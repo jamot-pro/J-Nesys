@@ -1,18 +1,18 @@
 import type { Metadata } from "next";
-import { Geist, Geist_Mono, Inter } from "next/font/google";
+import { Archivo, Geist_Mono } from "next/font/google";
 import type { ReactNode } from "react";
 
 import { Providers } from "@/app/providers";
 import "./globals.css";
 
-const inter = Inter({
+// Modernist design system: Archivo for both heading and body (see
+// project/readme.md / project/styles.css). globals.css's @theme block points
+// Tailwind's font-sans/font-display at this variable, so the ~40 files using
+// those classes don't need to change.
+const archivo = Archivo({
   subsets: ["latin"],
-  variable: "--font-inter",
-});
-
-const geistSans = Geist({
-  subsets: ["latin"],
-  variable: "--font-geist-sans",
+  weight: ["400", "600", "800"],
+  variable: "--font-archivo",
 });
 
 const geistMono = Geist_Mono({
@@ -33,7 +33,7 @@ export default function RootLayout({ children }: { children: ReactNode }) {
     <html
       lang="en"
       suppressHydrationWarning
-      className={`${inter.variable} ${geistSans.variable} ${geistMono.variable} h-full antialiased`}
+      className={`${archivo.variable} ${geistMono.variable} h-full antialiased`}
     >
       <body className="h-full bg-background text-foreground">
         <Providers>{children}</Providers>
