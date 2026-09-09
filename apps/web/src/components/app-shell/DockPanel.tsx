@@ -14,7 +14,7 @@ export interface DockPanelProps {
 
 export function DockPanel({ title, icon: Icon, children, className }: DockPanelProps) {
   return (
-    <section className={cn("rounded-2xl border border-border/40 bg-card/60 p-3.5 shadow-xs backdrop-blur-xs", className)}>
+    <section className={cn("rounded-2xl border border-border/40 bg-card/60 p-3.5 shadow-[var(--shadow-soft-sm)] backdrop-blur-xs", className)}>
       <header className="mb-2.5 flex items-center gap-2">
         {Icon ? <Icon className="size-3.5 text-muted-foreground" /> : null}
         <h3 className="text-[11px] font-medium tracking-wide uppercase text-muted-foreground">{title}</h3>

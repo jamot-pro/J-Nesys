@@ -365,7 +365,7 @@ function DesktopShell() {
           >
             <Button
               size="icon"
-              className="size-12 rounded-full bg-space-accent text-space-accent-foreground shadow-xl transition-transform hover:scale-105"
+              className="size-12 rounded-full bg-space-accent text-space-accent-foreground shadow-[var(--shadow-soft-md)] transition-transform hover:scale-105"
               aria-label={chatPopupOpen ? "Close AI assistant" : "Open AI assistant"}
               onClick={() => setChatPopupOpen((value) => !value)}
             >
@@ -387,7 +387,7 @@ function DesktopShell() {
             animate={{ opacity: 1, y: 0, scale: 1 }}
             exit={{ opacity: 0, y: 24, scale: 0.96 }}
             transition={{ duration: 0.2 }}
-            className="glass-card glass-border fixed bottom-24 z-50 flex h-[540px] w-[420px] max-w-[calc(100vw-2rem)] flex-col overflow-hidden rounded-3xl shadow-2xl backdrop-blur-xl"
+            className="glass-card glass-border fixed bottom-24 z-50 flex h-[540px] w-[420px] max-w-[calc(100vw-2rem)] flex-col overflow-hidden rounded-3xl shadow-[var(--shadow-soft-lg)] backdrop-blur-xl"
             style={
               dockLeft != null
                 ? { left: dockLeft - 420 - BUBBLE_GAP, transition: "left 200ms ease" }
@@ -445,7 +445,7 @@ function TabletShell() {
                 onClick={() => setDockOpen(false)}
               />
               <motion.div
-                className="glass-card absolute inset-y-0 right-0 z-30 w-84 max-w-[85vw] rounded-l-3xl shadow-2xl"
+                className="glass-card absolute inset-y-0 right-0 z-30 w-84 max-w-[85vw] rounded-l-3xl shadow-[var(--shadow-soft-lg)]"
                 initial={{ x: "100%" }}
                 animate={{ x: 0 }}
                 exit={{ x: "100%" }}
@@ -502,7 +502,7 @@ function MobileShell() {
             animate={{ y: 0 }}
             exit={{ y: "100%" }}
             transition={{ type: "spring", stiffness: 350, damping: 30 }}
-            className="glass-card fixed inset-x-0 bottom-0 z-50 shrink-0 rounded-t-3xl border-t border-border/40 p-5 shadow-2xl"
+            className="glass-card fixed inset-x-0 bottom-0 z-50 shrink-0 rounded-t-3xl border-t border-border/40 p-5 shadow-[var(--shadow-soft-lg)]"
           >
             <div className="mb-3 flex items-center justify-between">
               <h3 className="font-display text-base font-semibold">
