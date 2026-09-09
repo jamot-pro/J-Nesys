@@ -2,6 +2,8 @@ import type { Agent, Task } from "@jamot/contracts";
 import type { JamotRepository } from "../repository/repository.js";
 import type { HarnessRegistry } from "../harness/registry.js";
 import { evaluate, type RoleKind } from "../policy/policy-engine.js";
+import { recordTaskCompletion } from "../reputation/triggers.js";
+import type { ReputationService } from "../reputation/reputation.js";
 
 // Mirrors routing/pipeline.ts's INTENT_CAPABILITY_MAP["task"][0] — assignment
 // already policy-checked a candidate against this same capability name. Task
@@ -26,6 +28,7 @@ export interface TaskExecutionProcessor {
 export function createTaskExecutionProcessor(
   repo: JamotRepository,
   harness: HarnessRegistry,
+  reputation: ReputationService,
 ): TaskExecutionProcessor {
   async function executeOne(task: Task, agent: Agent): Promise<"executed" | "blocked" | "failed"> {
     const roles = await repo.listRolesForSpace(task.spaceId);
@@ -52,10 +55,17 @@ export function createTaskExecutionProcessor(
         taskId: task.id,
         agentId: agent.id,
       });
-      await repo.updateTask(task.id, {
-        outcome: { output: result.output, completedAt: new Date().toISOString() },
-      });
+      const outcome = { output: result.output, completedAt: new Date().toISOString() };
+      await repo.updateTask(task.id, { outcome });
       await repo.updateTaskStatus(task.id, "completed");
+      // Mirrors routes/tasks.ts's PATCH .../status handler - same trigger,
+      // same "record on every completed transition" semantics, just from
+      // the agent-execution path instead of a human clicking a button.
+      await recordTaskCompletion(reputation, {
+        id: task.id,
+        assigneeActorIds: task.assigneeActorIds,
+        outcome,
+      });
       return "executed";
     } catch (err) {
       // No retry/backoff policy yet — reverting to "assigned" means the next

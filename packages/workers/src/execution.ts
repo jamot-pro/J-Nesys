@@ -4,6 +4,7 @@ import { createPgRepository } from "@jamot/core/repository/pg";
 import { withAdvisoryLock } from "@jamot/core/scheduler";
 import { createHarnessRegistry } from "@jamot/core/harness";
 import { createTaskExecutionProcessor } from "@jamot/core/execution";
+import { createPostgresReputationService } from "@jamot/core/reputation";
 
 export interface ExecutionWorkerOptions {
   databaseUrl?: string;
@@ -21,7 +22,8 @@ export async function startExecutionWorker(
   const dbHandle = createDb(databaseUrl);
   const repo = createPgRepository(dbHandle);
   const harness = createHarnessRegistry();
-  const processor = createTaskExecutionProcessor(repo, harness);
+  const reputation = createPostgresReputationService(dbHandle);
+  const processor = createTaskExecutionProcessor(repo, harness, reputation);
 
   const intervalMs = opts.intervalMs ?? 15_000;
 

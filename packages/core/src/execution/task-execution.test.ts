@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import { createMemoryRepository } from "../repository/memory.js";
 import type { HarnessClient, HarnessRequest, HarnessResponse } from "../harness/harness.js";
 import type { HarnessRegistry } from "../harness/registry.js";
+import { createInMemoryReputationService } from "../reputation/memory.js";
 import { createTaskExecutionProcessor } from "./task-execution.js";
 
 function fakeHarnessRegistry(run: (req: HarnessRequest) => Promise<HarnessResponse>): HarnessRegistry {
@@ -45,7 +46,8 @@ describe("createTaskExecutionProcessor", () => {
     const harness = fakeHarnessRegistry(async () => {
       throw new Error("should not be called");
     });
-    const processor = createTaskExecutionProcessor(repo, harness);
+    const reputation = createInMemoryReputationService();
+    const processor = createTaskExecutionProcessor(repo, harness, reputation);
 
     const result = await processor.processDue();
 
@@ -55,8 +57,8 @@ describe("createTaskExecutionProcessor", () => {
     expect(reloaded?.outcome).toBeNull();
   });
 
-  it("executes the task and records the outcome when policy allows it", async () => {
-    const { repo, space, task } = await setup();
+  it("executes the task, records the outcome, and records reputation when policy allows it", async () => {
+    const { repo, space, agentActor, task } = await setup();
     await repo.createPolicy({
       spaceId: space.id,
       name: "Allow execution",
@@ -66,7 +68,8 @@ describe("createTaskExecutionProcessor", () => {
     const harness = fakeHarnessRegistry(async (req) => ({
       output: `handled: ${req.prompt.split("\n")[0]}`,
     }));
-    const processor = createTaskExecutionProcessor(repo, harness);
+    const reputation = createInMemoryReputationService();
+    const processor = createTaskExecutionProcessor(repo, harness, reputation);
 
     const result = await processor.processDue();
 
@@ -74,10 +77,12 @@ describe("createTaskExecutionProcessor", () => {
     const reloaded = await repo.getTask(task.id);
     expect(reloaded?.status).toBe("completed");
     expect(reloaded?.outcome?.output).toBe("handled: Follow up with lead");
+    const scores = await reputation.scores(agentActor.id);
+    expect(scores["task.execution"]).toBe(0.5);
   });
 
-  it("reverts to assigned and records the error when the harness fails", async () => {
-    const { repo, space, task } = await setup();
+  it("reverts to assigned, records the error, and does NOT record reputation when the harness fails", async () => {
+    const { repo, space, agentActor, task } = await setup();
     await repo.createPolicy({
       spaceId: space.id,
       name: "Allow execution",
@@ -87,7 +92,8 @@ describe("createTaskExecutionProcessor", () => {
     const harness = fakeHarnessRegistry(async () => {
       throw new Error("harness endpoint returned 503");
     });
-    const processor = createTaskExecutionProcessor(repo, harness);
+    const reputation = createInMemoryReputationService();
+    const processor = createTaskExecutionProcessor(repo, harness, reputation);
 
     const result = await processor.processDue();
 
@@ -95,6 +101,12 @@ describe("createTaskExecutionProcessor", () => {
     const reloaded = await repo.getTask(task.id);
     expect(reloaded?.status).toBe("assigned");
     expect(reloaded?.outcome?.lastError).toBe("harness endpoint returned 503");
+    // A retry-eligible transient failure isn't a terminal outcome (matches
+    // routes/tasks.ts's trigger, which only fires on an actual "completed"
+    // transition) - dinging reputation here would penalize a blip that
+    // might succeed on the very next poll.
+    const scores = await reputation.scores(agentActor.id);
+    expect(scores).toEqual({});
   });
 
   it("leaves human-targeted and unassigned tasks alone", async () => {
@@ -120,7 +132,8 @@ describe("createTaskExecutionProcessor", () => {
     const harness = fakeHarnessRegistry(async () => {
       throw new Error("should not be called");
     });
-    const processor = createTaskExecutionProcessor(repo, harness);
+    const reputation = createInMemoryReputationService();
+    const processor = createTaskExecutionProcessor(repo, harness, reputation);
 
     const result = await processor.processDue();
 
