@@ -1,0 +1,54 @@
+{
+  "organizationId": "org_supplier_001",
+  "name": "Nimbus Materials Co.",
+  "catalogId": "catalog_001",
+  "catalogVersion": "1.3.0",
+  "visibility": "public",
+  "status": "published",
+  "defaultCurrency": "USD",
+  "offers": [
+    {
+      "offerId": "offer_alpha_001",
+      "productId": "product_arm-latch",
+      "productName": "Armored Latch Plate",
+      "gtin": "08400050118812",
+      "sku": "NMB-AL-040",
+      "unitOfMeasure": "each",
+      "orderableUnit": "each",
+      "priceQuantity": 1,
+      "priceTiers": [
+        { "minQty": 1, "amount": 12.5, "currency": "USD" },
+        { "minQty": 500, "amount": 10.25, "currency": "USD" },
+        { "minQty": 5000, "amount": 8.9, "currency": "USD" }
+      ],
+      "minQty": 1,
+      "maxQty": 100000,
+      "orderIncrement": 1,
+      "availability": "in-stock",
+      "leadTime": "5 business days",
+      "validityTo": "2027-12-31T00:00:00Z",
+      "taxIncluded": false
+    },
+    {
+      "offerId": "offer_alpha_002",
+      "productId": "product-carbon-fiber",
+      "productName": "Carbon Fiber Sheet 1.5mm",
+      "gtin": "08400050118950",
+      "sku": "NMB-CF-015",
+      "unitOfMeasure": "sqm",
+      "orderableUnit": "sqm",
+      "priceQuantity": 1,
+      "priceTiers": [
+        { "minQty": 1, "amount": 45.0, "currency": "USD" },
+        { "minQty": 50, "amount": 39.5, "currency": "USD" }
+      ],
+      "minQty": 1,
+      "maxQty": 2000,
+      "orderIncrement": 1,
+      "availability": "made-to-order",
+      "leadTime": "12 business days",
+      "validityTo": "2027-12-31T00:00:00Z",
+      "taxIncluded": true
+    }
+  ]
+}

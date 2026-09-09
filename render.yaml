@@ -1,0 +1,185 @@
+# Jamot — Render Blueprint
+# Deploys the API, the Next.js web app, a scheduler worker, Postgres and Redis.
+# Validation: render blueprints validate
+#
+# NOTE: The temporal knowledge graph (Graphiti MCP server + FalkorDB, see
+# docker-compose.yml) is NOT provisioned here. It is not viable on the Render
+# free tier: it must run where the jamot-api service can reach it over HTTP and
+# needs OPENAI_API_KEY (per-episode LLM extraction). To enable in production,
+# run graphiti-mcp on a paid service / private network and set GRAPHITI_ENABLED
+# and GRAPHITI_MCP_URL on the jamot-api service below.
+
+projects:
+  - name: jamot
+    environments:
+      - name: production
+        previews:
+          generation: on
+        databases:
+          - name: jamot-db
+            plan: starter
+            region: oregon
+
+        services:
+          - type: web
+            name: jamot-api
+            runtime: node
+            region: oregon
+            plan: starter
+            buildCommand: corepack enable && pnpm install --frozen-lockfile && pnpm --filter @jamot/api build
+            startCommand: pnpm --filter @jamot/api exec tsx src/index.ts
+            healthCheckPath: /health
+            buildFilter:
+              paths:
+                - packages/api/**
+                - packages/core/**
+                - packages/contracts/**
+                - packages/sdk/**
+                - package.json
+                - pnpm-lock.yaml
+                - pnpm-workspace.yaml
+            disk:
+              name: wa-session
+              mountPath: /data
+              sizeGB: 1
+            envVars:
+              - key: DATABASE_URL
+                fromDatabase:
+                  name: jamot-db
+                  property: connectionString
+              - key: REDIS_URL
+                fromService:
+                  type: keyvalue
+                  name: jamot-redis
+                  property: connectionString
+              - key: SESSION_SECRET
+                generateValue: true
+              - key: SECRET_ENCRYPTION_KEY
+                generateValue: true
+              # Share the session cookie across all jamot.pro subdomains so the
+              # web app's server-side routes (CopilotKit chat) can forward the
+              # user's session to the API.
+              - key: COOKIE_DOMAIN
+                value: .jamot.pro
+              - key: CORS_ORIGIN
+                value: https://mvp.jamot.pro
+              - key: FRONTEND_URL
+                value: https://mvp.jamot.pro
+              - key: GOOGLE_CLIENT_ID
+                sync: false
+              - key: GOOGLE_CLIENT_SECRET
+                sync: false
+              - key: GOOGLE_REDIRECT_URI
+                value: https://api.jamot.pro/api/auth/google/callback
+              - key: GOOGLE_CONNECTOR_REDIRECT_URI
+                value: https://api.jamot.pro/api/google/callback
+              - key: WA_WORKER_URL
+                value: ""
+              - key: WHATSAPP_SESSION_DIR
+                value: /data/whatsapp
+              - key: WHATSAPP_PROXY_URL
+                value: ""
+              # Self-hosted org logo uploads (served from /uploads/*). Reuses the
+              # wa-session disk mounted at /data.
+              - key: UPLOADS_DIR
+                value: /data/uploads
+              - key: NODE_ENV
+                value: production
+              # Grant-only super admins; comma-separated emails. Leave empty unless you
+              # want to grant full platform super-admin access to specific accounts.
+              - key: SUPER_ADMIN_EMAILS
+                value: ""
+
+          - type: web
+            name: jamot-web
+            runtime: node
+            region: oregon
+            plan: starter
+            buildCommand: corepack enable && pnpm install --frozen-lockfile && pnpm --filter @jamot/web build
+            startCommand: pnpm --filter @jamot/web start
+            buildFilter:
+              paths:
+                - apps/web/**
+                - packages/contracts/**
+                - package.json
+                - pnpm-lock.yaml
+                - pnpm-workspace.yaml
+            envVars:
+              # Next_PUBLIC_ values must be concrete strings — they're compiled into client JS.
+              - key: NEXT_PUBLIC_API_URL
+                value: https://api.jamot.pro
+              # Root domain used to detect per-org subdomains (e.g. org.jamot.pro).
+              - key: NEXT_PUBLIC_ROOT_DOMAIN
+                value: jamot.pro
+
+          - type: worker
+            name: jamot-scheduler
+            runtime: node
+            region: oregon
+            plan: starter
+            buildCommand: corepack enable && pnpm install --frozen-lockfile && pnpm --filter @jamot/workers build
+            startCommand: pnpm --filter @jamot/workers exec tsx src/scheduler.ts
+            buildFilter:
+              paths:
+                - packages/workers/**
+                - packages/core/**
+                - packages/contracts/**
+                - package.json
+                - pnpm-lock.yaml
+                - pnpm-workspace.yaml
+            envVars:
+              - key: DATABASE_URL
+                fromDatabase:
+                  name: jamot-db
+                  property: connectionString
+              - key: REDIS_URL
+                fromService:
+                  type: keyvalue
+                  name: jamot-redis
+                  property: connectionString
+
+          - type: keyvalue
+            name: jamot-redis
+            plan: starter
+            maxmemoryPolicy: noeviction
+            ipAllowList:
+              - source: 0.0.0.0/0
+                description: everywhere
+
+          - type: worker
+            name: jamot-channels
+            runtime: node
+            region: oregon
+            plan: starter
+            buildCommand: corepack enable && pnpm install --frozen-lockfile && pnpm --filter @jamot/workers build
+            startCommand: pnpm --filter @jamot/workers exec tsx src/channel.ts
+            buildFilter:
+              paths:
+                - packages/workers/**
+                - packages/core/**
+                - packages/contracts/**
+                - package.json
+                - pnpm-lock.yaml
+                - pnpm-workspace.yaml
+            envVars:
+              - key: DATABASE_URL
+                fromDatabase:
+                  name: jamot-db
+                  property: connectionString
+              - key: REDIS_URL
+                fromService:
+                  type: keyvalue
+                  name: jamot-redis
+                  property: connectionString
+              # Telegram / Matrix are connected per-account from the channel_accounts
+              # table (configured in-app). The env vars below are optional global
+              # fallbacks. WHATSAPP_SESSION_DIR is intentionally empty here so the
+              # WhatsApp manager keeps running in-process on jamot-api.
+              - key: WHATSAPP_SESSION_DIR
+                value: ""
+              - key: TELEGRAM_API_URL
+                value: ""
+              - key: MATRIX_HOMESERVER_URL
+                value: ""
+              - key: NODE_ENV
+                value: production

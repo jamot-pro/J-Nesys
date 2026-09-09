@@ -1,0 +1,21 @@
+{
+  "name": "@jamot/supplier-mcp-server",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "Example standalone MCP server exposing a Jamot supplier catalog over MCP (spec §18) with a /api/.well-known/jamot manifest (spec §22.3).",
+  "main": "./src/server.ts",
+  "scripts": {
+    "start": "tsx src/server.ts",
+    "typecheck": "tsc -p tsconfig.json --noEmit"
+  },
+  "dependencies": {
+    "@modelcontextprotocol/sdk": "^1.30.0",
+    "zod": "^3.24.1"
+  },
+  "devDependencies": {
+    "@types/node": "^22.10.0",
+    "tsx": "^4.19.0",
+    "typescript": "^5.7.2"
+  }
+}

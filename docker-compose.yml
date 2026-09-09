@@ -1,0 +1,91 @@
+# Jamot local infrastructure
+
+services:
+  postgres:
+    image: postgres:16-alpine
+    container_name: jamot-postgres
+    environment:
+      POSTGRES_USER: jamot
+      POSTGRES_PASSWORD: jamot
+      POSTGRES_DB: jamot
+    ports:
+      - "5433:5432"
+    volumes:
+      - jamot_pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U jamot -d jamot"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  redis:
+    image: redis:7-alpine
+    container_name: jamot-redis
+    ports:
+      - "6379:6379"
+    volumes:
+      - jamot_redis:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  synapse:
+    image: matrixdotorg/synapse:latest
+    container_name: jamot-synapse
+    environment:
+      SYNAPSE_SERVER_NAME: jamot.local
+      SYNAPSE_REPORT_STATS: "no"
+    volumes:
+      - ./infra/synapse/data:/data
+    ports:
+      - "8008:8008"
+    # First run generates a config + homeserver; uncomment after bootstrap:
+    # command: ["run"]
+
+  falkordb:
+    image: falkordb/falkordb:latest
+    container_name: jamot-falkordb
+    environment:
+      FALKORDB_PASSWORD: ""
+      BROWSER: "0"            # skip the web UI; host port 3000 is the web app's
+    volumes:
+      - jamot_falkordb:/var/lib/falkordb/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "-p", "6379", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 10s
+    # No host ports: 6379 is jamot-redis's, and graphiti-mcp reaches falkordb
+    # over the compose network (redis://falkordb:6379).
+
+  graphiti-mcp:
+    image: zepai/knowledge-graph-mcp:standalone
+    container_name: jamot-graphiti
+    environment:
+      FALKORDB_URI: redis://falkordb:6379
+      OPENAI_API_KEY: ${OPENAI_API_KEY}
+      OPENAI_API_URL: ${OPENAI_BASE_URL:-https://api.openai.com/v1}
+      GRAPHITI_GROUP_ID: ${GRAPHITI_GROUP_ID:-main}
+      GRAPHITI_TELEMETRY_ENABLED: ${GRAPHITI_TELEMETRY_ENABLED:-false}
+      SEMAPHORE_LIMIT: ${SEMAPHORE_LIMIT:-2}
+    volumes:
+      - ./infra/graphiti/config.yaml:/app/mcp/config/config.yaml:ro
+    depends_on:
+      falkordb:
+        condition: service_healthy
+    ports:
+      - "8000:8000"
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request as u; u.urlopen('http://localhost:8000/health', timeout=5)"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 30s
+
+volumes:
+  jamot_pgdata:
+  jamot_redis:
+  jamot_falkordb:

@@ -1,0 +1,19 @@
+node_modules/
+dist/
+.next/
+build/
+.turbo/
+coverage/
+*.log
+.env
+.env.local
+.env.*.local
+.DS_Store
+.vscode/
+.idea/
+*.tsbuildinfo
+opencode.json
+# Self-hosted uploads (org logos) written by the API
+uploads/
+# Local WhatsApp session + persistent session-store data
+.data/

@@ -1,0 +1,15 @@
+{
+  "schemaVersion": "1.0",
+  "networkId": "jamot-example",
+  "actor": {
+    "id": "supplier_mcp_nimbus",
+    "name": "Nimbus Materials Co. (MCP example)",
+    "network": "jamot"
+  },
+  "discovery": {
+    "/api/.well-known/jamot": { "protocol": "MCP", "transport": "streamable-http" },
+    "/api/catalog": { "resource": "catalog://offers", "versioned": true }
+  },
+  "protocols": ["MCP"],
+  "capabilities": ["catalog.publish", "catalog_offers.list", "pricing.tiers"]
+}

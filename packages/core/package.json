@@ -1,0 +1,60 @@
+{
+  "name": "@jamot/core",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "main": "./src/index.ts",
+  "types": "./src/index.ts",
+  "exports": {
+    ".": "./src/index.ts",
+    "./llm": "./src/llm/index.ts",
+    "./routing": "./src/routing/index.ts",
+    "./repository": "./src/repository/repository.ts",
+    "./repository/memory": "./src/repository/memory.ts",
+    "./repository/pg": "./src/repository/pg.ts",
+    "./secrets/secret-store": "./src/secrets/secret-store.ts",
+    "./secrets/credential-resolution": "./src/secrets/credential-resolution.ts",
+    "./services/connectors": "./src/services/connectors.ts",
+    "./services/capabilities": "./src/services/capabilities.ts",
+    "./composio": "./src/composio/index.ts",
+    "./harness": "./src/harness/index.ts",
+    "./mcp": "./src/mcp/index.ts",
+    "./channels": "./src/channels/index.ts",
+    "./ingest": "./src/ingest/index.ts",
+    "./memory": "./src/memory/index.ts",
+    "./knowledge": "./src/knowledge/index.ts",
+    "./dream": "./src/dream/index.ts",
+    "./scheduler": "./src/scheduler/index.ts",
+    "./apps": "./src/apps/index.ts",
+    "./resolver": "./src/resolver/index.ts",
+    "./reputation": "./src/reputation/index.ts",
+    "./treasury": "./src/treasury/index.ts",
+    "./commerce": "./src/commerce/index.ts",
+    "./payments": "./src/payments/index.ts",
+    "./leads": "./src/leads/index.ts",
+    "./google": "./src/google/index.ts",
+    "./migrate": "./src/migrate.ts"
+  },
+  "scripts": {
+    "build": "tsc -p tsconfig.json",
+    "typecheck": "tsc -p tsconfig.json --noEmit",
+    "lint": "echo \"no lint configured\"",
+    "test": "vitest run"
+  },
+  "dependencies": {
+    "@jamot/contracts": "workspace:*",
+    "@whiskeysockets/baileys": "7.0.0-rc14",
+    "drizzle-orm": "^0.38.0",
+    "https-proxy-agent": "^9.1.0",
+    "matrix-js-sdk": "^42.1.0",
+    "pg": "^8.13.0",
+    "tsx": "^4.19.2",
+    "zod": "^3.24.1"
+  },
+  "devDependencies": {
+    "@types/node": "^22.10.0",
+    "@types/pg": "^8.11.10",
+    "typescript": "^5.7.2",
+    "vitest": "^2.1.8"
+  }
+}

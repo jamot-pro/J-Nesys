@@ -1,0 +1,105 @@
+@import "tailwindcss";
+
+@custom-variant dark (&:is(.dark *));
+
+:root {
+  --background: #fdfcfb;
+  --foreground: #1c1917;
+  --muted: #f5f3f0;
+  --muted-foreground: #78716c;
+  --border: #f0eeeb;
+  --card: #ffffff;
+  --card-foreground: #1c1917;
+  --accent: #1c1917;
+  --accent-foreground: #fdfcfb;
+  --ring: #d6d3d1;
+  --sidebar: #faf9f7;
+  --sidebar-foreground: #292524;
+  --space-accent: #e11d48;
+  --space-accent-foreground: #ffffff;
+  --radius: 0.75rem;
+}
+
+.dark {
+  --background: #0c0a09;
+  --foreground: #fafaf9;
+  --muted: #1c1917;
+  --muted-foreground: #a8a29e;
+  --border: #1a1816;
+  --card: #121110;
+  --card-foreground: #fafaf9;
+  --accent: #fafaf9;
+  --accent-foreground: #0c0a09;
+  --ring: #44403c;
+  --sidebar: #0e0c0b;
+  --sidebar-foreground: #e7e5e4;
+  --space-accent: #fb7185;
+  --space-accent-foreground: #0c0a09;
+}
+
+@theme inline {
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --color-muted: var(--muted);
+  --color-muted-foreground: var(--muted-foreground);
+  --color-border: var(--border);
+  --color-card: var(--card);
+  --color-card-foreground: var(--card-foreground);
+  --color-accent: var(--accent);
+  --color-accent-foreground: var(--accent-foreground);
+  --color-ring: var(--ring);
+  --color-sidebar: var(--sidebar);
+  --color-sidebar-foreground: var(--sidebar-foreground);
+  --color-space-accent: var(--space-accent);
+  --color-space-accent-foreground: var(--space-accent-foreground);
+  --font-sans: var(--font-inter);
+  --font-display: var(--font-geist-sans);
+  --font-mono: var(--font-geist-mono);
+  --radius-lg: var(--radius);
+  --radius-md: calc(var(--radius) - 2px);
+  --radius-sm: calc(var(--radius) - 4px);
+}
+
+@layer utilities {
+  .glass {
+    background: rgba(255, 255, 255, 0.75);
+    backdrop-filter: blur(20px) saturate(180%);
+    -webkit-backdrop-filter: blur(20px) saturate(180%);
+  }
+  .dark .glass {
+    background: rgba(18, 17, 16, 0.75);
+  }
+  .glass-card {
+    background: rgba(255, 255, 255, 0.85);
+    backdrop-filter: blur(24px) saturate(190%);
+    -webkit-backdrop-filter: blur(24px) saturate(190%);
+    border: 1px solid rgba(255, 255, 255, 0.6);
+  }
+  .dark .glass-card {
+    background: rgba(18, 17, 16, 0.85);
+    border: 1px solid rgba(255, 255, 255, 0.08);
+  }
+  .glass-border {
+    border: 1px solid rgba(0, 0, 0, 0.05);
+  }
+  .dark .glass-border {
+    border: 1px solid rgba(255, 255, 255, 0.08);
+  }
+}
+
+@layer base {
+  * {
+    border-color: var(--border);
+  }
+
+  html,
+  body {
+    height: 100%;
+  }
+
+  body {
+    background: var(--background);
+    color: var(--foreground);
+    font-family: var(--font-inter), ui-sans-serif, system-ui, sans-serif;
+  }
+}

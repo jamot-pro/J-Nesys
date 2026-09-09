@@ -1,0 +1,11 @@
+packages:
+  - "packages/*"
+  - "apps/*"
+
+allowBuilds:
+  esbuild: true
+  msgpackr-extract: false
+  '@scarf/scarf': false
+  '@whiskeysockets/baileys': false
+  protobufjs: false
+  unrs-resolver: false
