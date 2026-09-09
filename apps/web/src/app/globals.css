@@ -6,19 +6,27 @@
  * near-mono red accent on a warm off-white ground, Archivo throughout, soft
  * 12px corners, hairline dividers. Existing Tailwind token NAMES are kept
  * (--background, --card, --accent, ...) so the rest of the app's className
- * usage doesn't need to change; only the values move to match Modernist. */
+ * usage doesn't need to change; only the values move to match Modernist.
+ *
+ * --background is the page GROUND (Modernist "--color-surface", the grey
+ * area shell panels float on with a gap); --card is the panel surface
+ * (Modernist "--color-bg", the lighter card/aside/chat-panel fill). This is
+ * the inverse of a typical shadcn setup where cards sit lighter-on-white —
+ * here the page is the darker of the two and panels are lighter, which is
+ * what makes panels read as distinct floating surfaces instead of blending
+ * into the page. */
 :root {
-  --background: #f3f2f2;
+  --background: #eae9e9;
   --foreground: #201e1d;
   --muted: #f8f4f4;
   --muted-foreground: color-mix(in srgb, #201e1d 55%, transparent);
   --border: color-mix(in srgb, #201e1d 11%, transparent);
-  --card: #eae9e9;
+  --card: #f3f2f2;
   --card-foreground: #201e1d;
   --accent: #201e1d;
   --accent-foreground: #f3f2f2;
   --ring: #ff2657;
-  --sidebar: #eae9e9;
+  --sidebar: #f3f2f2;
   --sidebar-foreground: #201e1d;
   --space-accent: #ff2657;
   --space-accent-foreground: #f3f2f2;
@@ -27,9 +35,7 @@
   --shadow-sm: 0 1px 2px color-mix(in srgb, #2d2b2b 5%, transparent), 0 2px 8px color-mix(in srgb, #2d2b2b 5%, transparent);
   --shadow-md: 0 2px 6px color-mix(in srgb, #2d2b2b 5%, transparent), 0 12px 28px color-mix(in srgb, #2d2b2b 7%, transparent);
   --shadow-lg: 0 6px 16px color-mix(in srgb, #2d2b2b 7%, transparent), 0 32px 72px color-mix(in srgb, #2d2b2b 12%, transparent);
-  /* Aliases for AppShell/DockPanel/LeftSidebar, which reference these names
-     directly via shadow-[var(--shadow-soft-*)] - kept until Phase B replaces
-     those components, rather than touching them in a tokens-only change. */
+  /* Aliases for any remaining shadow-[var(--shadow-soft-*)] usages. */
   --shadow-soft-sm: var(--shadow-sm);
   --shadow-soft-md: var(--shadow-md);
   --shadow-soft-lg: var(--shadow-lg);
@@ -56,17 +62,17 @@
 }
 
 .dark {
-  --background: #1f1e1c;
+  --background: #141312;
   --foreground: #f2f0ef;
-  --muted: #141312;
+  --muted: #0e0d0c;
   --muted-foreground: color-mix(in srgb, #f2f0ef 55%, transparent);
   --border: color-mix(in srgb, #f2f0ef 14%, transparent);
-  --card: #141312;
+  --card: #1f1e1c;
   --card-foreground: #f2f0ef;
   --accent: #f2f0ef;
   --accent-foreground: #1f1e1c;
   --ring: #ff7d95;
-  --sidebar: #141312;
+  --sidebar: #1f1e1c;
   --sidebar-foreground: #f2f0ef;
   --space-accent: #ff2657;
   --space-accent-foreground: #1f1e1c;
@@ -101,8 +107,7 @@
   --font-sans: var(--font-archivo);
   --font-display: var(--font-archivo);
   --font-mono: var(--font-geist-mono);
-  /* Radius tiers ported from the design system: 8 / 12 / 18, replacing the
-     previous 8/10/12 scale derived from --radius. */
+  /* Radius tiers ported from the design system: 8 / 12 / 18. */
   --radius-lg: 18px;
   --radius-md: 12px;
   --radius-sm: 8px;
