@@ -113,7 +113,7 @@ function SpaceSwitcher() {
             animate={{ opacity: 1, y: 0, scale: 1 }}
             exit={{ opacity: 0, y: -4, scale: 0.98 }}
             transition={{ type: "spring", stiffness: 400, damping: 30 }}
-            className="glass-card glass-border absolute bottom-full left-2 right-2 z-20 mb-1.5 overflow-hidden rounded-2xl p-1.5 shadow-2xl"
+            className="glass-card glass-border absolute bottom-full left-2 right-2 z-20 mb-1.5 overflow-hidden rounded-2xl p-1.5 shadow-[var(--shadow-soft-lg)]"
           >
             <p className="px-2 pb-1 pt-1.5 text-[11px] font-medium tracking-wide uppercase text-muted-foreground">
               {space.name}
