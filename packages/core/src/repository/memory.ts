@@ -13,6 +13,7 @@ import {
   LeadListMember,
   CustomAppManifest,
   MergeCandidate,
+  Notification,
   OrgEdge,
   OrgNode,
   Organization,
@@ -54,6 +55,7 @@ import type {
   NewLeadPerson,
   NewCustomApp,
   NewMergeCandidate,
+  NewNotification,
   NewOrganization,
   NewOutreachCampaign,
   NewOutreachList,
@@ -103,6 +105,7 @@ export function createMemoryRepository(): JamotRepository {
   const composioOAuthStates = new Map<string, ComposioOAuthStateRecord>();
   const capabilities = new Map<string, Capability>();
   const policies = new Map<string, Policy>();
+  const notificationStore = new Map<string, Notification>();
   const customAppStore = new Map<string, CustomAppManifest>();
   const relationships = new Map<string, Relationship>();
   const events: Event[] = [];
@@ -726,6 +729,20 @@ export function createMemoryRepository(): JamotRepository {
         name: input.name,
       });
       spaces.set(space.id, space);
+      // Mirrors pg.ts createSpace: seed a permissive baseline policy so the
+      // routing pipeline's default-deny (evaluate([]) === "deny") doesn't
+      // leave a freshly created space unable to assign anything.
+      const defaultPolicy = Policy.parse({
+        id: uuid(),
+        spaceId: space.id,
+        name: "Default — allow",
+        capability: "*",
+        resource: "*",
+        minRole: null,
+        riskThreshold: 0.5,
+        decision: "allow",
+      });
+      policies.set(defaultPolicy.id, defaultPolicy);
       return space;
     },
 
@@ -1248,6 +1265,49 @@ export function createMemoryRepository(): JamotRepository {
       const all = [...policies.values()];
       if (!filter?.spaceId) return all;
       return all.filter((p) => p.spaceId === filter.spaceId);
+    },
+
+    async createNotification(input: NewNotification) {
+      const timestamp = now();
+      const notification = Notification.parse({
+        id: uuid(),
+        spaceId: input.spaceId,
+        actorId: input.actorId,
+        type: input.type,
+        title: input.title,
+        summary: input.summary ?? "",
+        read: false,
+        targetSection: input.targetSection ?? null,
+        targetId: input.targetId ?? null,
+        createdAt: timestamp,
+        updatedAt: timestamp,
+      });
+      notificationStore.set(notification.id, notification);
+      return notification;
+    },
+
+    async listNotifications(filter) {
+      return [...notificationStore.values()]
+        .filter(
+          (n) => n.actorId === filter.actorId && (!filter.spaceId || n.spaceId === filter.spaceId),
+        )
+        .sort((a, b) => b.createdAt.localeCompare(a.createdAt));
+    },
+
+    async markNotificationRead(id, actorId) {
+      const notification = notificationStore.get(id);
+      if (!notification || notification.actorId !== actorId) return null;
+      const updated = { ...notification, read: true, updatedAt: now() };
+      notificationStore.set(id, updated);
+      return updated;
+    },
+
+    async markAllNotificationsRead(filter) {
+      for (const notification of notificationStore.values()) {
+        if (notification.actorId !== filter.actorId) continue;
+        if (filter.spaceId && notification.spaceId !== filter.spaceId) continue;
+        notificationStore.set(notification.id, { ...notification, read: true, updatedAt: now() });
+      }
     },
 
     async createCustomApp(input: NewCustomApp) {

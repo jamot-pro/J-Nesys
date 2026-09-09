@@ -27,6 +27,7 @@ import type {
   LeadListMember,
   CustomAppManifest,
   MergeCandidate,
+  Notification,
   OrgEdge,
   OrgNode,
   Organization,
@@ -67,6 +68,7 @@ import {
   identities,
   customApps,
   modelProviders,
+  notifications,
   organizations,
   personMergeCandidates,
   providerModels,
@@ -113,6 +115,7 @@ import type {
   NewLeadPerson,
   NewCustomApp,
   NewMergeCandidate,
+  NewNotification,
   NewOrganization,
   NewOutreachCampaign,
   NewOutreachList,
@@ -155,6 +158,7 @@ type SkillRow = typeof skills.$inferSelect;
 type ConnectorRow = typeof connectors.$inferSelect;
 type CapabilityRow = typeof capabilities.$inferSelect;
 type PolicyRow = typeof policies.$inferSelect;
+type NotificationRow = typeof notifications.$inferSelect;
 type CustomAppRow = typeof customApps.$inferSelect;
 type SecretRow = typeof secrets.$inferSelect;
 type ComposioOAuthStateRow = typeof composioOauthStates.$inferSelect;
@@ -548,6 +552,22 @@ function toPolicy(row: PolicyRow): Policy {
     minRole: row.minRole,
     riskThreshold: Number(row.riskThreshold),
     decision: row.decision,
+  };
+}
+
+function toNotification(row: NotificationRow): Notification {
+  return {
+    id: row.id as Id,
+    spaceId: row.spaceId as Id,
+    actorId: row.actorId as Id,
+    type: row.type,
+    title: row.title,
+    summary: row.summary,
+    read: row.read,
+    targetSection: row.targetSection,
+    targetId: row.targetId as Id | null,
+    createdAt: row.createdAt,
+    updatedAt: row.updatedAt,
   };
 }
 
@@ -1612,6 +1632,21 @@ export function createPgRepository(db: Db): JamotRepository {
         })
         .returning();
       if (!row) throw new Error("failed to create space");
+      // Every space needs at least one matching policy or the routing
+      // pipeline's default-deny leaves it unable to assign anything (see
+      // policy-engine.ts: evaluate([]) === "deny"). Seed a permissive
+      // baseline so the space is usable immediately; an admin can add
+      // narrower policies later, which correctly override via evaluate()'s
+      // deny-short-circuit.
+      await q.insert(policies).values({
+        spaceId: row.id,
+        name: "Default — allow",
+        capability: "*",
+        resource: "*",
+        minRole: null,
+        riskThreshold: "0.5",
+        decision: "allow",
+      });
       return toSpace(row);
     },
 
@@ -2392,6 +2427,56 @@ export function createPgRepository(db: Db): JamotRepository {
           filter?.spaceId ? eq(policies.spaceId, filter.spaceId) : undefined,
         );
       return rows.map(toPolicy);
+    },
+
+    async createNotification(input: NewNotification) {
+      const [row] = await q
+        .insert(notifications)
+        .values({
+          spaceId: input.spaceId,
+          actorId: input.actorId,
+          type: input.type,
+          title: input.title,
+          summary: input.summary ?? "",
+          targetSection: input.targetSection ?? null,
+          targetId: input.targetId ?? null,
+        })
+        .returning();
+      if (!row) throw new Error("failed to create notification");
+      return toNotification(row);
+    },
+
+    async listNotifications(filter) {
+      const rows = await q
+        .select()
+        .from(notifications)
+        .where(
+          filter.spaceId
+            ? and(eq(notifications.actorId, filter.actorId), eq(notifications.spaceId, filter.spaceId))
+            : eq(notifications.actorId, filter.actorId),
+        )
+        .orderBy(desc(notifications.createdAt));
+      return rows.map(toNotification);
+    },
+
+    async markNotificationRead(id, actorId) {
+      const [row] = await q
+        .update(notifications)
+        .set({ read: true, updatedAt: new Date().toISOString() })
+        .where(and(eq(notifications.id, id), eq(notifications.actorId, actorId)))
+        .returning();
+      return row ? toNotification(row) : null;
+    },
+
+    async markAllNotificationsRead(filter) {
+      await q
+        .update(notifications)
+        .set({ read: true, updatedAt: new Date().toISOString() })
+        .where(
+          filter.spaceId
+            ? and(eq(notifications.actorId, filter.actorId), eq(notifications.spaceId, filter.spaceId))
+            : eq(notifications.actorId, filter.actorId),
+        );
     },
 
     async createCustomApp(input: NewCustomApp) {

@@ -1,6 +1,7 @@
 import type { FastifyInstance } from "fastify";
 import type { JamotRepository } from "../repository.js";
 import { requireAuth } from "../rbac.js";
+import { fail } from "../util.js";
 
 export default async function notificationsRoutes(
   app: FastifyInstance,
@@ -8,47 +9,32 @@ export default async function notificationsRoutes(
 ): Promise<void> {
   const { repository } = opts;
 
-  // GET /api/notifications?spaceId=... — list all notifications for the user/space
+  // GET /api/notifications?spaceId=... — the authenticated actor's own notifications
   app.get("/notifications", { preHandler: requireAuth }, async (request) => {
     const query = request.query as { spaceId?: string };
     const actorId = request.session.actorId!;
-
-    // Stub: return empty array for now. Real implementation would join
-    // tasks, messages, approvals etc. into a unified feed.
-    // When tasks exist, we can surface unassigned or recently-updated ones.
-    if (query.spaceId) {
-      try {
-        const tasks = await repository.listTasks({
-          spaceId: query.spaceId,
-        });
-        // Convert uncompleted recent tasks into notification-like items
-        const items = tasks
-          .filter((t) => t.status !== "completed" && t.status !== "cancelled")
-          .slice(0, 20)
-          .map((t) => ({
-            id: `task-${t.id}`,
-            type: "message" as const,
-            title: t.title || "Untitled Task",
-            summary: t.description || "",
-            read: false,
-            createdAt: t.createdAt,
-          }));
-        return { items };
-      } catch {
-        return { items: [] };
-      }
-    }
-
-    return { items: [] };
+    const items = await repository.listNotifications({
+      actorId,
+      spaceId: query.spaceId,
+    });
+    return { items };
   });
 
   // PUT /api/notifications/:id/read — mark a single notification as read
   app.put("/notifications/:id/read", { preHandler: requireAuth }, async (request, reply) => {
+    const params = request.params as { id?: string };
+    if (!params.id) return fail(reply, 400, "missing id");
+    const actorId = request.session.actorId!;
+    const updated = await repository.markNotificationRead(params.id, actorId);
+    if (!updated) return fail(reply, 404, "notification not found");
     return { status: "ok" };
   });
 
-  // PUT /api/notifications/read-all — mark all notifications as read
-  app.put("/notifications/read-all", { preHandler: requireAuth }, async (_request, reply) => {
+  // PUT /api/notifications/read-all — mark all of the actor's notifications as read
+  app.put("/notifications/read-all", { preHandler: requireAuth }, async (request) => {
+    const query = request.query as { spaceId?: string };
+    const actorId = request.session.actorId!;
+    await repository.markAllNotificationsRead({ actorId, spaceId: query.spaceId });
     return { status: "ok" };
   });
 }

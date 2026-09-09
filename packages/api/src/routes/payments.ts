@@ -28,15 +28,23 @@ export default async function paymentsRoutes(
 ): Promise<void> {
   const { payments } = opts;
 
+  app.get("/payments/providers", { preHandler: requireAuth }, async () => {
+    return { items: payments.availableProviders() };
+  });
+
   app.post("/payment-intents", { preHandler: requireAuth }, async (request, reply) => {
     const body = parse(CreateIntentBody, request.body, reply);
     if (!body) return;
-    const intent = await payments.createIntent({
-      ...body,
-      metadata: body.metadata ?? null,
-    });
-    reply.code(201);
-    return intent;
+    try {
+      const intent = await payments.createIntent({
+        ...body,
+        metadata: body.metadata ?? null,
+      });
+      reply.code(201);
+      return intent;
+    } catch (err) {
+      return fail(reply, 400, err instanceof Error ? err.message : "cannot create payment intent");
+    }
   });
 
   app.get("/payment-intents", { preHandler: requireAuth }, async (request) => {

@@ -2,8 +2,11 @@ import { z } from "zod";
 import type { FastifyInstance } from "fastify";
 import { Id } from "@jamot/contracts";
 import type { JamotRepository } from "../repository.js";
+import { notifyTaskCompleted } from "@jamot/core/notifications";
 import { createRbac, requireAuth } from "../rbac.js";
 import { fail, parse } from "../util.js";
+import type { ReputationService } from "@jamot/core/reputation";
+import { recordTaskCompletion } from "@jamot/core/reputation";
 
 const CreateTaskBody = z.object({
   spaceId: Id,
@@ -42,7 +45,7 @@ const AddAttachmentBody = z.object({
   data: z.string().min(1),
 });
 
-export function tasksRoutes(repo: JamotRepository) {
+export function tasksRoutes(repo: JamotRepository, reputation: ReputationService) {
   const { requireSpaceAccess } = createRbac(repo);
 
   return async function (app: FastifyInstance): Promise<void> {
@@ -138,6 +141,10 @@ export function tasksRoutes(repo: JamotRepository) {
 
       const updated = await repo.updateTaskStatus(id, body.status);
       if (!updated) return fail(reply, 404, "task not found");
+      if (body.status === "completed" && task.status !== "completed") {
+        await notifyTaskCompleted(repo, updated);
+        await recordTaskCompletion(reputation, updated);
+      }
       return updated;
     });
 

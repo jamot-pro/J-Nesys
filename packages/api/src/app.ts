@@ -21,6 +21,7 @@ import { organizationsRoutes } from "./routes/organizations.js";
 import { dreamRoutes } from "./routes/dream.js";
 import { spacesRoutes } from "./routes/spaces.js";
 import { rolesRoutes } from "./routes/roles.js";
+import { policiesRoutes } from "./routes/policies.js";
 import { tasksRoutes } from "./routes/tasks.js";
 import { authRoutes } from "./routes/auth.js";
 import connectorsRoutes from "./routes/connectors.js";
@@ -223,7 +224,8 @@ export async function buildApp(opts: BuildAppOptions) {
   await app.register(dreamRoutes(opts.repository, { memoryProvider }), { prefix: "/api" });
   await app.register(spacesRoutes(opts.repository), { prefix: "/api" });
   await app.register(rolesRoutes(opts.repository), { prefix: "/api" });
-  await app.register(tasksRoutes(opts.repository), { prefix: "/api" });
+  await app.register(policiesRoutes(opts.repository), { prefix: "/api" });
+  await app.register(tasksRoutes(opts.repository, reputation), { prefix: "/api" });
   await app.register(authRoutes(opts.repository), { prefix: "/api" });
   await app.register(connectorsRoutes, { prefix: "/api", ...routeOpts });
   await app.register(composioRoutes, {
