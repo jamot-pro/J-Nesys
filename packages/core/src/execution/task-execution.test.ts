@@ -41,8 +41,19 @@ async function setup() {
 }
 
 describe("createTaskExecutionProcessor", () => {
-  it("blocks execution when no policy allows it (default-deny, matching evaluate([]) === deny)", async () => {
-    const { repo, task } = await setup();
+  it("blocks execution when a policy explicitly denies the capability", async () => {
+    // createSpace() now seeds a permissive default "allow *" policy
+    // (fix/policy-engine-reachability), so an empty policy list is no
+    // longer reachable through the normal path - the blocked case is an
+    // admin narrowing access with an explicit deny, which evaluate()'s
+    // deny-short-circuit still honors over the seeded allow.
+    const { repo, space, task } = await setup();
+    await repo.createPolicy({
+      spaceId: space.id,
+      name: "Deny execution",
+      capability: "task.execution",
+      decision: "deny",
+    });
     const harness = fakeHarnessRegistry(async () => {
       throw new Error("should not be called");
     });

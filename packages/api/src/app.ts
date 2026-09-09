@@ -225,7 +225,7 @@ export async function buildApp(opts: BuildAppOptions) {
   await app.register(spacesRoutes(opts.repository), { prefix: "/api" });
   await app.register(rolesRoutes(opts.repository), { prefix: "/api" });
   await app.register(policiesRoutes(opts.repository), { prefix: "/api" });
-  await app.register(tasksRoutes(opts.repository), { prefix: "/api" });
+  await app.register(tasksRoutes(opts.repository, reputation), { prefix: "/api" });
   await app.register(authRoutes(opts.repository), { prefix: "/api" });
   await app.register(connectorsRoutes, { prefix: "/api", ...routeOpts });
   await app.register(composioRoutes, {
