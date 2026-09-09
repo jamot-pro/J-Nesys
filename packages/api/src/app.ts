@@ -9,6 +9,7 @@ import { createHash } from "node:crypto";
 import { join } from "node:path";
 import type { JamotRepository } from "./repository.js";
 import { sessionOptions } from "./auth.js";
+import { buildCorsOrigin } from "./cors.js";
 import type { FastifySessionOptions } from "@fastify/session";
 import { createSecretStore } from "@jamot/core/secrets/secret-store";
 import { createCredentialResolver } from "@jamot/core/secrets/credential-resolution";
@@ -139,7 +140,10 @@ export async function buildApp(opts: BuildAppOptions) {
   await app.register(cookie);
   await app.register(session, sessionOptions(opts.secret, opts.sessionStore));
   await app.register(helmet, { global: true });
-  await app.register(cors, { origin: true, credentials: true });
+  await app.register(cors, {
+    origin: buildCorsOrigin(process.env.CORS_ORIGIN),
+    credentials: true,
+  });
   await app.register(rateLimit, { max: 1000, timeWindow: "1 minute" });
 
   const uploadsRoot = process.env.UPLOADS_DIR ?? join(process.cwd(), "uploads");
