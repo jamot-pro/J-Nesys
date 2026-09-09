@@ -38,7 +38,7 @@ function Hint() {
   );
 }
 
-function ChatContent() {
+function ChatContent({ threadId }: { threadId?: string }) {
   const { space } = useAppShell();
   const searchParams = useSearchParams();
   const agentId = searchParams.get("agent");
@@ -89,6 +89,7 @@ function ChatContent() {
       <div className="min-h-0 flex-1 overflow-hidden">
         <CopilotChat
           className="h-full"
+          threadId={threadId}
           welcomeScreen={false}
           input={{ textArea: MentionTextarea }}
           labels={{
@@ -103,10 +104,10 @@ function ChatContent() {
   );
 }
 
-export function ChatWorkspace() {
+export function ChatWorkspace({ threadId }: { threadId?: string } = {}) {
   return (
     <Suspense>
-      <ChatContent />
+      <ChatContent threadId={threadId} />
     </Suspense>
   );
 }
