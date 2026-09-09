@@ -11,6 +11,7 @@ import type {
   LeadList,
   LeadListMember,
   MergeCandidate,
+  Notification,
   OrgEdge,
   OrgNode,
   Organization,
@@ -311,6 +312,17 @@ export interface NewPolicy {
   minRole?: Policy["minRole"];
   riskThreshold?: number;
   decision: Policy["decision"];
+}
+
+export interface NewNotification {
+  spaceId: string;
+  /** Recipient actor. */
+  actorId: string;
+  type: Notification["type"];
+  title: string;
+  summary?: string;
+  targetSection?: string | null;
+  targetId?: string | null;
 }
 
 export interface NewSupplier {
@@ -825,6 +837,13 @@ export interface JamotRepository {
   // policies
   createPolicy(input: NewPolicy): Promise<Policy>;
   listPolicies(filter?: { spaceId?: string }): Promise<Policy[]>;
+
+  // notifications
+  createNotification(input: NewNotification): Promise<Notification>;
+  listNotifications(filter: { actorId: string; spaceId?: string }): Promise<Notification[]>;
+  /** Scoped to actorId so an actor can only mark their own notifications read. */
+  markNotificationRead(id: string, actorId: string): Promise<Notification | null>;
+  markAllNotificationsRead(filter: { actorId: string; spaceId?: string }): Promise<void>;
 
   // secrets
   putSecret(secret: SecretRecord): Promise<void>;
