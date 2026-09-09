@@ -25,6 +25,7 @@ import type {
   Identity,
   LeadList,
   LeadListMember,
+  CustomAppManifest,
   MergeCandidate,
   Notification,
   OrgEdge,
@@ -65,6 +66,7 @@ import {
   connectors,
   events,
   identities,
+  customApps,
   modelProviders,
   notifications,
   organizations,
@@ -111,6 +113,7 @@ import type {
   NewLeadList,
   NewLeadListMember,
   NewLeadPerson,
+  NewCustomApp,
   NewMergeCandidate,
   NewNotification,
   NewOrganization,
@@ -156,6 +159,7 @@ type ConnectorRow = typeof connectors.$inferSelect;
 type CapabilityRow = typeof capabilities.$inferSelect;
 type PolicyRow = typeof policies.$inferSelect;
 type NotificationRow = typeof notifications.$inferSelect;
+type CustomAppRow = typeof customApps.$inferSelect;
 type SecretRow = typeof secrets.$inferSelect;
 type ComposioOAuthStateRow = typeof composioOauthStates.$inferSelect;
 type LeadListRow = typeof leadLists.$inferSelect;
@@ -562,6 +566,28 @@ function toNotification(row: NotificationRow): Notification {
     read: row.read,
     targetSection: row.targetSection,
     targetId: row.targetId as Id | null,
+    createdAt: row.createdAt,
+    updatedAt: row.updatedAt,
+  };
+}
+
+function toCustomApp(row: CustomAppRow): CustomAppManifest {
+  return {
+    id: row.id as Id,
+    organizationId: row.organizationId as Id,
+    slug: row.slug,
+    name: row.name,
+    version: row.version,
+    description: row.description,
+    entities: row.entities,
+    capabilities: row.capabilities,
+    tools: row.tools,
+    events: row.events,
+    hooks: row.hooks,
+    settings: row.settings,
+    canvas: row.canvas,
+    permissions: row.permissions,
+    createdByActorId: row.createdByActorId as Id,
     createdAt: row.createdAt,
     updatedAt: row.updatedAt,
   };
@@ -2451,6 +2477,42 @@ export function createPgRepository(db: Db): JamotRepository {
             ? and(eq(notifications.actorId, filter.actorId), eq(notifications.spaceId, filter.spaceId))
             : eq(notifications.actorId, filter.actorId),
         );
+    },
+
+    async createCustomApp(input: NewCustomApp) {
+      const [row] = await q
+        .insert(customApps)
+        .values({
+          organizationId: input.organizationId,
+          slug: input.slug,
+          name: input.name,
+          version: input.version ?? "1.0.0",
+          description: input.description ?? "",
+          entities: input.entities ?? [],
+          capabilities: input.capabilities ?? [],
+          tools: input.tools ?? [],
+          events: input.events ?? [],
+          hooks: input.hooks ?? [],
+          settings: input.settings ?? {},
+          canvas: input.canvas ?? [],
+          permissions: input.permissions ?? [],
+          createdByActorId: input.createdByActorId,
+        })
+        .returning();
+      if (!row) throw new Error("failed to create custom app");
+      return toCustomApp(row);
+    },
+
+    async listCustomApps(filter) {
+      const rows = await q
+        .select()
+        .from(customApps)
+        .where(eq(customApps.organizationId, filter.organizationId));
+      return rows.map(toCustomApp);
+    },
+
+    async deleteCustomApp(id) {
+      await q.delete(customApps).where(eq(customApps.id, id));
     },
 
     async putSecret(secret) {

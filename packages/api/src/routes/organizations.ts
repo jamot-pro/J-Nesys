@@ -3,6 +3,7 @@ import type { FastifyInstance } from "fastify";
 import { mkdir, writeFile } from "node:fs/promises";
 import { join } from "node:path";
 import {
+  CreateCustomAppBody,
   DeleteOrganizationBody,
   Id,
   OrgMemberRoleKind,
@@ -110,12 +111,39 @@ export function organizationsRoutes(
     });
   };
 
-  const appsPayload = (organizationId: string, enabledAppIds: string[]): AppsPayload => {
-    const valid = enabledAppIds.filter((appId) => opts.apps.get(appId) !== null);
+  // Custom apps are org-scoped DB rows, never written into the shared
+  // in-process AppRegistry - merging them in per-request keeps one org's
+  // custom apps from leaking into another org's catalog.
+  const catalogFor = async (organizationId: string): Promise<AppManifest[]> => {
+    const custom = await repo.listCustomApps({ organizationId });
+    const customManifests: AppManifest[] = custom.map((c) => ({
+      id: c.slug,
+      name: c.name,
+      version: c.version,
+      description: c.description,
+      entities: c.entities,
+      capabilities: c.capabilities,
+      tools: c.tools,
+      events: c.events,
+      hooks: c.hooks,
+      settings: c.settings,
+      canvas: c.canvas,
+      permissions: c.permissions,
+    }));
+    return [...opts.apps.list(), ...customManifests];
+  };
+
+  const appsPayload = (
+    organizationId: string,
+    enabledAppIds: string[],
+    catalog: AppManifest[],
+  ): AppsPayload => {
+    const catalogIds = new Set(catalog.map((m) => m.id));
+    const valid = enabledAppIds.filter((appId) => catalogIds.has(appId));
     return {
       organizationId,
       enabledAppIds: valid,
-      apps: opts.apps.list().map((m) => ({ ...m, enabled: valid.includes(m.id) })),
+      apps: catalog.map((m) => ({ ...m, enabled: valid.includes(m.id) })),
     };
   };
 
@@ -717,7 +745,8 @@ export function organizationsRoutes(
         if (!id) return;
         const organization = await repo.getOrganization(id);
         if (!organization) return fail(reply, 404, "organization not found");
-        return appsPayload(organization.id, organization.enabledAppIds);
+        const catalog = await catalogFor(organization.id);
+        return appsPayload(organization.id, organization.enabledAppIds, catalog);
       },
     );
 
@@ -733,7 +762,9 @@ export function organizationsRoutes(
         const body = parse(UpdateOrganizationApps, request.body, reply);
         if (!body) return;
 
-        const invalid = body.enabledAppIds.filter((appId) => !opts.apps.get(appId));
+        const catalog = await catalogFor(organization.id);
+        const catalogIds = new Set(catalog.map((m) => m.id));
+        const invalid = body.enabledAppIds.filter((appId) => !catalogIds.has(appId));
         if (invalid.length > 0) {
           return fail(reply, 400, `unknown app ids: ${invalid.join(", ")}`);
         }
@@ -748,7 +779,81 @@ export function organizationsRoutes(
 
         const updated = await repo.getOrganization(id);
         if (!updated) return fail(reply, 404, "organization not found");
-        return appsPayload(updated.id, updated.enabledAppIds);
+        return appsPayload(updated.id, updated.enabledAppIds, catalog);
+      },
+    );
+
+    app.post(
+      "/organizations/:id/apps/custom",
+      { preHandler: rbac.requireOrgAdmin("id") },
+      async (request, reply) => {
+        const params = request.params as { id?: string };
+        const id = parse(Id, params.id, reply);
+        if (!id) return;
+        const organization = await repo.getOrganization(id);
+        if (!organization) return fail(reply, 404, "organization not found");
+        const body = parse(CreateCustomAppBody, request.body, reply);
+        if (!body) return;
+
+        const catalog = await catalogFor(organization.id);
+        if (catalog.some((m) => m.id === body.slug)) {
+          return fail(reply, 409, `an app with slug "${body.slug}" already exists for this org`);
+        }
+
+        const actorId = request.session.actorId!;
+        const created = await repo.createCustomApp({
+          organizationId: organization.id,
+          slug: body.slug,
+          name: body.name,
+          version: body.version,
+          description: body.description,
+          entities: body.entities,
+          capabilities: body.capabilities,
+          tools: body.tools,
+          events: body.events,
+          hooks: body.hooks,
+          settings: body.settings,
+          canvas: body.canvas,
+          permissions: body.permissions,
+          createdByActorId: actorId,
+        });
+
+        await writeOrgMemory(organization.id, {
+          type: "apps.custom.registered",
+          slug: created.slug,
+          byActorId: actorId,
+        });
+
+        reply.code(201);
+        return created;
+      },
+    );
+
+    app.delete(
+      "/organizations/:id/apps/custom/:customAppId",
+      { preHandler: rbac.requireOrgAdmin("id") },
+      async (request, reply) => {
+        const params = request.params as { id?: string; customAppId?: string };
+        const id = parse(Id, params.id, reply);
+        if (!id) return;
+        const customAppId = parse(Id, params.customAppId, reply);
+        if (!customAppId) return;
+        const organization = await repo.getOrganization(id);
+        if (!organization) return fail(reply, 404, "organization not found");
+
+        const custom = await repo.listCustomApps({ organizationId: organization.id });
+        const target = custom.find((c) => c.id === customAppId);
+        if (!target) return fail(reply, 404, "custom app not found");
+
+        await repo.deleteCustomApp(customAppId);
+
+        if (organization.enabledAppIds.includes(target.slug)) {
+          await repo.updateOrganization(id, {
+            enabledAppIds: organization.enabledAppIds.filter((appId) => appId !== target.slug),
+          });
+        }
+
+        reply.code(204).send();
       },
     );
   };

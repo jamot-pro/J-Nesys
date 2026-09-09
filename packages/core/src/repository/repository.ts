@@ -10,6 +10,7 @@ import type {
   Identity,
   LeadList,
   LeadListMember,
+  CustomAppManifest,
   MergeCandidate,
   Notification,
   OrgEdge,
@@ -323,6 +324,23 @@ export interface NewNotification {
   summary?: string;
   targetSection?: string | null;
   targetId?: string | null;
+}
+
+export interface NewCustomApp {
+  organizationId: string;
+  slug: string;
+  name: string;
+  version?: string;
+  description?: string;
+  entities?: string[];
+  capabilities?: string[];
+  tools?: string[];
+  events?: string[];
+  hooks?: string[];
+  settings?: Record<string, unknown>;
+  canvas?: string[];
+  permissions?: string[];
+  createdByActorId: string;
 }
 
 export interface NewSupplier {
@@ -845,6 +863,11 @@ export interface JamotRepository {
   /** Scoped to actorId so an actor can only mark their own notifications read. */
   markNotificationRead(id: string, actorId: string): Promise<Notification | null>;
   markAllNotificationsRead(filter: { actorId: string; spaceId?: string }): Promise<void>;
+
+  // custom apps (per-org, beyond the built-in catalog)
+  createCustomApp(input: NewCustomApp): Promise<CustomAppManifest>;
+  listCustomApps(filter: { organizationId: string }): Promise<CustomAppManifest[]>;
+  deleteCustomApp(id: string): Promise<void>;
 
   // secrets
   putSecret(secret: SecretRecord): Promise<void>;

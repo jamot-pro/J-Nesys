@@ -11,6 +11,7 @@ import {
   Identity,
   LeadList,
   LeadListMember,
+  CustomAppManifest,
   MergeCandidate,
   Notification,
   OrgEdge,
@@ -52,6 +53,7 @@ import type {
   NewLeadList,
   NewLeadListMember,
   NewLeadPerson,
+  NewCustomApp,
   NewMergeCandidate,
   NewNotification,
   NewOrganization,
@@ -104,6 +106,7 @@ export function createMemoryRepository(): JamotRepository {
   const capabilities = new Map<string, Capability>();
   const policies = new Map<string, Policy>();
   const notificationStore = new Map<string, Notification>();
+  const customAppStore = new Map<string, CustomAppManifest>();
   const relationships = new Map<string, Relationship>();
   const events: Event[] = [];
   const secrets = new Map<string, SecretRecord>();
@@ -1305,6 +1308,39 @@ export function createMemoryRepository(): JamotRepository {
         if (filter.spaceId && notification.spaceId !== filter.spaceId) continue;
         notificationStore.set(notification.id, { ...notification, read: true, updatedAt: now() });
       }
+    },
+
+    async createCustomApp(input: NewCustomApp) {
+      const timestamp = now();
+      const customApp = CustomAppManifest.parse({
+        id: uuid(),
+        organizationId: input.organizationId,
+        slug: input.slug,
+        name: input.name,
+        version: input.version ?? "1.0.0",
+        description: input.description ?? "",
+        entities: input.entities ?? [],
+        capabilities: input.capabilities ?? [],
+        tools: input.tools ?? [],
+        events: input.events ?? [],
+        hooks: input.hooks ?? [],
+        settings: input.settings ?? {},
+        canvas: input.canvas ?? [],
+        permissions: input.permissions ?? [],
+        createdByActorId: input.createdByActorId,
+        createdAt: timestamp,
+        updatedAt: timestamp,
+      });
+      customAppStore.set(customApp.id, customApp);
+      return customApp;
+    },
+
+    async listCustomApps(filter) {
+      return [...customAppStore.values()].filter((a) => a.organizationId === filter.organizationId);
+    },
+
+    async deleteCustomApp(id) {
+      customAppStore.delete(id);
     },
 
     async putSecret(secret) {
