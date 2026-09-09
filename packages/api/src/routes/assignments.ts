@@ -5,6 +5,7 @@ import type { JamotRepository } from "../repository.js";
 import { createRoutingPipeline } from "@jamot/core/routing";
 import type { LLMProvider } from "@jamot/core/llm";
 import { createLLMProvider, resolveEnabledModel } from "@jamot/core/llm";
+import { notifyApprovalRequired, notifyTaskAssigned } from "@jamot/core/notifications";
 import type { SecretStoreLike } from "../app.js";
 import { requireAuth } from "../rbac.js";
 import { fail, parse } from "../util.js";
@@ -65,6 +66,9 @@ export default async function assignmentsRoutes(
       });
 
       if (!result.assignment) {
+        if (result.decision === "require_human" || result.decision === "require_admin") {
+          await notifyApprovalRequired(repository, task);
+        }
         return fail(
           reply,
           409,
@@ -77,6 +81,7 @@ export default async function assignmentsRoutes(
       ]);
       if (!assigned) return fail(reply, 404, "task not found");
       await repository.updateTaskStatus(id, "assigned");
+      await notifyTaskAssigned(repository, task, result.assignment.actorId);
       return assigned;
     },
   );

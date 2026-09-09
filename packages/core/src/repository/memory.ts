@@ -12,6 +12,7 @@ import {
   LeadList,
   LeadListMember,
   MergeCandidate,
+  Notification,
   OrgEdge,
   OrgNode,
   Organization,
@@ -52,6 +53,7 @@ import type {
   NewLeadListMember,
   NewLeadPerson,
   NewMergeCandidate,
+  NewNotification,
   NewOrganization,
   NewOutreachCampaign,
   NewOutreachList,
@@ -101,6 +103,7 @@ export function createMemoryRepository(): JamotRepository {
   const composioOAuthStates = new Map<string, ComposioOAuthStateRecord>();
   const capabilities = new Map<string, Capability>();
   const policies = new Map<string, Policy>();
+  const notificationStore = new Map<string, Notification>();
   const relationships = new Map<string, Relationship>();
   const events: Event[] = [];
   const secrets = new Map<string, SecretRecord>();
@@ -1259,6 +1262,49 @@ export function createMemoryRepository(): JamotRepository {
       const all = [...policies.values()];
       if (!filter?.spaceId) return all;
       return all.filter((p) => p.spaceId === filter.spaceId);
+    },
+
+    async createNotification(input: NewNotification) {
+      const timestamp = now();
+      const notification = Notification.parse({
+        id: uuid(),
+        spaceId: input.spaceId,
+        actorId: input.actorId,
+        type: input.type,
+        title: input.title,
+        summary: input.summary ?? "",
+        read: false,
+        targetSection: input.targetSection ?? null,
+        targetId: input.targetId ?? null,
+        createdAt: timestamp,
+        updatedAt: timestamp,
+      });
+      notificationStore.set(notification.id, notification);
+      return notification;
+    },
+
+    async listNotifications(filter) {
+      return [...notificationStore.values()]
+        .filter(
+          (n) => n.actorId === filter.actorId && (!filter.spaceId || n.spaceId === filter.spaceId),
+        )
+        .sort((a, b) => b.createdAt.localeCompare(a.createdAt));
+    },
+
+    async markNotificationRead(id, actorId) {
+      const notification = notificationStore.get(id);
+      if (!notification || notification.actorId !== actorId) return null;
+      const updated = { ...notification, read: true, updatedAt: now() };
+      notificationStore.set(id, updated);
+      return updated;
+    },
+
+    async markAllNotificationsRead(filter) {
+      for (const notification of notificationStore.values()) {
+        if (notification.actorId !== filter.actorId) continue;
+        if (filter.spaceId && notification.spaceId !== filter.spaceId) continue;
+        notificationStore.set(notification.id, { ...notification, read: true, updatedAt: now() });
+      }
     },
 
     async putSecret(secret) {

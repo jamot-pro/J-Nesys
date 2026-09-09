@@ -29,6 +29,7 @@
     "./apps": "./src/apps/index.ts",
     "./resolver": "./src/resolver/index.ts",
     "./reputation": "./src/reputation/index.ts",
+    "./notifications": "./src/notifications/index.ts",
     "./treasury": "./src/treasury/index.ts",
     "./commerce": "./src/commerce/index.ts",
     "./payments": "./src/payments/index.ts",

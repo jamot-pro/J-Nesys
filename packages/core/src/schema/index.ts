@@ -690,6 +690,36 @@ export const policies = pgTable("policies", {
   decision: policyDecisionEnum("decision").notNull(),
 });
 
+export const notificationTypeEnum = pgEnum("notification_type", [
+  "approval",
+  "completed",
+  "warning",
+  "opportunity",
+  "proposal",
+  "message",
+]);
+
+export const notifications = pgTable(
+  "notifications",
+  {
+    id: uuid("id").defaultRandom().primaryKey(),
+    spaceId: uuid("space_id")
+      .notNull()
+      .references(() => spaces.id),
+    actorId: uuid("actor_id")
+      .notNull()
+      .references(() => actors.id),
+    type: notificationTypeEnum("type").notNull(),
+    title: text("title").notNull(),
+    summary: text("summary").notNull().default(""),
+    read: boolean("read").notNull().default(false),
+    targetSection: text("target_section"),
+    targetId: uuid("target_id"),
+    ...timestamps(),
+  },
+  (table) => [index("notifications_actor_space_idx").on(table.actorId, table.spaceId)],
+);
+
 export const events = pgTable(
   "events",
   {
@@ -1303,6 +1333,7 @@ export const schema = {
   connectors,
   capabilities,
   policies,
+  notifications,
   events,
   auditLog,
   secrets,
