@@ -18,6 +18,7 @@
     "./services/capabilities": "./src/services/capabilities.ts",
     "./composio": "./src/composio/index.ts",
     "./harness": "./src/harness/index.ts",
+    "./execution": "./src/execution/index.ts",
     "./mcp": "./src/mcp/index.ts",
     "./channels": "./src/channels/index.ts",
     "./ingest": "./src/ingest/index.ts",
