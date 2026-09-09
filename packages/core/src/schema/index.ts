@@ -10,6 +10,7 @@ import {
   real,
   text,
   timestamp,
+  uniqueIndex,
   uuid,
 } from "drizzle-orm/pg-core";
 import type { AnyPgColumn } from "drizzle-orm/pg-core";
@@ -690,6 +691,39 @@ export const policies = pgTable("policies", {
   decision: policyDecisionEnum("decision").notNull(),
 });
 
+export const customApps = pgTable(
+  "custom_apps",
+  {
+    id: uuid("id").defaultRandom().primaryKey(),
+    organizationId: uuid("organization_id")
+      .notNull()
+      .references(() => organizations.id, { onDelete: "cascade" }),
+    slug: text("slug").notNull(),
+    name: text("name").notNull(),
+    version: text("version").notNull().default("1.0.0"),
+    description: text("description").notNull().default(""),
+    entities: text("entities").array().notNull().default(sql`'{}'::text[]`),
+    capabilities: text("capabilities").array().notNull().default(sql`'{}'::text[]`),
+    tools: text("tools").array().notNull().default(sql`'{}'::text[]`),
+    events: text("events").array().notNull().default(sql`'{}'::text[]`),
+    hooks: text("hooks").array().notNull().default(sql`'{}'::text[]`),
+    settings: jsonb("settings")
+      .$type<Record<string, unknown>>()
+      .notNull()
+      .default(sql`'{}'::jsonb`),
+    canvas: text("canvas").array().notNull().default(sql`'{}'::text[]`),
+    permissions: text("permissions").array().notNull().default(sql`'{}'::text[]`),
+    createdByActorId: uuid("created_by_actor_id")
+      .notNull()
+      .references(() => actors.id),
+    ...timestamps(),
+  },
+  (table) => [
+    index("custom_apps_organization_id_idx").on(table.organizationId),
+    uniqueIndex("custom_apps_org_slug_unique").on(table.organizationId, table.slug),
+  ],
+);
+
 export const events = pgTable(
   "events",
   {
@@ -1303,6 +1337,7 @@ export const schema = {
   connectors,
   capabilities,
   policies,
+  customApps,
   events,
   auditLog,
   secrets,

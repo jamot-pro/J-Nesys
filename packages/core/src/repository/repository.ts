@@ -10,6 +10,7 @@ import type {
   Identity,
   LeadList,
   LeadListMember,
+  CustomAppManifest,
   MergeCandidate,
   OrgEdge,
   OrgNode,
@@ -311,6 +312,23 @@ export interface NewPolicy {
   minRole?: Policy["minRole"];
   riskThreshold?: number;
   decision: Policy["decision"];
+}
+
+export interface NewCustomApp {
+  organizationId: string;
+  slug: string;
+  name: string;
+  version?: string;
+  description?: string;
+  entities?: string[];
+  capabilities?: string[];
+  tools?: string[];
+  events?: string[];
+  hooks?: string[];
+  settings?: Record<string, unknown>;
+  canvas?: string[];
+  permissions?: string[];
+  createdByActorId: string;
 }
 
 export interface NewSupplier {
@@ -825,6 +843,11 @@ export interface JamotRepository {
   // policies
   createPolicy(input: NewPolicy): Promise<Policy>;
   listPolicies(filter?: { spaceId?: string }): Promise<Policy[]>;
+
+  // custom apps (per-org, beyond the built-in catalog)
+  createCustomApp(input: NewCustomApp): Promise<CustomAppManifest>;
+  listCustomApps(filter: { organizationId: string }): Promise<CustomAppManifest[]>;
+  deleteCustomApp(id: string): Promise<void>;
 
   // secrets
   putSecret(secret: SecretRecord): Promise<void>;
