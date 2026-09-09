@@ -209,14 +209,6 @@ function AppPanelBody({ app }: { app: AppManifest }) {
   );
 }
 
-/** True whenever the shell has something to show for the current
- * activeSection/activeAppId — used by callers to decide whether to render a
- * dock/aside at all. */
-export function useHasSectionContent(): boolean {
-  const { activeSection, activeAppId } = useAppShell();
-  return Boolean(activeSection || activeAppId);
-}
-
 export function useSectionTitle(): string {
   const { activeSection, activeAppId, availableApps } = useAppShell();
   if (activeAppId) {
