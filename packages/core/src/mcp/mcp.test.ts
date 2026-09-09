@@ -1,26 +1,61 @@
-import { afterEach, describe, expect, it } from "vitest";
-import { assertSafeMcpUrl } from "./ssrf.js";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import { createMcpClient } from "./client.js";
 
 describe("assertSafeMcpUrl", () => {
-  it("accepts a public https URL", () => {
-    expect(() => assertSafeMcpUrl("https://mcp.example.com/mcp")).not.toThrow();
+  afterEach(() => {
+    vi.resetModules();
+    vi.doUnmock("node:dns/promises");
   });
 
-  it("rejects localhost", () => {
-    expect(() => assertSafeMcpUrl("http://localhost:3000/mcp")).toThrow(/loopback|host/);
+  it("accepts a public https URL", async () => {
+    const { assertSafeMcpUrl } = await import("./ssrf.js");
+    await expect(assertSafeMcpUrl("https://mcp.example.com/mcp")).resolves.toBeUndefined();
   });
 
-  it("rejects private IPv4", () => {
-    expect(() => assertSafeMcpUrl("http://192.168.1.1/mcp")).toThrow(/private IPv4/);
+  it("rejects localhost", async () => {
+    const { assertSafeMcpUrl } = await import("./ssrf.js");
+    await expect(assertSafeMcpUrl("http://localhost:3000/mcp")).rejects.toThrow(/loopback|host/);
   });
 
-  it("rejects non-http(s) schemes", () => {
-    expect(() => assertSafeMcpUrl("ftp://mcp.example.com/mcp")).toThrow(/scheme/);
+  it("rejects private IPv4", async () => {
+    const { assertSafeMcpUrl } = await import("./ssrf.js");
+    await expect(assertSafeMcpUrl("http://192.168.1.1/mcp")).rejects.toThrow(/private IPv4/);
   });
 
-  it("rejects loopback IPv6", () => {
-    expect(() => assertSafeMcpUrl("http://[::1]/mcp")).toThrow(/private IPv6/);
+  it("rejects non-http(s) schemes", async () => {
+    const { assertSafeMcpUrl } = await import("./ssrf.js");
+    await expect(assertSafeMcpUrl("ftp://mcp.example.com/mcp")).rejects.toThrow(/scheme/);
+  });
+
+  it("rejects loopback IPv6", async () => {
+    const { assertSafeMcpUrl } = await import("./ssrf.js");
+    await expect(assertSafeMcpUrl("http://[::1]/mcp")).rejects.toThrow(/private IPv6/);
+  });
+
+  // Regression test for a real bug: assertSafeMcpUrl used to fire off the DNS
+  // check without awaiting it, so it always resolved successfully for ANY
+  // hostname regardless of what it resolved to — a hostname that resolves to
+  // a private/internal address sailed straight through. This mocks DNS
+  // resolution to point a public-looking hostname at a private address and
+  // asserts the call now actually rejects.
+  it("rejects a hostname that resolves to a private address", async () => {
+    vi.doMock("node:dns/promises", () => ({
+      lookup: vi.fn().mockResolvedValue([{ address: "10.0.0.5", family: 4 }]),
+    }));
+    const { assertSafeMcpUrl } = await import("./ssrf.js");
+    await expect(assertSafeMcpUrl("http://internal.attacker-controlled.example/mcp")).rejects.toThrow(
+      /resolved to private address/,
+    );
+  });
+
+  it("accepts a hostname that resolves to a public address", async () => {
+    vi.doMock("node:dns/promises", () => ({
+      lookup: vi.fn().mockResolvedValue([{ address: "8.8.8.8", family: 4 }]),
+    }));
+    const { assertSafeMcpUrl } = await import("./ssrf.js");
+    await expect(
+      assertSafeMcpUrl("http://mcp.example.com/mcp"),
+    ).resolves.toBeUndefined();
   });
 });
 

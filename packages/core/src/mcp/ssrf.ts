@@ -47,10 +47,12 @@ function isPrivateIpv6(ip: string): boolean {
   return false;
 }
 
-// Best-effort SSRF guard: scheme and literal-IP checks are synchronous, but a
-// hostname that resolves to a private address (DNS rebinding) is only detected
-// asynchronously and cannot be rejected here — treat this as a heuristic.
-export function assertSafeMcpUrl(url: string): void {
+// SSRF guard: scheme and literal-IP checks are synchronous; a hostname is
+// additionally resolved and every returned address checked before this
+// resolves. Still best-effort against DNS rebinding — the actual outbound
+// request happens after this check returns, so a hostname that starts
+// resolving safely and later rebinds to a private address is not caught.
+export async function assertSafeMcpUrl(url: string): Promise<void> {
   let parsed: URL;
   try {
     parsed = new URL(url);
@@ -82,21 +84,26 @@ export function assertSafeMcpUrl(url: string): void {
     const timeout = new Promise<never>((_, reject) =>
       setTimeout(() => reject(new Error("dns lookup timeout")), 2000),
     );
-    Promise.race([lookup(hostname, { all: true }), timeout])
-      .then((addresses) => {
-        const privateAddr = addresses.find(
-          ({ address }) =>
-            (isIP(address) === 4 && isPrivateIpv4(address)) ||
-            (isIP(address) === 6 && isPrivateIpv6(address)),
-        );
-        if (privateAddr) {
-          throw new Error(
-            `unsafe MCP URL host: ${hostname} resolved to private address ${privateAddr.address}`,
-          );
-        }
-      })
-      .catch(() => {
-        // unresolved hosts are treated as safe; best-effort only
-      });
+    let addresses: { address: string; family: number }[];
+    try {
+      addresses = await Promise.race([lookup(hostname, { all: true }), timeout]);
+    } catch {
+      // Unresolved or slow-to-resolve hosts are treated as safe here — the
+      // outbound request will simply fail on its own if the host doesn't
+      // resolve. This is a deliberate best-effort tradeoff, not a bypass:
+      // unlike before, every address that DOES resolve in time is checked
+      // below and a private one is rejected.
+      return;
+    }
+    const privateAddr = addresses.find(
+      ({ address }) =>
+        (isIP(address) === 4 && isPrivateIpv4(address)) ||
+        (isIP(address) === 6 && isPrivateIpv6(address)),
+    );
+    if (privateAddr) {
+      throw new Error(
+        `unsafe MCP URL host: ${hostname} resolved to private address ${privateAddr.address}`,
+      );
+    }
   }
 }

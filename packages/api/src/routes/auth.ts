@@ -17,28 +17,35 @@ const ChangePasswordBody = z.object({
 
 export function authRoutes(repo: JamotRepository) {
   return async function (app: FastifyInstance): Promise<void> {
-    app.post("/auth/login", async (request, reply) => {
-      const body = parse(LoginBody, request.body, reply);
-      if (!body) return;
+    // Stricter than the app-wide default (1000/min): a login endpoint needs
+    // its own low ceiling or the general API limit does nothing to slow down
+    // password guessing.
+    app.post(
+      "/auth/login",
+      { config: { rateLimit: { max: 10, timeWindow: "1 minute" } } },
+      async (request, reply) => {
+        const body = parse(LoginBody, request.body, reply);
+        if (!body) return;
 
-      const user = await repo.findUserByEmail(body.email.toLowerCase());
-      if (!user || !user.passwordHash) return fail(reply, 401, "invalid credentials");
+        const user = await repo.findUserByEmail(body.email.toLowerCase());
+        if (!user || !user.passwordHash) return fail(reply, 401, "invalid credentials");
 
-      const valid = await verifyPassword(body.password, user.passwordHash);
-      if (!valid) return fail(reply, 401, "invalid credentials");
+        const valid = await verifyPassword(body.password, user.passwordHash);
+        if (!valid) return fail(reply, 401, "invalid credentials");
 
-      // Fresh session id + clear stale host-only cookie: guarantees a single
-      // consistent session after login even if the browser still holds an old
-      // pre-COOKIE_DOMAIN jamot_session cookie.
-      await new Promise<void>((resolve) => {
-        request.session.regenerate(() => resolve());
-      });
-      clearStaleHostOnlySessionCookie(reply);
-      request.session.set("actorId", user.actor.id);
-      request.session.set("personId", user.person.id);
+        // Fresh session id + clear stale host-only cookie: guarantees a single
+        // consistent session after login even if the browser still holds an old
+        // pre-COOKIE_DOMAIN jamot_session cookie.
+        await new Promise<void>((resolve) => {
+          request.session.regenerate(() => resolve());
+        });
+        clearStaleHostOnlySessionCookie(reply);
+        request.session.set("actorId", user.actor.id);
+        request.session.set("personId", user.person.id);
 
-      return { actor: user.actor, person: user.person };
-    });
+        return { actor: user.actor, person: user.person };
+      },
+    );
 
     app.post("/auth/logout", async (request) => {
       await request.session.destroy();

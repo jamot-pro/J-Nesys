@@ -27,7 +27,7 @@ export function createMcpLeadProvider(
       if (!url) return false;
       if (ctx.config.allowPrivate) return true;
       try {
-        assertSafeMcpUrl(url);
+        await assertSafeMcpUrl(url);
         return true;
       } catch {
         return false;
@@ -41,7 +41,7 @@ export function createMcpLeadProvider(
     async search(criteria: LeadCriteria, ctx) {
       const url = String(ctx.config.url ?? "");
       if (!url) throw new Error("MCP server URL is not configured");
-      if (!ctx.config.allowPrivate) assertSafeMcpUrl(url);
+      if (!ctx.config.allowPrivate) await assertSafeMcpUrl(url);
       const headers = (ctx.config.headers ?? {}) as Record<string, string>;
       const client = createMcpClient(url, headers);
       const tool = String(ctx.config.tool ?? "leads.search");

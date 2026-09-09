@@ -320,7 +320,7 @@ export default async function agentsRoutes(
       if (!ownerId) return fail(reply, 401, "Unauthenticated");
 
       try {
-        assertSafeMcpUrl(body.mcpUrl);
+        await assertSafeMcpUrl(body.mcpUrl);
       } catch (err) {
         return fail(reply, 400, err instanceof Error ? err.message : "invalid mcp url");
       }
