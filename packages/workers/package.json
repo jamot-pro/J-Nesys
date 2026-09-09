@@ -13,16 +13,12 @@
     "typecheck": "tsc -p tsconfig.json --noEmit",
     "lint": "echo \"no lint configured\"",
     "dev:scheduler": "tsx watch src/scheduler.ts",
-    "dev:channel": "tsx watch src/channel.ts",
-    "dev:execution": "tsx watch src/execution.ts",
-    "dev:memory": "tsx watch src/memory.ts"
+    "dev:channel": "tsx watch src/channel.ts"
   },
   "dependencies": {
     "@jamot/contracts": "workspace:*",
     "@jamot/core": "workspace:*",
     "@whiskeysockets/baileys": "7.0.0-rc14",
-    "bullmq": "^5.34.0",
-    "ioredis": "^5.4.1",
     "matrix-js-sdk": "^42.1.0",
     "qrcode": "^1.5.4",
     "tsx": "^4.19.2"

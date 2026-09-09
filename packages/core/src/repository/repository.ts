@@ -771,6 +771,7 @@ export interface JamotRepository {
         | "position"
         | "assigneeActorIds"
         | "targetType"
+        | "outcome"
       >
     >,
   ): Promise<Task | null>;

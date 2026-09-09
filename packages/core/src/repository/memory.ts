@@ -726,6 +726,20 @@ export function createMemoryRepository(): JamotRepository {
         name: input.name,
       });
       spaces.set(space.id, space);
+      // Mirrors pg.ts createSpace: seed a permissive baseline policy so the
+      // routing pipeline's default-deny (evaluate([]) === "deny") doesn't
+      // leave a freshly created space unable to assign anything.
+      const defaultPolicy = Policy.parse({
+        id: uuid(),
+        spaceId: space.id,
+        name: "Default — allow",
+        capability: "*",
+        resource: "*",
+        minRole: null,
+        riskThreshold: 0.5,
+        decision: "allow",
+      });
+      policies.set(defaultPolicy.id, defaultPolicy);
       return space;
     },
 

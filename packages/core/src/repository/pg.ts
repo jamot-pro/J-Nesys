@@ -1606,6 +1606,21 @@ export function createPgRepository(db: Db): JamotRepository {
         })
         .returning();
       if (!row) throw new Error("failed to create space");
+      // Every space needs at least one matching policy or the routing
+      // pipeline's default-deny leaves it unable to assign anything (see
+      // policy-engine.ts: evaluate([]) === "deny"). Seed a permissive
+      // baseline so the space is usable immediately; an admin can add
+      // narrower policies later, which correctly override via evaluate()'s
+      // deny-short-circuit.
+      await q.insert(policies).values({
+        spaceId: row.id,
+        name: "Default — allow",
+        capability: "*",
+        resource: "*",
+        minRole: null,
+        riskThreshold: "0.5",
+        decision: "allow",
+      });
       return toSpace(row);
     },
 
