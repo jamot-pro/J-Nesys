@@ -228,4 +228,29 @@ describe("commerce + payments routes smoke", () => {
     expect(records.json().items).toHaveLength(1);
     expect(records.json().items[0].paidAmount).toBe(1700);
   });
+
+  it("reports only the payment providers actually wired, and rejects creating an intent against an unwired one", async () => {
+    const providers = await app.inject({
+      method: "GET",
+      url: "/api/payments/providers",
+      headers: { cookie },
+    });
+    expect(providers.statusCode).toBe(200);
+    expect(providers.json().items).toEqual(["ledger"]);
+
+    const rejected = await app.inject({
+      method: "POST",
+      url: "/api/payment-intents",
+      headers: { cookie },
+      payload: {
+        purchaseOrderId,
+        buyerOrganizationId: BUYER_ORG,
+        sellerOrganizationId: SELLER_ORG,
+        estimatedAmount: 100,
+        provider: "card",
+      },
+    });
+    expect(rejected.statusCode).toBe(400);
+    expect(rejected.json().error).toContain("no payment provider registered for card");
+  });
 });

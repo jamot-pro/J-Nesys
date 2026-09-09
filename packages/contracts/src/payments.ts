@@ -1,7 +1,12 @@
 import { z } from "zod";
 import { EntityBase, Id } from "./common.js";
 
-/** Abstraction seam for payment rails (JAMOT_SPEC §31 — never hard-code one rail). */
+/** Abstraction seam for payment rails (JAMOT_SPEC §31 — never hard-code one rail).
+ * Not every kind listed here has a working implementation yet — only
+ * "ledger" is currently wired (packages/api/src/app.ts). Callers should
+ * check PaymentService.availableProviders() / GET /api/payments/providers
+ * for what's actually usable rather than assuming every enum value works;
+ * PaymentService.createIntent rejects a request for an unregistered kind. */
 export const PaymentProviderKind = z.enum(["ledger", "card", "bank", "stablecoin"]);
 export type PaymentProviderKind = z.infer<typeof PaymentProviderKind>;
 
