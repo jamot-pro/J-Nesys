@@ -2,59 +2,81 @@
 
 @custom-variant dark (&:is(.dark *));
 
+/* Modernist design system (project/styles.css / project/theme.json) — a
+ * near-mono red accent on a warm off-white ground, Archivo throughout, soft
+ * 12px corners, hairline dividers. Existing Tailwind token NAMES are kept
+ * (--background, --card, --accent, ...) so the rest of the app's className
+ * usage doesn't need to change; only the values move to match Modernist. */
 :root {
-  --background: #fdfcfb;
-  --foreground: #1c1917;
-  --muted: #f5f3f0;
-  --muted-foreground: #78716c;
-  /* Hairline divider, ~11% ink on this background (design-system port). */
-  --border: #e5e3e1;
-  --card: #ffffff;
-  --card-foreground: #1c1917;
-  --accent: #1c1917;
-  --accent-foreground: #fdfcfb;
-  --ring: #d6d3d1;
-  --sidebar: #faf9f7;
-  --sidebar-foreground: #292524;
-  /* Jamot brand red (design-system port, 2026-09) — was #e11d48. */
+  --background: #f3f2f2;
+  --foreground: #201e1d;
+  --muted: #f8f4f4;
+  --muted-foreground: color-mix(in srgb, #201e1d 55%, transparent);
+  --border: color-mix(in srgb, #201e1d 11%, transparent);
+  --card: #eae9e9;
+  --card-foreground: #201e1d;
+  --accent: #201e1d;
+  --accent-foreground: #f3f2f2;
+  --ring: #ff2657;
+  --sidebar: #eae9e9;
+  --sidebar-foreground: #201e1d;
   --space-accent: #ff2657;
-  --space-accent-foreground: #ffffff;
-  /* Accent-tinted text/links, contrast-safe against --background — derived from
-     --space-accent so it tracks per-space branding instead of being a fixed hex. */
-  --accent-ink: color-mix(in srgb, var(--space-accent) 65%, black);
+  --space-accent-foreground: #f3f2f2;
+  --accent-ink: #a80a2f;
   --radius: 0.75rem;
-  /* Soft, ink-tinted layered shadows (design-system port) — opt-in via
-     shadow-[var(--shadow-soft-*)], not wired into Tailwind's own shadow-* scale. */
-  --shadow-soft-sm: 0 1px 2px color-mix(in srgb, var(--foreground) 5%, transparent),
-    0 2px 8px color-mix(in srgb, var(--foreground) 5%, transparent);
-  --shadow-soft-md: 0 2px 6px color-mix(in srgb, var(--foreground) 5%, transparent),
-    0 12px 28px color-mix(in srgb, var(--foreground) 7%, transparent);
-  --shadow-soft-lg: 0 6px 16px color-mix(in srgb, var(--foreground) 7%, transparent),
-    0 32px 72px color-mix(in srgb, var(--foreground) 12%, transparent);
+  --shadow-sm: 0 1px 2px color-mix(in srgb, #2d2b2b 5%, transparent), 0 2px 8px color-mix(in srgb, #2d2b2b 5%, transparent);
+  --shadow-md: 0 2px 6px color-mix(in srgb, #2d2b2b 5%, transparent), 0 12px 28px color-mix(in srgb, #2d2b2b 7%, transparent);
+  --shadow-lg: 0 6px 16px color-mix(in srgb, #2d2b2b 7%, transparent), 0 32px 72px color-mix(in srgb, #2d2b2b 12%, transparent);
+  /* Aliases for AppShell/DockPanel/LeftSidebar, which reference these names
+     directly via shadow-[var(--shadow-soft-*)] - kept until Phase B replaces
+     those components, rather than touching them in a tokens-only change. */
+  --shadow-soft-sm: var(--shadow-sm);
+  --shadow-soft-md: var(--shadow-md);
+  --shadow-soft-lg: var(--shadow-lg);
+
+  /* Tonal ramps, OKLCH-derived — see project/styles.css for the full set. */
+  --color-neutral-100: #f8f4f4;
+  --color-neutral-200: #eae7e7;
+  --color-neutral-300: #d7d3d3;
+  --color-neutral-400: #bab6b6;
+  --color-neutral-500: #9b9797;
+  --color-neutral-600: #7d7979;
+  --color-neutral-700: #605d5d;
+  --color-neutral-800: #444141;
+  --color-neutral-900: #2d2b2b;
+  --color-accent-100: #fff0f3;
+  --color-accent-200: #ffdbe2;
+  --color-accent-300: #ffb8c6;
+  --color-accent-400: #ff7d95;
+  --color-accent-500: #ff2657;
+  --color-accent-600: #db0c3c;
+  --color-accent-700: #a80a2f;
+  --color-accent-800: #760a23;
+  --color-accent-900: #4a0d1a;
 }
 
 .dark {
-  --background: #0c0a09;
-  --foreground: #fafaf9;
-  --muted: #1c1917;
-  --muted-foreground: #a8a29e;
-  /* Hairline divider, ~14% ink on this background (design-system port). */
-  --border: #2d2c2a;
-  --card: #121110;
-  --card-foreground: #fafaf9;
-  --accent: #fafaf9;
-  --accent-foreground: #0c0a09;
-  --ring: #44403c;
-  --sidebar: #0e0c0b;
-  --sidebar-foreground: #e7e5e4;
-  /* Same brand red as light — white text carries contrast in both themes,
-     rather than the previous theme-specific pink/near-black pairing. */
+  --background: #1f1e1c;
+  --foreground: #f2f0ef;
+  --muted: #141312;
+  --muted-foreground: color-mix(in srgb, #f2f0ef 55%, transparent);
+  --border: color-mix(in srgb, #f2f0ef 14%, transparent);
+  --card: #141312;
+  --card-foreground: #f2f0ef;
+  --accent: #f2f0ef;
+  --accent-foreground: #1f1e1c;
+  --ring: #ff7d95;
+  --sidebar: #141312;
+  --sidebar-foreground: #f2f0ef;
   --space-accent: #ff2657;
-  --space-accent-foreground: #ffffff;
-  --accent-ink: color-mix(in srgb, var(--space-accent) 55%, white);
-  --shadow-soft-sm: 0 1px 2px rgba(0, 0, 0, 0.32), 0 2px 8px rgba(0, 0, 0, 0.24);
-  --shadow-soft-md: 0 2px 6px rgba(0, 0, 0, 0.3), 0 12px 28px rgba(0, 0, 0, 0.34);
-  --shadow-soft-lg: 0 6px 16px rgba(0, 0, 0, 0.34), 0 32px 72px rgba(0, 0, 0, 0.46);
+  --space-accent-foreground: #1f1e1c;
+  --accent-ink: #ff7d95;
+  --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.32), 0 2px 8px rgba(0, 0, 0, 0.24);
+  --shadow-md: 0 2px 6px rgba(0, 0, 0, 0.3), 0 12px 28px rgba(0, 0, 0, 0.34);
+  --shadow-lg: 0 6px 16px rgba(0, 0, 0, 0.34), 0 32px 72px rgba(0, 0, 0, 0.46);
+  --shadow-soft-sm: var(--shadow-sm);
+  --shadow-soft-md: var(--shadow-md);
+  --shadow-soft-lg: var(--shadow-lg);
 }
 
 @theme inline {
@@ -72,8 +94,12 @@
   --color-sidebar-foreground: var(--sidebar-foreground);
   --color-space-accent: var(--space-accent);
   --color-space-accent-foreground: var(--space-accent-foreground);
-  --font-sans: var(--font-inter);
-  --font-display: var(--font-geist-sans);
+  --color-accent-ink: var(--accent-ink);
+  --shadow-sm: var(--shadow-sm);
+  --shadow-md: var(--shadow-md);
+  --shadow-lg: var(--shadow-lg);
+  --font-sans: var(--font-archivo);
+  --font-display: var(--font-archivo);
   --font-mono: var(--font-geist-mono);
   /* Radius tiers ported from the design system: 8 / 12 / 18, replacing the
      previous 8/10/12 scale derived from --radius. */
@@ -122,6 +148,6 @@
   body {
     background: var(--background);
     color: var(--foreground);
-    font-family: var(--font-inter), ui-sans-serif, system-ui, sans-serif;
+    font-family: var(--font-archivo), ui-sans-serif, system-ui, sans-serif;
   }
 }
