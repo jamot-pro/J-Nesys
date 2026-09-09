@@ -133,4 +133,22 @@ describe("payment service — ledger provider", () => {
     expect(intent.estimatedAmount).toBe(75);
     expect(intent.status).toBe("approved");
   });
+
+  it("reports only the providers actually registered", async () => {
+    const { payments } = await setup();
+    expect(payments.availableProviders()).toEqual(["ledger"]);
+  });
+
+  it("rejects creating an intent against an unregistered provider up front, instead of letting it fail later at confirm", async () => {
+    const { payments } = await setup();
+    await expect(
+      payments.createIntent({
+        purchaseOrderId: "00000000-0000-4000-8000-0000000000aa",
+        buyerOrganizationId: ORG_BUYER,
+        sellerOrganizationId: ORG_SELLER,
+        estimatedAmount: 100,
+        provider: "card",
+      }),
+    ).rejects.toThrow("no payment provider registered for card");
+  });
 });

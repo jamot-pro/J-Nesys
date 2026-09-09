@@ -27,6 +27,11 @@ export interface PaymentService {
   cancelIntent(intentId: string): Promise<PaymentIntent>;
   refund(intentId: string): Promise<PaymentIntent>;
   get(intentId: string): Promise<PaymentIntent | null>;
+  /** Provider kinds actually registered and usable right now - the real
+   * source of truth callers should check before offering a provider as
+   * selectable, since PaymentProviderKind's schema lists more kinds than
+   * are wired (e.g. card/bank/stablecoin have no implementation yet). */
+  availableProviders(): PaymentProviderKind[];
   listByOrganization(
     organizationId: string,
     role: "buyer" | "seller",
@@ -91,6 +96,12 @@ export function createPaymentService(opts: PaymentServiceOptions): PaymentServic
 
   return {
     async createIntent(input) {
+      const provider = input.provider ?? defaultProvider;
+      // Fail at creation, not three steps later at confirm - creating a
+      // draft against a provider that will only ever throw is exactly the
+      // "advertises a rail that doesn't work" problem this guards against.
+      providerFor(provider);
+
       const status: PaymentIntentStatus = input.requiresApproval ? "pending_approval" : "approved";
       return repo.createPaymentIntent({
         purchaseOrderId: input.purchaseOrderId,
@@ -98,7 +109,7 @@ export function createPaymentService(opts: PaymentServiceOptions): PaymentServic
         sellerOrganizationId: input.sellerOrganizationId,
         currency: input.currency ?? "USD",
         estimatedAmount: input.estimatedAmount,
-        provider: input.provider ?? defaultProvider,
+        provider,
         requiresApproval: input.requiresApproval ?? false,
         approvedByActorId: input.approvedByActorId ?? null,
         metadata: input.metadata ?? null,
@@ -194,6 +205,10 @@ export function createPaymentService(opts: PaymentServiceOptions): PaymentServic
 
     async get(intentId) {
       return repo.getPaymentIntent(intentId);
+    },
+
+    availableProviders() {
+      return Object.keys(opts.providers) as PaymentProviderKind[];
     },
 
     async listByOrganization(organizationId, role, spaceId?) {
