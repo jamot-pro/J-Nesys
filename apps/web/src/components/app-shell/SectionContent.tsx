@@ -73,7 +73,15 @@ function AddAppsSection() {
                 onClick={() => toggleRailSection(item.id)}
                 className="flex w-full items-center gap-2 rounded-md px-2 py-1.5 text-left text-sm transition-colors hover:bg-muted"
               >
-                <Icon className="size-4 shrink-0 text-muted-foreground" />
+                <span className="flex size-4 shrink-0 items-center justify-center text-muted-foreground">
+                  {item.d ? (
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                      <path d={item.d} />
+                    </svg>
+                  ) : Icon ? (
+                    <Icon className="size-4" />
+                  ) : null}
+                </span>
                 <span className="min-w-0 flex-1 truncate">{item.label}</span>
                 <span
                   className={cn(
