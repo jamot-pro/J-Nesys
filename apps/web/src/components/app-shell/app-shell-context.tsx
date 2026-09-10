@@ -75,8 +75,11 @@ const ORG_ACCENTS: { accent: string; accentForeground: string }[] = [
 ];
 
 export type SectionId =
+  | "discover"
+  | "my-dreams"
   | "tasks"
   | "people"
+  | "channels"
   | "agents"
   | "organization"
   | "dashboard"
@@ -91,8 +94,11 @@ export type SectionId =
   | "add-apps";
 
 export const SECTION_TITLES: Record<SectionId, string> = {
-  tasks: "Tasks",
+  discover: "Discover Dreams",
+  "my-dreams": "My Dreams",
+  tasks: "Task Manager",
   people: "People",
+  channels: "Channels",
   agents: "Agents",
   organization: "Organization",
   dashboard: "Dashboard",
@@ -164,8 +170,10 @@ const RAIL_PREFS_KEY = "jamot:rail";
 const MCP_KEY = "jamot:rail:mcp";
 
 const RAIL_SECTION_IDS: SectionId[] = [
-  "tasks",
+  "my-dreams",
   "people",
+  "tasks",
+  "channels",
   "agents",
   "organization",
   "dashboard",

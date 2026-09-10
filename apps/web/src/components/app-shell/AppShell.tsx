@@ -261,7 +261,13 @@ function MobileShell() {
                           : undefined
                       }
                     >
-                      <Icon className="size-5" />
+                      {item.d ? (
+                        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                          <path d={item.d} />
+                        </svg>
+                      ) : Icon ? (
+                        <Icon className="size-5" />
+                      ) : null}
                       <span className="truncate">{item.label}</span>
                     </button>
                   );

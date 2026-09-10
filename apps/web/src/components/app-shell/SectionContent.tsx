@@ -7,15 +7,18 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Switch } from "@/components/ui/switch";
 import { AgentsWorkspace } from "@/components/agents/AgentsWorkspace";
-import { PeopleWorkspace } from "@/components/people/PeopleWorkspace";
 import { OrganizationWorkspace } from "@/components/organization/OrganizationWorkspace";
-import { TasksBoard } from "@/components/tasks/TasksBoard";
 import { CanvasWorkspace } from "@/components/canvas/CanvasWorkspace";
 import { WhatsAppApp } from "@/components/whatsapp/WhatsAppApp";
 import { FinanceWorkspace } from "@/components/finance/FinanceWorkspace";
 import { SuppliersWorkspace } from "@/components/suppliers/SuppliersWorkspace";
 import { LeadsWorkspace } from "@/components/leads/LeadsWorkspace";
 import { OutreachWorkspace } from "@/components/outreach/OutreachWorkspace";
+import { DiscoverDreams } from "@/components/discover/DiscoverDreams";
+import { MyDreams } from "@/components/discover/MyDreams";
+import { Channels } from "@/components/discover/Channels";
+import { PeopleCRM } from "@/components/discover/PeopleCRM";
+import { TaskBoardClone } from "@/components/discover/TaskBoardClone";
 
 import { SECTION_TITLES, useAppShell, type SectionId } from "./app-shell-context";
 import { SECTION_ITEMS } from "./AppRail";
@@ -70,7 +73,15 @@ function AddAppsSection() {
                 onClick={() => toggleRailSection(item.id)}
                 className="flex w-full items-center gap-2 rounded-md px-2 py-1.5 text-left text-sm transition-colors hover:bg-muted"
               >
-                <Icon className="size-4 shrink-0 text-muted-foreground" />
+                <span className="flex size-4 shrink-0 items-center justify-center text-muted-foreground">
+                  {item.d ? (
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                      <path d={item.d} />
+                    </svg>
+                  ) : Icon ? (
+                    <Icon className="size-4" />
+                  ) : null}
+                </span>
                 <span className="min-w-0 flex-1 truncate">{item.label}</span>
                 <span
                   className={cn(
@@ -233,12 +244,18 @@ export function SectionContent() {
     );
   }
 
-  const section = activeSection ?? "dashboard";
+  const section = activeSection ?? "discover";
   switch (section) {
+    case "discover":
+      return <DiscoverDreams />;
+    case "my-dreams":
+      return <MyDreams />;
+    case "channels":
+      return <Channels />;
     case "tasks":
-      return <TasksBoard />;
+      return <TaskBoardClone />;
     case "people":
-      return <PeopleWorkspace />;
+      return <PeopleCRM />;
     case "agents":
       return <AgentsWorkspace />;
     case "organization":
