@@ -7,15 +7,18 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Switch } from "@/components/ui/switch";
 import { AgentsWorkspace } from "@/components/agents/AgentsWorkspace";
-import { PeopleWorkspace } from "@/components/people/PeopleWorkspace";
 import { OrganizationWorkspace } from "@/components/organization/OrganizationWorkspace";
-import { TasksBoard } from "@/components/tasks/TasksBoard";
 import { CanvasWorkspace } from "@/components/canvas/CanvasWorkspace";
 import { WhatsAppApp } from "@/components/whatsapp/WhatsAppApp";
 import { FinanceWorkspace } from "@/components/finance/FinanceWorkspace";
 import { SuppliersWorkspace } from "@/components/suppliers/SuppliersWorkspace";
 import { LeadsWorkspace } from "@/components/leads/LeadsWorkspace";
 import { OutreachWorkspace } from "@/components/outreach/OutreachWorkspace";
+import { DiscoverDreams } from "@/components/discover/DiscoverDreams";
+import { MyDreams } from "@/components/discover/MyDreams";
+import { Channels } from "@/components/discover/Channels";
+import { PeopleCRM } from "@/components/discover/PeopleCRM";
+import { TaskBoardClone } from "@/components/discover/TaskBoardClone";
 
 import { SECTION_TITLES, useAppShell, type SectionId } from "./app-shell-context";
 import { SECTION_ITEMS } from "./AppRail";
@@ -233,12 +236,18 @@ export function SectionContent() {
     );
   }
 
-  const section = activeSection ?? "dashboard";
+  const section = activeSection ?? "discover";
   switch (section) {
+    case "discover":
+      return <DiscoverDreams />;
+    case "my-dreams":
+      return <MyDreams />;
+    case "channels":
+      return <Channels />;
     case "tasks":
-      return <TasksBoard />;
+      return <TaskBoardClone />;
     case "people":
-      return <PeopleWorkspace />;
+      return <PeopleCRM />;
     case "agents":
       return <AgentsWorkspace />;
     case "organization":

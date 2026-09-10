@@ -26,10 +26,12 @@ import {
   ListTodo,
   Megaphone,
   MessageCircle,
+  MessagesSquare,
   Plus,
   Radar,
   Server,
   Settings,
+  Sparkles,
   Truck,
   Users,
 } from "lucide-react";
@@ -48,8 +50,10 @@ interface RailItem {
 }
 
 export const SECTION_ITEMS: RailItem[] = [
-  { id: "tasks", label: "Tasks", icon: ListTodo },
+  { id: "my-dreams", label: "My Dreams", icon: Sparkles },
   { id: "people", label: "People", icon: Users },
+  { id: "tasks", label: "Task Manager", icon: ListTodo },
+  { id: "channels", label: "Channels", icon: MessagesSquare },
   { id: "agents", label: "Agents", icon: Bot },
   { id: "organization", label: "Organization", icon: Building2 },
   { id: "dashboard", label: "Dashboard", icon: LayoutGrid },
@@ -99,8 +103,8 @@ export function AppRail() {
       <div className="flex h-[52px] w-full shrink-0 items-center justify-center border-b border-border">
         <button
           type="button"
-          title="Dashboard"
-          aria-label="Dashboard"
+          title="Discover dreams"
+          aria-label="Discover dreams"
           onClick={() => setActiveSection(null)}
           className={railButtonClass}
         >
