@@ -11,7 +11,7 @@ import { cn } from "@/lib/utils";
  * exists.
  */
 
-const CATEGORIES = ["All", "Education", "Climate", "Health", "Technology", "Craft", "Community"];
+const CATEGORIES = ["All", "Energy", "Food", "Education", "Circular", "Cities", "Commerce"];
 
 interface DreamCard {
   initials: string;
@@ -20,99 +20,100 @@ interface DreamCard {
   place: string;
   cat: string;
   statement: string;
-  believers: number;
+  believers: string;
   pctText: string;
-  agents: number;
+  agents: string;
   need: string;
   pay: string;
   joined: boolean;
 }
 
+/** Copied verbatim from OrgConsole.dc.html's PUBLIC_DREAMS array. `joined`
+ * mirrors its JOINED array (ids: tidal, lumen). */
 const DREAMS: DreamCard[] = [
   {
     initials: "TG",
     name: "Tidal Grid",
     holder: "Mara Jansen",
-    place: "Utrecht, Netherlands",
-    cat: "Climate",
-    statement:
-      "Put tidal power on the grid of every small island in the North Sea, owned by the people who live there.",
-    believers: 812,
-    pctText: "64% funded",
-    agents: 6,
-    need: "Grid engineers, Dutch translation",
-    pay: "€40–90 per task",
-    joined: false,
-  },
-  {
-    initials: "OS",
-    name: "Open Stitch",
-    holder: "Amara Boateng",
-    place: "Accra, Ghana",
-    cat: "Craft",
-    statement: "Train 500 tailors in pattern-drafting and connect them directly to buyers, no middlemen.",
-    believers: 341,
-    pctText: "38% funded",
-    agents: 3,
-    need: "Curriculum design, video editing",
-    pay: "$25–60 per task",
+    place: "Utrecht",
+    cat: "Energy",
+    statement: "Put tidal power on the grid of every small island in the North Sea, owned by the people who live there.",
+    believers: "1,232",
+    pctText: "62% funded",
+    agents: "14",
+    need: "Grid analysts, translators, permit readers",
+    pay: "€40–€120 / task",
     joined: true,
   },
   {
-    initials: "RH",
-    name: "Rural Health Net",
-    holder: "Priya Nair",
-    place: "Kerala, India",
-    cat: "Health",
-    statement: "A referral network so a village clinic can reach a specialist in minutes, not weeks.",
-    believers: 1204,
-    pctText: "81% funded",
-    agents: 9,
-    need: "Malayalam translation, ops",
-    pay: "₹800–2,200 per task",
+    initials: "OS",
+    name: "Open Seed Bank",
+    holder: "Ifeoma Adeyemi",
+    place: "Lagos",
+    cat: "Food",
+    statement: "A public, free seed library for every climate zone in West Africa, with agents that match seeds to soil.",
+    believers: "4,870",
+    pctText: "41% funded",
+    agents: "31",
+    need: "Agronomists, data entry, field photographers",
+    pay: "€25–€90 / task",
+    joined: false,
+  },
+  {
+    initials: "LS",
+    name: "Lumen Schools",
+    holder: "Diego Ferraz",
+    place: "Porto",
+    cat: "Education",
+    statement: "Every rural school in Portugal gets a tutor agent that speaks the local dialect and never gives up on a student.",
+    believers: "2,104",
+    pctText: "78% funded",
+    agents: "22",
+    need: "Teachers, dialect speakers, curriculum reviewers",
+    pay: "€30–€150 / task",
+    joined: true,
+  },
+  {
+    initials: "R",
+    name: "Reknit",
+    holder: "Hanna Vogel",
+    place: "Leipzig",
+    cat: "Circular",
+    statement: "Make repairing a garment cheaper than replacing it, in every European city, by 2030.",
+    believers: "918",
+    pctText: "24% funded",
+    agents: "9",
+    need: "Tailors, logistics planners, pricing analysts",
+    pay: "€20–€75 / task",
+    joined: false,
+  },
+  {
+    initials: "QS",
+    name: "Quiet Sky",
+    holder: "Ravi Menon",
+    place: "Bengaluru",
+    cat: "Cities",
+    statement: "Measure night noise on every street of one city, then hand the map to the people who can change it.",
+    believers: "3,406",
+    pctText: "55% funded",
+    agents: "18",
+    need: "Sensor builders, night walkers, city lawyers",
+    pay: "€35–€110 / task",
     joined: false,
   },
   {
     initials: "FL",
-    name: "First Language",
-    holder: "Kai Whetu",
-    place: "Rotorua, New Zealand",
-    cat: "Education",
-    statement: "Build a spaced-repetition course for Te Reo Māori from oral recordings before they're lost.",
-    believers: 567,
-    pctText: "52% funded",
-    agents: 4,
-    need: "Audio transcription, dialect review",
-    pay: "$30–70 per task",
+    name: "Fair Ledger",
+    holder: "Amara Osei",
+    place: "Accra",
+    cat: "Commerce",
+    statement: "Every cocoa farmer sees the final shelf price of their own beans, and can act on it.",
+    believers: "1,677",
+    pctText: "33% funded",
+    agents: "12",
+    need: "Field interviewers, supply-chain analysts",
+    pay: "€45–€130 / task",
     joined: false,
-  },
-  {
-    initials: "GB",
-    name: "Grid Bazaar",
-    holder: "Tomás Ríos",
-    place: "Oaxaca, Mexico",
-    cat: "Technology",
-    statement: "A peer-to-peer marketplace for surplus solar power between neighboring households.",
-    believers: 289,
-    pctText: "29% funded",
-    agents: 5,
-    need: "Firmware, Spanish support",
-    pay: "$35–80 per task",
-    joined: false,
-  },
-  {
-    initials: "NW",
-    name: "Neighbor Watch",
-    holder: "Elin Berg",
-    place: "Malmö, Sweden",
-    cat: "Community",
-    statement: "Coordinate volunteer eldercare check-ins across a whole district, agent-scheduled.",
-    believers: 178,
-    pctText: "22% funded",
-    agents: 2,
-    need: "Ops coordination, Swedish support",
-    pay: "kr 300–650 per task",
-    joined: true,
   },
 ];
 

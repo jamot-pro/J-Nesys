@@ -10,24 +10,27 @@ import { cn } from "@/lib/utils";
  * real Tasks backend yet.
  */
 
-interface Label {
-  text: string;
-  color: string;
-}
+type ActorKind = "human" | "agent" | "robot";
 
 interface Actor {
-  mono: string;
-  color: string;
-  title: string;
+  name: string;
+  kind: ActorKind;
+}
+
+interface ChecklistItem {
+  text: string;
+  done: boolean;
 }
 
 interface Card {
   id: string;
-  labels: Label[];
+  labels: string[];
   title: string;
+  desc: string;
   due?: string;
-  checkLabel?: string;
+  checklist: ChecklistItem[];
   actors: Actor[];
+  comments: { who: string; kind: ActorKind; text: string }[];
 }
 
 interface Column {
@@ -36,32 +39,78 @@ interface Column {
   cards: Card[];
 }
 
+/** Fixed per-kind monogram/color — copied verbatim from OrgConsole.dc.html's
+ * ACTOR_KINDS map (actor color depends on kind, not on the individual). */
+const ACTOR_KINDS: Record<ActorKind, { mono: string; bg: string }> = {
+  human: { mono: "hu", bg: "oklch(0.42 0.02 60)" },
+  agent: { mono: "ag", bg: "oklch(0.44 0.15 265)" },
+  robot: { mono: "ro", bg: "oklch(0.42 0.12 155)" },
+};
+
+/** Label background hues cycle through this list, by first-seen index —
+ * copied verbatim from OrgConsole.dc.html's LABEL_HUES. */
+const LABEL_HUES = [25, 60, 145, 210, 300];
+const labelHueIndex = new Map<string, number>();
+function labelColor(text: string): string {
+  if (!labelHueIndex.has(text)) labelHueIndex.set(text, labelHueIndex.size % LABEL_HUES.length);
+  return `oklch(0.5 0.13 ${LABEL_HUES[labelHueIndex.get(text)!]})`;
+}
+
+/** Copied verbatim from OrgConsole.dc.html's BOARD array. */
 const INITIAL_COLUMNS: Column[] = [
   {
     id: "c1",
-    name: "To do",
+    name: "Intake",
     cards: [
-      { id: "k1", labels: [{ text: "Grid", color: "#ff2657" }], title: "Confirm Vlieland municipal filing", due: "in 2 days", checkLabel: "0/3", actors: [{ mono: "MJ", color: "#ff2657", title: "Mara Jansen" }] },
-      { id: "k2", labels: [{ text: "Translation", color: "#0ea5e9" }], title: "Translate grid-connection request #118", due: "in 4 days", actors: [{ mono: "AI", color: "#605d5d", title: "Translator agent" }] },
+      {
+        id: "k1", labels: ["pilot"], title: "Qualify inbound from Ruben Alvarez",
+        desc: "Asked for a paid pilot in Q4. Decide scope before the call.", due: "2026-09-14",
+        checklist: [{ text: "Read his last three messages", done: true }, { text: "Draft scope options", done: false }],
+        actors: [{ name: "Research agent", kind: "agent" }], comments: [],
+      },
+      {
+        id: "k2", labels: ["recurring"], title: "Weekly logistics digest",
+        desc: "Recurring — every Monday 07:00.", checklist: [],
+        actors: [{ name: "Research agent", kind: "agent" }],
+        comments: [{ who: "Research agent", kind: "agent", text: "ran 6 sources, 2 flagged as paywalled." }],
+      },
     ],
   },
   {
     id: "c2",
-    name: "In progress",
+    name: "Assigned",
     cards: [
-      { id: "k3", labels: [{ text: "QA", color: "#10b981" }], title: "Score week-3 pattern submissions", checkLabel: "8/12", actors: [{ mono: "AB", color: "#0ea5e9", title: "Amara Boateng" }] },
+      {
+        id: "k3", labels: ["sop", "benelux"], title: "Rewrite port SOP for Havenlink",
+        desc: "Tomas needs an editable draft, not a final.", due: "2026-09-10",
+        checklist: [{ text: "Pull current SOP", done: true }, { text: "Draft v2", done: true }, { text: "Human sign-off", done: false }],
+        actors: [{ name: "Mara Jansen", kind: "human" }, { name: "Drafting agent", kind: "agent" }], comments: [],
+      },
     ],
   },
   {
     id: "c3",
-    name: "Blocked",
-    cards: [],
+    name: "In progress",
+    cards: [
+      {
+        id: "k4", labels: ["warehouse"], title: "Cycle-count sweep, aisle 4–9",
+        desc: "Physical count executed on site.", due: "2026-09-08",
+        checklist: [{ text: "Aisles 4–6", done: true }, { text: "Aisles 7–9", done: false }],
+        actors: [{ name: "Unit R-02", kind: "robot" }],
+        comments: [{ who: "Unit R-02", kind: "robot", text: "aisle 6 blocked, resumed at 04:12." }],
+      },
+    ],
   },
   {
     id: "c4",
     name: "Done",
     cards: [
-      { id: "k4", labels: [{ text: "Ops", color: "#8b5cf6" }], title: "Set up firmware CI pipeline", actors: [{ mono: "TR", color: "#8b5cf6", title: "Tomás Ríos" }, { mono: "AI", color: "#605d5d", title: "Build agent" }] },
+      {
+        id: "k5", labels: ["onboarding"], title: "Onboard Saoirse Byrne",
+        desc: "Profile generated, two agents active.",
+        checklist: [{ text: "Send link", done: true }, { text: "Confirm aura sync", done: true }],
+        actors: [{ name: "Mara Jansen", kind: "human" }], comments: [],
+      },
     ],
   },
 ];
@@ -109,7 +158,7 @@ export function TaskBoardClone() {
             onClick={() => setShowDone((v) => !v)}
             className="flex h-10 items-center justify-start rounded-[var(--radius-sm)] border border-border px-4 text-sm hover:bg-muted"
           >
-            {showDone ? "Hide done" : "Show done"}
+            {showDone ? "Hide done column" : "Show done column"}
           </button>
           <button
             onClick={() =>
@@ -153,11 +202,11 @@ export function TaskBoardClone() {
                   <div className="flex flex-wrap gap-1">
                     {k.labels.map((lb) => (
                       <span
-                        key={lb.text}
-                        style={{ background: lb.color }}
+                        key={lb}
+                        style={{ background: labelColor(lb) }}
                         className="rounded-full px-2 py-0.5 text-[10px] font-bold tracking-[0.06em] text-white uppercase"
                       >
-                        {lb.text}
+                        {lb}
                       </span>
                     ))}
                   </div>
@@ -174,21 +223,27 @@ export function TaskBoardClone() {
                         {k.due}
                       </span>
                     ) : null}
-                    {k.checkLabel ? (
+                    {k.checklist.length > 0 ? (
                       <span className="inline-flex items-center gap-1">
                         <CheckCircle2 className="size-[11px]" />
-                        {k.checkLabel}
+                        {k.checklist.filter((c) => c.done).length}/{k.checklist.length}
+                      </span>
+                    ) : null}
+                    {k.comments.length > 0 ? (
+                      <span className="inline-flex items-center gap-1">
+                        <MessageSquare className="size-[11px]" />
+                        {k.comments.length}
                       </span>
                     ) : null}
                     <span className="ml-auto flex gap-1">
                       {k.actors.map((a, i) => (
                         <span
                           key={i}
-                          title={a.title}
-                          style={{ background: a.color }}
+                          title={a.name}
+                          style={{ background: ACTOR_KINDS[a.kind].bg }}
                           className="flex size-5 items-center justify-center rounded-full font-mono text-[9px] font-bold text-white"
                         >
-                          {a.mono}
+                          {ACTOR_KINDS[a.kind].mono}
                         </span>
                       ))}
                     </span>
@@ -221,7 +276,7 @@ export function TaskBoardClone() {
                 setColumns((prev) =>
                   prev.map((c) =>
                     c.id === C.id
-                      ? { ...c, cards: [...c.cards, { id: `k${Date.now()}`, labels: [], title: "New card", actors: [] }] }
+                      ? { ...c, cards: [...c.cards, { id: `k${Date.now()}`, labels: [], title: "New card", desc: "", checklist: [], actors: [], comments: [] }] }
                       : c,
                   ),
                 )
@@ -264,6 +319,7 @@ export function TaskBoardClone() {
                 <label className="text-xs font-medium text-muted-foreground">Description</label>
                 <textarea
                   rows={3}
+                  defaultValue={card.desc}
                   className="rounded-[var(--radius-sm)] border border-border bg-background p-2.5 text-sm outline-none focus:border-space-accent"
                 />
               </div>
@@ -285,10 +341,10 @@ export function TaskBoardClone() {
                 <div className="mt-3 flex flex-wrap gap-1.5">
                   {card.actors.map((a, i) => (
                     <span key={i} className="flex items-center gap-1.5 rounded-full bg-background py-1 pr-2 pl-2.5 text-xs">
-                      <span style={{ background: a.color }} className="flex size-4 items-center justify-center rounded-full font-mono text-white">
-                        {a.mono}
+                      <span style={{ background: ACTOR_KINDS[a.kind].bg }} className="flex size-4 items-center justify-center rounded-full font-mono text-white">
+                        {ACTOR_KINDS[a.kind].mono}
                       </span>
-                      {a.title}
+                      {a.name}
                       <button title="Unassign" className="flex size-[17px] items-center justify-center rounded-full hover:bg-card">
                         <X className="size-2.5" />
                       </button>
@@ -304,13 +360,17 @@ export function TaskBoardClone() {
               <div>
                 <div className="flex items-baseline gap-2">
                   <span className="font-display text-xs font-extrabold tracking-[0.1em] uppercase">Checklist</span>
-                  <span className="text-xs text-muted-foreground">{card.checkLabel ?? "0/0"}</span>
+                  <span className="text-xs text-muted-foreground">
+                    {card.checklist.filter((c) => c.done).length}/{card.checklist.length}
+                  </span>
                 </div>
                 <div className="mt-3 flex flex-col gap-2">
-                  <label className="flex items-center gap-2 text-[13px]">
-                    <input type="checkbox" />
-                    Confirm filing with municipality
-                  </label>
+                  {card.checklist.map((item, i) => (
+                    <label key={i} className="flex items-center gap-2 text-[13px]">
+                      <input type="checkbox" defaultChecked={item.done} />
+                      {item.text}
+                    </label>
+                  ))}
                   <input
                     placeholder="Add checklist item, press Enter"
                     className="h-[34px] rounded-[var(--radius-sm)] border border-border bg-background px-3 text-sm outline-none focus:border-space-accent"
@@ -320,14 +380,23 @@ export function TaskBoardClone() {
               <div>
                 <span className="font-display text-xs font-extrabold tracking-[0.1em] uppercase">Activity</span>
                 <div className="mt-3 flex flex-col gap-2.5">
-                  <div className="flex gap-2.5 text-[13px] leading-relaxed">
-                    <span className="flex size-6 shrink-0 items-center justify-center rounded-full bg-space-accent font-mono text-[10px] text-white">
-                      <MessageSquare className="size-3" />
-                    </span>
-                    <span>
-                      <span className="font-semibold">Mara Jansen</span> moved this to In progress.
-                    </span>
-                  </div>
+                  {card.comments.length === 0 ? (
+                    <p className="text-xs text-muted-foreground">No comments yet.</p>
+                  ) : (
+                    card.comments.map((c, i) => (
+                      <div key={i} className="flex gap-2.5 text-[13px] leading-relaxed">
+                        <span
+                          style={{ background: ACTOR_KINDS[c.kind].bg }}
+                          className="flex size-6 shrink-0 items-center justify-center rounded-full font-mono text-[10px] text-white"
+                        >
+                          {ACTOR_KINDS[c.kind].mono}
+                        </span>
+                        <span>
+                          <span className="font-semibold">{c.who}</span> {c.text}
+                        </span>
+                      </div>
+                    ))
+                  )}
                   <input
                     placeholder="Write a comment, press Enter"
                     className="h-[34px] rounded-[var(--radius-sm)] border border-border bg-background px-3 text-sm outline-none focus:border-space-accent"

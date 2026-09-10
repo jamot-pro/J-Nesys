@@ -24,53 +24,62 @@ interface JoinedDream {
   agents: { name: string; task: string; model: string; runs: number; running: boolean }[];
 }
 
+/** Copied verbatim from OrgConsole.dc.html's JOINED array. */
 const JOINED: JoinedDream[] = [
   {
-    id: "tidal-grid",
+    id: "tidal",
     name: "Tidal Grid",
-    role: "Grid engineer",
-    agentCount: "2 agents",
+    role: "Agent maintainer",
+    agentCount: "3 agents",
     open: 3,
-    points: 1240,
-    earned: "€310",
+    points: 4820,
+    earned: "€1,340",
     agents: [
-      { name: "Permit Tracker", task: "Watches municipal filings for tidal permits", model: "GPT-4.1", runs: 812, running: true },
-      { name: "Translator", task: "Dutch ↔ English on incoming grid requests", model: "Claude Haiku", runs: 204, running: false },
+      { name: "Permit Reader", task: "Reads council minutes for objections", model: "Sonnet 4.5", runs: 412, running: true },
+      { name: "Grid Scout", task: "Tracks operator offtake terms", model: "Haiku 4.5", runs: 96, running: true },
+      { name: "Tide Translator", task: "NL/DA/DE translation of charter docs", model: "Sonnet 4.5", runs: 58, running: false },
     ],
   },
   {
-    id: "open-stitch",
-    name: "Open Stitch",
-    role: "Curriculum reviewer",
+    id: "lumen",
+    name: "Lumen Schools",
+    role: "Contributor",
     agentCount: "1 agent",
     open: 5,
-    points: 640,
-    earned: "$140",
+    points: 1150,
+    earned: "€380",
     agents: [
-      { name: "Pattern QA", task: "Checks submitted drafting patterns against spec", model: "GPT-4.1 mini", runs: 96, running: true },
+      { name: "Dialect Checker", task: "Flags tutor replies that miss local idiom", model: "Sonnet 4.5", runs: 1204, running: true },
     ],
   },
 ];
 
+/** Copied verbatim from OrgConsole.dc.html's MY_TASKS array. */
 const MY_TASKS = [
-  { dream: "Tidal Grid", text: "Confirm the Vlieland municipal filing is complete", pay: "€45", pts: 20, due: "in 2 days" },
-  { dream: "Tidal Grid", text: "Review translated grid-connection request #118", pay: "€25", pts: 10, due: "in 4 days" },
-  { dream: "Open Stitch", text: "Score week-3 pattern submissions (12)", pay: "$60", pts: 30, due: "tomorrow" },
-  { dream: "Open Stitch", text: "Draft feedback for the sizing-chart module", pay: "$20", pts: 8, due: "in 6 days" },
+  { dream: "Tidal Grid", text: "Review Permit Reader output for the Fanø council minutes.", pay: "€60", pts: 120, due: "Today" },
+  { dream: "Tidal Grid", text: "Re-prompt Grid Scout to also capture connection-cost estimates.", pay: "€90", pts: 180, due: "Thu" },
+  { dream: "Lumen Schools", text: "Record 20 phrases in Mirandese for the dialect set.", pay: "€45", pts: 90, due: "Fri" },
+  { dream: "Lumen Schools", text: "Sanity-check tutor transcripts from Bragança for tone.", pay: "€35", pts: 70, due: "Next week" },
 ];
 
-const SEARCH_CATEGORIES = ["All", "Education", "Climate", "Health", "Technology", "Craft", "Community"];
+const SEARCH_CATEGORIES = ["All", "Energy", "Food", "Education", "Circular", "Cities", "Commerce"];
 
+/** Remaining (un-joined) entries from OrgConsole.dc.html's PUBLIC_DREAMS. */
 const SEARCH_RESULTS = [
-  { initials: "RH", name: "Rural Health Net", need: "Malayalam translation, ops", pay: "₹800–2,200 per task", believers: 1204, pctText: "81% funded", joined: false },
-  { initials: "FL", name: "First Language", need: "Audio transcription, dialect review", pay: "$30–70 per task", believers: 567, pctText: "52% funded", joined: false },
-  { initials: "GB", name: "Grid Bazaar", need: "Firmware, Spanish support", pay: "$35–80 per task", believers: 289, pctText: "29% funded", joined: false },
+  { initials: "OS", name: "Open Seed Bank", need: "Agronomists, data entry, field photographers", pay: "€25–€90 / task", believers: "4,870", pctText: "41% funded", joined: false },
+  { initials: "R", name: "Reknit", need: "Tailors, logistics planners, pricing analysts", pay: "€20–€75 / task", believers: "918", pctText: "24% funded", joined: false },
+  { initials: "QS", name: "Quiet Sky", need: "Sensor builders, night walkers, city lawyers", pay: "€35–€110 / task", believers: "3,406", pctText: "55% funded", joined: false },
+  { initials: "FL", name: "Fair Ledger", need: "Field interviewers, supply-chain analysts", pay: "€45–€130 / task", believers: "1,677", pctText: "33% funded", joined: false },
 ];
 
+/** Mirrors MATCH_OPENING — the mockup only seeds one opening message, not
+ * a fabricated back-and-forth. */
 const MATCH_CHAT = [
-  { who: "Dream matchmaker", isAgent: true, text: "Tell me what you're good at and what you care about — I'll suggest dreams that need exactly that." },
-  { who: "You", isAgent: false, text: "I'm a translator and I care about education." },
-  { who: "Dream matchmaker", isAgent: true, text: "First Language needs Māori-fluent transcription review — a close fit. Want the details?" },
+  {
+    who: "Jamot",
+    isAgent: true,
+    text: "Tell me what you are good at and what you care about, and I will point at the dreams that need exactly that.",
+  },
 ];
 
 export function MyDreams() {
@@ -317,7 +326,9 @@ export function MyDreams() {
             </div>
             <div className="min-w-[180px] flex-1 rounded-[var(--radius-md)] border border-border p-4">
               <span className="text-[10px] tracking-[0.1em] text-muted-foreground uppercase">Paid out</span>
-              <div className="mt-1 font-display text-[34px] font-extrabold">€450</div>
+              <div className="mt-1 font-display text-[34px] font-extrabold">
+                €{JOINED.reduce((sum, j) => sum + Number(j.earned.replace(/[^0-9]/g, "")), 0).toLocaleString("en-US")}
+              </div>
             </div>
           </div>
           <h2 className="mt-6 mb-3 text-xl">Per dream</h2>

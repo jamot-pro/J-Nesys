@@ -10,33 +10,76 @@ import { cn } from "@/lib/utils";
  * channel/thread data isn't wired up here yet.
  */
 
+interface Msg {
+  who: string;
+  out: boolean;
+  text: string;
+  time: string;
+}
+
+interface Thread {
+  id: string;
+  ch: string;
+  name: string;
+  group: boolean;
+  members: number;
+  time: string;
+  unread: number;
+  msgs: Msg[];
+}
+
+/** Copied verbatim from OrgConsole.dc.html's CHANNELS array. */
 const CHANNEL_CHIPS = [
-  { id: "whatsapp", name: "WhatsApp", mono: "WA", color: "#25D366", unread: 3 },
-  { id: "telegram", name: "Telegram", mono: "TG", color: "#229ED9", unread: 0 },
-  { id: "email", name: "Email", mono: "@", color: "#605d5d", unread: 12 },
-  { id: "instagram", name: "Instagram", mono: "IG", color: "#C13584", unread: 0 },
+  { id: "tg", name: "Telegram", mono: "tg", hue: 235 },
+  { id: "wa", name: "WhatsApp", mono: "wa", hue: 150 },
+  { id: "dc", name: "Discord", mono: "dc", hue: 275 },
+  { id: "gc", name: "Google Chat", mono: "gc", hue: 130 },
+  { id: "sl", name: "Slack", mono: "sl", hue: 330 },
+  { id: "bz", name: "Buzz", mono: "bz", hue: 45 },
 ];
+function channelColor(hue: number): string {
+  return `oklch(0.55 0.14 ${hue})`;
+}
 
-const THREADS = [
-  { id: "t1", mono: "MJ", color: "#ff2657", name: "Mara Jansen", time: "2m", preview: "Can you confirm the Vlieland filing?", unread: 2 },
-  { id: "t2", mono: "AB", color: "#0ea5e9", name: "Amara Boateng", time: "1h", preview: "Sent the week-3 patterns over", unread: 0 },
-  { id: "t3", mono: "PN", color: "#10b981", name: "Priya Nair", time: "3h", preview: "Thanks, that resolved it", unread: 0 },
-  { id: "t4", mono: "KW", color: "#f59e0b", name: "Kai Whetu", time: "1d", preview: "Recording upload finished", unread: 1 },
-  { id: "t5", mono: "TR", color: "#8b5cf6", name: "Tomás Ríos", time: "2d", preview: "Firmware build passed CI", unread: 0 },
-];
-
-const MESSAGES = [
-  { who: "Mara Jansen", showWho: true, text: "Hey — can you confirm the Vlieland municipal filing is complete?", time: "10:02" },
-  { who: "You", showWho: false, text: "Checking now, give me a minute.", time: "10:03" },
-  { who: "You", showWho: false, text: "Confirmed, filed yesterday. I'll close the task.", time: "10:06" },
-  { who: "Mara Jansen", showWho: true, text: "Perfect, thank you!", time: "10:07" },
+/** Copied verbatim from OrgConsole.dc.html's THREADS array. */
+const THREADS: Thread[] = [
+  {
+    id: "t1", ch: "tg", name: "Havenlink ops", group: true, members: 6, unread: 3, time: "09:41",
+    msgs: [
+      { who: "Tomas de Wit", out: false, text: "Aisle 6 is blocked again — can the sweep be rescheduled?", time: "09:32" },
+      { who: "Drafting agent", out: false, text: "SOP v2 is drafted and waiting for your sign-off.", time: "09:35" },
+      { who: "Mara Jansen", out: true, text: "Looking at it now. Keep the sweep, I will clear the aisle.", time: "09:41" },
+    ],
+  },
+  {
+    id: "t2", ch: "tg", name: "Ruben Alvarez", group: false, members: 2, unread: 1, time: "08:12",
+    msgs: [{ who: "Ruben Alvarez", out: false, text: "Send me the pilot scope when you have it.", time: "08:12" }],
+  },
+  {
+    id: "t3", ch: "wa", name: "Ines Moreau", group: false, members: 2, unread: 0, time: "Yesterday",
+    msgs: [
+      { who: "Ines Moreau", out: false, text: "The research run came back clean. Invoice me.", time: "17:20" },
+      { who: "Mara Jansen", out: true, text: "Sent, outcome-priced as agreed.", time: "17:44" },
+    ],
+  },
+  {
+    id: "t4", ch: "sl", name: "Pilot candidates", group: true, members: 9, unread: 2, time: "Mon",
+    msgs: [{ who: "Research agent", out: false, text: "Two new inbounds match the Benelux operator profile.", time: "11:02" }],
+  },
+  {
+    id: "t5", ch: "dc", name: "Robot fleet", group: true, members: 4, unread: 0, time: "Mon",
+    msgs: [{ who: "Unit R-02", out: false, text: "Cycle count aisles 4-6 complete. 3 discrepancies logged.", time: "04:12" }],
+  },
 ];
 
 export function Channels() {
-  const [activeChip, setActiveChip] = useState("whatsapp");
+  const [activeChip, setActiveChip] = useState("tg");
   const [activeThread, setActiveThread] = useState("t1");
 
-  const thread = THREADS.find((t) => t.id === activeThread) ?? THREADS[0]!;
+  const chipUnread = (chId: string) =>
+    THREADS.filter((t) => t.ch === chId).reduce((sum, t) => sum + t.unread, 0);
+  const visibleThreads = THREADS.filter((t) => t.ch === activeChip);
+  const thread = THREADS.find((t) => t.id === activeThread) ?? visibleThreads[0] ?? THREADS[0]!;
 
   return (
     <div>
@@ -57,7 +100,11 @@ export function Channels() {
         {CHANNEL_CHIPS.map((ch) => (
           <button
             key={ch.id}
-            onClick={() => setActiveChip(ch.id)}
+            onClick={() => {
+              setActiveChip(ch.id);
+              const first = THREADS.find((t) => t.ch === ch.id);
+              setActiveThread(first ? first.id : "");
+            }}
             title={ch.name}
             className={cn(
               "flex h-[38px] items-center gap-2 rounded-full border pr-3.5 pl-2 text-sm",
@@ -66,14 +113,14 @@ export function Channels() {
           >
             <span
               className="flex size-6 shrink-0 items-center justify-center rounded-full font-mono text-[10px] font-bold text-white"
-              style={{ background: ch.color }}
+              style={{ background: channelColor(ch.hue) }}
             >
               {ch.mono}
             </span>
             {ch.name}
-            {ch.unread > 0 ? (
+            {chipUnread(ch.id) > 0 ? (
               <span className="flex h-4 min-w-4 items-center justify-center rounded-full bg-space-accent px-1 font-display text-[9px] font-extrabold text-space-accent-foreground">
-                {ch.unread}
+                {chipUnread(ch.id)}
               </span>
             ) : null}
           </button>
@@ -91,35 +138,42 @@ export function Channels() {
             />
           </div>
           <div className="min-h-0 flex-1 overflow-y-auto">
-            {THREADS.map((t) => (
-              <button
-                key={t.id}
-                onClick={() => setActiveThread(t.id)}
-                style={{ borderLeftColor: t.id === activeThread ? t.color : "transparent" }}
-                className="flex w-full items-center gap-2.5 border-l-[3px] px-3 py-2.5 text-left hover:bg-background"
-              >
-                <span
-                  className="flex size-9 shrink-0 items-center justify-center rounded-full font-mono text-xs font-bold text-white"
-                  style={{ background: t.color }}
+            {visibleThreads.map((t) => {
+              const chip = CHANNEL_CHIPS.find((c) => c.id === t.ch)!;
+              const mono = t.group ? "gr" : t.name.slice(0, 2).toLowerCase();
+              const last = t.msgs[t.msgs.length - 1];
+              return (
+                <button
+                  key={t.id}
+                  onClick={() => setActiveThread(t.id)}
+                  style={{ borderLeftColor: t.id === activeThread ? channelColor(chip.hue) : "transparent" }}
+                  className="flex w-full items-center gap-2.5 border-l-[3px] px-3 py-2.5 text-left hover:bg-background"
                 >
-                  {t.mono}
-                </span>
-                <span className="flex min-w-0 flex-1 flex-col gap-0.5 text-left">
-                  <span className="flex items-baseline gap-1.5">
-                    <span className="min-w-0 flex-1 truncate text-[13px] font-semibold">{t.name}</span>
-                    <span className="shrink-0 text-[10px] text-muted-foreground">{t.time}</span>
+                  <span
+                    className="flex size-9 shrink-0 items-center justify-center rounded-full font-mono text-xs font-bold text-white"
+                    style={{ background: channelColor(chip.hue) }}
+                  >
+                    {mono}
                   </span>
-                  <span className="flex items-center gap-1.5">
-                    <span className="min-w-0 flex-1 truncate text-xs text-muted-foreground">{t.preview}</span>
-                    {t.unread > 0 ? (
-                      <span className="flex h-[17px] min-w-[17px] shrink-0 items-center justify-center rounded-full bg-space-accent px-1 font-display text-[9px] font-extrabold text-space-accent-foreground">
-                        {t.unread}
+                  <span className="flex min-w-0 flex-1 flex-col gap-0.5 text-left">
+                    <span className="flex items-baseline gap-1.5">
+                      <span className="min-w-0 flex-1 truncate text-[13px] font-semibold">{t.name}</span>
+                      <span className="shrink-0 text-[10px] text-muted-foreground">{t.time}</span>
+                    </span>
+                    <span className="flex items-center gap-1.5">
+                      <span className="min-w-0 flex-1 truncate text-xs text-muted-foreground">
+                        {last ? last.text : "No messages yet"}
                       </span>
-                    ) : null}
+                      {t.unread > 0 ? (
+                        <span className="flex h-[17px] min-w-[17px] shrink-0 items-center justify-center rounded-full bg-space-accent px-1 font-display text-[9px] font-extrabold text-space-accent-foreground">
+                          {t.unread}
+                        </span>
+                      ) : null}
+                    </span>
                   </span>
-                </span>
-              </button>
-            ))}
+                </button>
+              );
+            })}
           </div>
         </aside>
 
@@ -127,23 +181,32 @@ export function Channels() {
           <header className="flex h-14 shrink-0 items-center gap-3 border-b border-border px-4">
             <span
               className="flex size-8 shrink-0 items-center justify-center rounded-full font-mono text-xs font-bold text-white"
-              style={{ background: thread.color }}
+              style={{ background: channelColor(CHANNEL_CHIPS.find((c) => c.id === thread.ch)!.hue) }}
             >
-              {thread.mono}
+              {thread.group ? "gr" : thread.name.slice(0, 2).toLowerCase()}
             </span>
             <span className="flex min-w-0 flex-col gap-px">
               <span className="truncate font-display text-[15px] font-extrabold">{thread.name}</span>
-              <span className="text-[11px] text-muted-foreground">Active 2m ago</span>
+              <span className="text-[11px] text-muted-foreground">
+                {thread.group ? `${thread.members} members · group` : "Direct message"}
+              </span>
             </span>
             <span className="ml-auto text-[10px] tracking-[0.1em] text-accent-ink uppercase">
               {CHANNEL_CHIPS.find((c) => c.id === activeChip)?.name}
             </span>
           </header>
           <div className="flex min-h-0 flex-1 flex-col gap-2.5 overflow-y-auto bg-background p-4">
-            {MESSAGES.map((m, i) => (
-              <div key={i} className="flex justify-start">
-                <div className="max-w-[72%] rounded-tl-[14px] rounded-tr-[14px] rounded-br-[14px] rounded-bl-[4px] border border-border bg-card px-2.5 py-2 shadow-[var(--shadow-sm)]">
-                  {m.showWho ? (
+            {thread.msgs.map((m, i) => (
+              <div key={i} className={cn("flex", m.out ? "justify-end" : "justify-start")}>
+                <div
+                  className={cn(
+                    "max-w-[72%] rounded-tl-[14px] rounded-tr-[14px] px-2.5 py-2",
+                    m.out
+                      ? "rounded-bl-[14px] rounded-br-[4px] bg-space-accent text-space-accent-foreground"
+                      : "rounded-br-[14px] rounded-bl-[4px] border border-border bg-card shadow-[var(--shadow-sm)]",
+                  )}
+                >
+                  {!m.out ? (
                     <span className="mb-0.5 block font-display text-[11px] font-extrabold text-accent-ink">
                       {m.who}
                     </span>

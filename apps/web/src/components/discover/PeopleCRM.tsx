@@ -24,30 +24,20 @@ interface PersonRow {
   profileLink: string;
   context: string;
   aura: number;
-  auraColor: string;
   channels: string[];
   onboarded: boolean;
 }
 
-const PEOPLE: PersonRow[] = [
-  {
-    id: "p1", name: "Mara", surname: "Jansen", email: "mara@tidalgrid.org", phone: "+31 6 1234 5678",
-    website: "tidalgrid.org", pid: "prof_a91f", hasProfile: true, profileLink: "jamot.pro/mara",
-    context: "Grid engineer, holds Tidal Grid. Prefers async, replies fastest on WhatsApp.",
-    aura: 812, auraColor: "#ff2657", channels: ["WA", "@"], onboarded: true,
-  },
-  {
-    id: "p2", name: "Amara", surname: "Boateng", email: "amara@openstitch.org", phone: "+233 55 123 4567",
-    website: "openstitch.org", pid: "prof_2c7e", hasProfile: true, profileLink: "jamot.pro/amara",
-    context: "Curriculum lead for Open Stitch. Reviews patterns weekly.", aura: 341, auraColor: "#0ea5e9",
-    channels: ["TG"], onboarded: true,
-  },
-  {
-    id: "p3", name: "Kai", surname: "Whetu", email: "kai@firstlanguage.nz", phone: "+64 21 555 0110",
-    website: "", pid: "", hasProfile: false, profileLink: "", context: "Native speaker, audio archive contact.",
-    aura: 0, auraColor: "#9b9797", channels: ["@"], onboarded: false,
-  },
-];
+/** 2-letter channel codes — copied verbatim from OrgConsole.dc.html's
+ * CHANNEL_MONO map. */
+const CHANNEL_MONO: Record<string, string> = {
+  Email: "em",
+  WhatsApp: "wa",
+  LinkedIn: "in",
+  Telegram: "tg",
+  Voice: "vo",
+  SMS: "sm",
+};
 
 interface PersonList {
   id: string;
@@ -56,15 +46,65 @@ interface PersonList {
   open: boolean;
 }
 
-function AuraDot({ color, size = 8 }: { color: string; size?: number }) {
-  return <span className="inline-block rounded-full" style={{ width: size, height: size, background: color }} />;
+/** Copied verbatim from OrgConsole.dc.html's PEOPLE_LISTS array. */
+const PEOPLE_LISTS: PersonList[] = [
+  {
+    id: "l1",
+    name: "Operators — Benelux",
+    open: true,
+    people: [
+      {
+        id: "p1", name: "Mara", surname: "Jansen", email: "mara@northbound.co", phone: "+31 6 2244 8100",
+        website: "jamot.pro", pid: "JM-0001", hasProfile: true, profileLink: "jamot.pro/mara",
+        context: "Runs ops for a 40-person logistics collective. Wants agents that draft SOPs she can edit.",
+        aura: 78, channels: ["Email", "WhatsApp", "LinkedIn"], onboarded: true,
+      },
+      {
+        id: "p2", name: "Tomas", surname: "de Wit", email: "tomas@havenlink.nl", phone: "+31 6 1180 4472",
+        website: "havenlink.nl", pid: "JM-0014", hasProfile: false, profileLink: "",
+        context: "Port scheduling. Referred by Mara, no profile generated yet.",
+        aura: 41, channels: ["Email", "Telegram"], onboarded: false,
+      },
+      {
+        id: "p3", name: "Ines", surname: "Moreau", email: "ines@atelier-mo.be", phone: "+32 471 22 09 55",
+        website: "atelier-mo.be", pid: "JM-0022", hasProfile: true, profileLink: "jamot.pro/ines",
+        context: "Independent designer, buys outcome-priced research runs.",
+        aura: 63, channels: ["Email", "Voice"], onboarded: true,
+      },
+    ],
+  },
+  {
+    id: "l2",
+    name: "Pilot candidates",
+    open: true,
+    people: [
+      {
+        id: "p4", name: "Ruben", surname: "Alvarez", email: "ruben@cargofold.es", phone: "+34 611 908 244",
+        website: "cargofold.es", pid: "JM-0031", hasProfile: false, profileLink: "",
+        context: "Asked for a paid pilot in Q4. Needs an onboarding link.",
+        aura: 29, channels: ["Email", "SMS"], onboarded: false,
+      },
+      {
+        id: "p5", name: "Saoirse", surname: "Byrne", email: "saoirse@loopyard.ie", phone: "+353 87 552 1180",
+        website: "loopyard.ie", pid: "JM-0037", hasProfile: true, profileLink: "jamot.pro/saoirse",
+        context: "Two agents already active on her account. High response rate.",
+        aura: 86, channels: ["Email", "WhatsApp"], onboarded: true,
+      },
+    ],
+  },
+];
+
+function AuraDot({ size = 8 }: { size?: number }) {
+  return (
+    <span
+      className="inline-block rounded-full bg-space-accent"
+      style={{ width: size, height: size }}
+    />
+  );
 }
 
 export function PeopleCRM() {
-  const [lists, setLists] = useState<PersonList[]>([
-    { id: "l1", name: "All people", people: PEOPLE, open: true },
-    { id: "l2", name: "Tidal Grid believers", people: [PEOPLE[0]!], open: false },
-  ]);
+  const [lists, setLists] = useState<PersonList[]>(PEOPLE_LISTS);
   const [openPerson, setOpenPerson] = useState<{ listId: string; personId: string } | null>(null);
 
   const toggleList = (id: string) =>
@@ -193,7 +233,7 @@ export function PeopleCRM() {
                           </td>
                           <td className="px-3 py-2.5 whitespace-nowrap">
                             <span className="inline-flex items-center gap-1.5">
-                              <AuraDot color={p.auraColor} />
+                              <AuraDot />
                               <span className="font-display font-extrabold">{p.aura}</span>
                             </span>
                           </td>
@@ -205,7 +245,7 @@ export function PeopleCRM() {
                                   title={ch}
                                   className="flex size-6 items-center justify-center rounded-full border border-border font-display text-[10px] font-extrabold"
                                 >
-                                  {ch}
+                                  {CHANNEL_MONO[ch] ?? ch}
                                 </span>
                               ))}
                             </span>
@@ -268,7 +308,7 @@ export function PeopleCRM() {
                     : "Draft profile — send an onboarding link so they can claim it."}
                 </span>
                 <span className="inline-flex items-center gap-1.5">
-                  <AuraDot color={openPersonData.auraColor} size={10} />
+                  <AuraDot size={10} />
                   <span className="font-display text-[15px] font-extrabold">{openPersonData.aura}</span>
                   <span className="text-[10px] tracking-[0.1em] text-muted-foreground uppercase">Aura</span>
                 </span>

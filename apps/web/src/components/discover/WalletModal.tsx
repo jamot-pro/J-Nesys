@@ -8,15 +8,16 @@ import { X } from "lucide-react";
  * Placeholder content — no real treasury/spend backend wired up here yet.
  */
 
+/** Copied verbatim from OrgConsole.dc.html's walletRows array. */
 const MOVEMENTS = [
-  { when: "2h ago", what: "Payout — Permit Tracker agent run", amount: "-€4.20" },
-  { when: "1d ago", what: "Top-up via card ending 4471", amount: "+€200.00" },
-  { when: "2d ago", what: "Payout — Translator agent run", amount: "-€1.80" },
-  { when: "4d ago", what: "Task reward — Mara Jansen", amount: "-€45.00" },
+  { when: "Today", what: "Outreach — 42 messages sent by Kestrel", amount: "− € 61" },
+  { when: "Today", what: "Lead generation — 5 leads confirmed", amount: "− € 125" },
+  { when: "Yesterday", what: "Pilot outcome settled — Saoirse Byrne", amount: "+ € 900" },
+  { when: "Mon", what: "Voice notes — ElevenLabs", amount: "− € 34" },
 ];
 
 export function WalletModal({ onClose }: { onClose: () => void }) {
-  const [cap, setCap] = useState("€250 / month");
+  const [cap, setCap] = useState("€ 2,000 / month");
 
   return (
     <div
@@ -44,13 +45,13 @@ export function WalletModal({ onClose }: { onClose: () => void }) {
         <div className="flex min-h-0 flex-1 flex-col gap-4 overflow-y-auto p-4">
           <div className="flex flex-wrap gap-3">
             <div className="flex min-w-[150px] flex-1 flex-col gap-0.5 rounded-[var(--radius-md)] bg-background px-4 py-3">
-              <span className="font-display text-[26px] leading-[1.1] font-extrabold">€612.40</span>
+              <span className="font-display text-[26px] leading-[1.1] font-extrabold">€ 1,640</span>
               <span className="text-[10px] tracking-[0.1em] text-muted-foreground uppercase">
                 Available balance
               </span>
             </div>
             <div className="flex min-w-[150px] flex-1 flex-col gap-0.5 rounded-[var(--radius-md)] bg-background px-4 py-3">
-              <span className="font-display text-[26px] leading-[1.1] font-extrabold">€187.60</span>
+              <span className="font-display text-[26px] leading-[1.1] font-extrabold">€ 918</span>
               <span className="text-[10px] tracking-[0.1em] text-muted-foreground uppercase">
                 Spent this month
               </span>
@@ -88,7 +89,7 @@ export function WalletModal({ onClose }: { onClose: () => void }) {
 
         <div className="flex shrink-0 flex-wrap gap-2 border-t border-border px-4 py-3">
           <button className="flex h-10 items-center justify-start rounded-[var(--radius-sm)] bg-space-accent px-4 text-sm font-medium text-space-accent-foreground hover:opacity-90">
-            Top up
+            Add € 3,500
           </button>
           <button
             onClick={onClose}

@@ -13,16 +13,19 @@ import { BrandLogo } from "@/components/brand-logo";
  * inventing content the mockup doesn't specify. Not wired to any backend.
  */
 
+/** Copied verbatim from OrgConsole.dc.html's SECTIONS array (ids/labels;
+ * `badge` is set to "Open" for whichever section is active, per its
+ * `sections` binding). */
 const SECTIONS = [
-  { id: "profile", label: "Public profile", badge: "" },
-  { id: "dreamspace", label: "Dreamspace", badge: "" },
-  { id: "apps", label: "Apps", badge: "" },
-  { id: "models", label: "Models", badge: "" },
-  { id: "notifications", label: "Notifications", badge: "" },
-  { id: "billing", label: "Billing", badge: "" },
-  { id: "team", label: "Team & roles", badge: "" },
-  { id: "integrations", label: "Integrations", badge: "" },
-  { id: "danger", label: "Danger zone", badge: "" },
+  { id: "profile", label: "Profile" },
+  { id: "dreamspace", label: "Dreamspace" },
+  { id: "models", label: "Models" },
+  { id: "connectors", label: "Connectors" },
+  { id: "channels", label: "Channels" },
+  { id: "apps", label: "Apps" },
+  { id: "skills", label: "Skills" },
+  { id: "memory", label: "Memory" },
+  { id: "actors", label: "Actors" },
 ];
 
 function ProfileSection() {
@@ -55,8 +58,8 @@ function ProfileSection() {
               }}
             />
             <div className="relative flex flex-col items-center justify-center gap-px">
-              <span className="font-display text-[28px] leading-none font-extrabold text-white">812</span>
-              <span className="text-[9px] tracking-[0.1em] text-white/85 uppercase">Strong</span>
+              <span className="font-display text-[28px] leading-none font-extrabold text-white">72</span>
+              <span className="text-[9px] tracking-[0.1em] text-white/85 uppercase">Building</span>
             </div>
           </div>
           <span className="text-[10px] tracking-[0.12em] text-muted-foreground uppercase">Aura</span>
@@ -210,7 +213,7 @@ export function SystemConfigModal({ onClose }: { onClose: () => void }) {
           <span className="font-display text-[15px] font-extrabold tracking-[0.08em] uppercase">
             System configuration
           </span>
-          <span className="text-[11px] tracking-[0.08em] text-muted-foreground uppercase">Jamot</span>
+          <span className="text-[11px] tracking-[0.08em] text-muted-foreground uppercase">Northbound Collective</span>
           <button
             onClick={onClose}
             title="Close"
@@ -230,6 +233,9 @@ export function SystemConfigModal({ onClose }: { onClose: () => void }) {
                 style={active === s.id ? { background: "color-mix(in srgb, var(--foreground) 7%, transparent)" } : undefined}
               >
                 <span className="flex-1">{s.label}</span>
+                {active === s.id ? (
+                  <span className="text-[10px] tracking-[0.08em] text-muted-foreground uppercase">Open</span>
+                ) : null}
               </button>
             ))}
           </div>
