@@ -88,37 +88,6 @@ export const UpdateOrganizationApps = z.object({
 });
 export type UpdateOrganizationApps = z.infer<typeof UpdateOrganizationApps>;
 
-/** Super-admin-only org settings patch. */
-export const UpdateOrganizationSettings = z.object({
-  name: z.string().min(1).optional(),
-  slug: z.string().min(1).optional(),
-  logoUrl: z.string().min(1).optional(),
-  dream: z.string().optional(),
-});
-export type UpdateOrganizationSettings = z.infer<typeof UpdateOrganizationSettings>;
-
-/** Body for the super-admin org delete (confirm-by-name). */
-export const DeleteOrganizationBody = z.object({
-  confirmName: z.string().min(1),
-});
-export type DeleteOrganizationBody = z.infer<typeof DeleteOrganizationBody>;
-
-/** Body for org-admin workspace settings (name + isolated config). */
-export const UpdateWorkspaceBody = z.object({
-  name: z.string().min(1).optional(),
-  config: z.record(z.string(), z.unknown()).optional(),
-});
-export type UpdateWorkspaceBody = z.infer<typeof UpdateWorkspaceBody>;
-
-/** Result of resolving an org by its subdomain slug. */
-export const SubdomainResolution = z.object({
-  organization: Organization,
-  space: Space,
-  workspaces: z.array(Workspace),
-  role: z.enum(["owner", "admin", "member", "agent", "external"]).nullable(),
-});
-export type SubdomainResolution = z.infer<typeof SubdomainResolution>;
-
 /** Per-organization branding for the org console (apps/console).
  *
  * Persisted inside `Organization.blueprint` under the `brand` key rather than
@@ -166,3 +135,36 @@ export function organizationBranding(blueprint: Record<string, unknown>): OrgBra
   const parsed = OrgBranding.safeParse(blueprint?.["brand"] ?? {});
   return parsed.success ? parsed.data : {};
 }
+
+/** Super-admin-only org settings patch. */
+export const UpdateOrganizationSettings = z.object({
+  name: z.string().min(1).optional(),
+  slug: z.string().min(1).optional(),
+  logoUrl: z.string().min(1).optional(),
+  dream: z.string().optional(),
+  /** Console branding, merged into `blueprint.brand` (see OrgBranding). */
+  branding: OrgBranding.optional(),
+});
+export type UpdateOrganizationSettings = z.infer<typeof UpdateOrganizationSettings>;
+
+/** Body for the super-admin org delete (confirm-by-name). */
+export const DeleteOrganizationBody = z.object({
+  confirmName: z.string().min(1),
+});
+export type DeleteOrganizationBody = z.infer<typeof DeleteOrganizationBody>;
+
+/** Body for org-admin workspace settings (name + isolated config). */
+export const UpdateWorkspaceBody = z.object({
+  name: z.string().min(1).optional(),
+  config: z.record(z.string(), z.unknown()).optional(),
+});
+export type UpdateWorkspaceBody = z.infer<typeof UpdateWorkspaceBody>;
+
+/** Result of resolving an org by its subdomain slug. */
+export const SubdomainResolution = z.object({
+  organization: Organization,
+  space: Space,
+  workspaces: z.array(Workspace),
+  role: z.enum(["owner", "admin", "member", "agent", "external"]).nullable(),
+});
+export type SubdomainResolution = z.infer<typeof SubdomainResolution>;

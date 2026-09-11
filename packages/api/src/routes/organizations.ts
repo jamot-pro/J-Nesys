@@ -481,6 +481,7 @@ export function organizationsRoutes(
           slug?: string | null;
           logoUrl?: string | null;
           dream?: string;
+          blueprint?: Record<string, unknown>;
         } = {};
 
         let name: string | undefined;
@@ -508,6 +509,16 @@ export function organizationsRoutes(
           patch.logoUrl = body.logoUrl === null || body.logoUrl === "" ? null : body.logoUrl;
         }
         if (body.dream !== undefined) patch.dream = body.dream;
+
+        if (body.branding !== undefined) {
+          // updateOrganization REPLACES blueprint wholesale in both the memory
+          // and pg repositories, so merge here: writing branding must not drop
+          // whatever else an org keeps in its blueprint.
+          patch.blueprint = {
+            ...organization.blueprint,
+            brand: { ...organizationBranding(organization.blueprint), ...body.branding },
+          };
+        }
 
         let updatedOrg = organization;
         if (Object.keys(patch).length > 0) {

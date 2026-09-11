@@ -3,6 +3,9 @@ import type { LightMyRequestResponse } from "fastify";
 import { buildApp } from "./app.js";
 import { createMemoryRepository } from "./repository.js";
 
+// The settings PATCH is super-admin gated; make the seeded owner one.
+process.env.SUPER_ADMIN_EMAILS = "owner@example.com";
+
 function sessionCookie(res: LightMyRequestResponse): string {
   const raw = res.headers["set-cookie"];
   const value = Array.isArray(raw) ? raw[0] : raw;
@@ -57,5 +60,45 @@ describe("public org branding", () => {
     // "api" is reserved, so it can never name an org console.
     const reserved = await app.inject({ method: "GET", url: "/api/organizations/api/branding" });
     expect(reserved.statusCode).toBe(400);
+  });
+
+  it("writes branding through the settings patch, merging rather than replacing", async () => {
+    const login = await app.inject({
+      method: "POST",
+      url: "/api/auth/login",
+      payload: { email: "owner@example.com", password: "password123" },
+    });
+    const cookie = sessionCookie(login);
+    const list = await app.inject({
+      method: "GET",
+      url: "/api/organizations",
+      headers: { cookie },
+    });
+    const orgId = list.json().items[0].organization.id as string;
+
+    await app.inject({
+      method: "PATCH",
+      url: `/api/organizations/${orgId}`,
+      headers: { cookie },
+      payload: { branding: { accent: "#0f766e", accentForeground: "#ffffff" } },
+    });
+
+    // A second, partial write must not drop the accent written by the first:
+    // updateOrganization replaces `blueprint` wholesale in both repositories,
+    // so the route has to merge.
+    await app.inject({
+      method: "PATCH",
+      url: `/api/organizations/${orgId}`,
+      headers: { cookie },
+      payload: { branding: { displayName: "Acme Industrial" } },
+    });
+
+    const res = await app.inject({ method: "GET", url: "/api/organizations/acme/branding" });
+    expect(res.json().branding).toEqual({
+      accent: "#0f766e",
+      accentForeground: "#ffffff",
+      displayName: "Acme Industrial",
+    });
+    expect(res.json().displayName).toBe("Acme Industrial");
   });
 });

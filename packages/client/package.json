@@ -9,7 +9,8 @@
   "exports": {
     ".": "./src/index.ts",
     "./config": "./src/config.ts",
-    "./branding": "./src/branding.ts"
+    "./branding": "./src/branding.ts",
+    "./auth": "./src/auth.ts"
   },
   "scripts": {
     "build": "tsc -p tsconfig.json --noEmit",

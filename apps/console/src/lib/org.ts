@@ -1,17 +1,8 @@
 import { headers } from "next/headers";
-import { configureApiClient } from "@jamot/client/config";
 import { fetchOrgBranding, type OrgPublicBranding } from "@jamot/client/branding";
 
+import "@/lib/api-config";
 import { ORG_SLUG_HEADER } from "@/proxy";
-
-configureApiClient(process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:4000");
-
-/** Fallback when no org resolves, or the org has set no brand. Mirrors the
- * cockpit's default so the two surfaces read as one product. */
-export const DEFAULT_BRAND = {
-  accent: "#e11d48",
-  accentForeground: "#ffffff",
-} as const;
 
 export async function currentOrgSlug(): Promise<string | null> {
   return (await headers()).get(ORG_SLUG_HEADER);

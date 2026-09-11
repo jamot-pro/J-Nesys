@@ -2,7 +2,8 @@ import type { Metadata } from "next";
 import { Archivo } from "next/font/google";
 import type { CSSProperties, ReactNode } from "react";
 
-import { DEFAULT_BRAND, loadOrgBranding } from "@/lib/org";
+import { brandStyle } from "@/lib/brand";
+import { loadOrgBranding } from "@/lib/org";
 import "./globals.css";
 
 const archivo = Archivo({
@@ -11,7 +12,7 @@ const archivo = Archivo({
   variable: "--font-archivo",
 });
 
-/** Title follows the organization, so a tab reads "Acme" not "Jamot". */
+/** Title follows the organization, so a tab reads "Acme", not "Jamot". */
 export async function generateMetadata(): Promise<Metadata> {
   const org = await loadOrgBranding();
   return {
@@ -23,19 +24,13 @@ export async function generateMetadata(): Promise<Metadata> {
 
 export default async function RootLayout({ children }: { children: ReactNode }) {
   const org = await loadOrgBranding();
-
-  // Branding is applied as CSS custom properties on <html> rather than by
-  // generating per-org CSS: one build serves every organization, and an org
-  // that has set no brand simply inherits the default palette.
-  const style = {
-    "--space-accent": org?.branding.accent ?? DEFAULT_BRAND.accent,
-    "--space-accent-foreground":
-      org?.branding.accentForeground ?? DEFAULT_BRAND.accentForeground,
-  } as CSSProperties;
+  const style = brandStyle(org?.branding.accent);
 
   return (
-    <html lang="en" className={`${archivo.variable} h-full antialiased`} style={style}>
-      <body className="h-full bg-background text-foreground">{children}</body>
+    <html lang="en" className={archivo.variable} style={style}>
+      <body style={{ background: "var(--color-surface)", color: "var(--color-text)" }}>
+        {children}
+      </body>
     </html>
   );
 }
