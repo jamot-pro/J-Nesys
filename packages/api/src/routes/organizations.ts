@@ -8,6 +8,7 @@ import {
   Id,
   OrgMemberRoleKind,
   OrganizationMember,
+  OrgPublicBranding,
   SubdomainResolution,
   UpdateOrganizationApps,
   UpdateOrganizationSettings,
@@ -16,6 +17,7 @@ import {
 import type { OrganizationMember as OrganizationMemberType } from "@jamot/contracts";
 import type { MemoryProvider } from "@jamot/core/memory";
 import type { AppManifest, AppRegistry } from "@jamot/core/apps";
+import { organizationBranding } from "@jamot/contracts";
 import type { JamotRepository, RoleKind } from "../repository.js";
 import {
   ROLE_WEIGHT,
@@ -258,6 +260,36 @@ export function organizationsRoutes(
       return { items };
     });
 
+    /** Public branding for <slug>.<root>. Unauthenticated by design: a
+     * logged-out visitor must see the organization's brand before they have a
+     * session to authenticate with, so /organizations/resolve (which requires
+     * auth and returns membership) cannot serve the console's first paint.
+     *
+     * This exposes only what that login screen already displays — name, logo,
+     * accent. It does make slug -> name/logo enumerable, the same trade every
+     * branded-login product makes; that is precisely why the payload is
+     * minimal and rate-limited. Nothing authorization-bearing (members,
+     * workspaces, dream, enabled apps, reputation) may be added here. */
+    app.get(
+      "/organizations/:slug/branding",
+      { config: { rateLimit: { max: 60, timeWindow: "1 minute" } } },
+      async (request, reply) => {
+        const params = request.params as { slug?: string };
+        const slug = normalizeSlug(params.slug);
+        if (!slug) return fail(reply, 400, "valid slug is required");
+        const organization = await repo.getOrganizationBySlug(slug);
+        if (!organization) return fail(reply, 404, "organization not found");
+        const space = await repo.getSpace(organization.spaceId);
+        const branding = organizationBranding(organization.blueprint);
+        return OrgPublicBranding.parse({
+          slug,
+          displayName: branding.displayName ?? space?.name ?? slug,
+          logoUrl: organization.logoUrl,
+          branding,
+        });
+      },
+    );
+
     app.get(
       "/organizations/resolve",
       { preHandler: requireAuth },
@@ -449,6 +481,7 @@ export function organizationsRoutes(
           slug?: string | null;
           logoUrl?: string | null;
           dream?: string;
+          blueprint?: Record<string, unknown>;
         } = {};
 
         let name: string | undefined;
@@ -476,6 +509,16 @@ export function organizationsRoutes(
           patch.logoUrl = body.logoUrl === null || body.logoUrl === "" ? null : body.logoUrl;
         }
         if (body.dream !== undefined) patch.dream = body.dream;
+
+        if (body.branding !== undefined) {
+          // updateOrganization REPLACES blueprint wholesale in both the memory
+          // and pg repositories, so merge here: writing branding must not drop
+          // whatever else an org keeps in its blueprint.
+          patch.blueprint = {
+            ...organization.blueprint,
+            brand: { ...organizationBranding(organization.blueprint), ...body.branding },
+          };
+        }
 
         let updatedOrg = organization;
         if (Object.keys(patch).length > 0) {

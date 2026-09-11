@@ -1,0 +1,42 @@
+@import "tailwindcss";
+@import "./design-system.css";
+
+/* The Modernist sheet above owns every colour, radius, shadow and space token
+ * and the component layer (.card, .btn, .nav, .table, .tag). Tailwind is kept
+ * for layout utilities only — flex, grid, gap, sizing. Nothing here may
+ * re-declare a value the design system already carries; see its readme.md
+ * ("Never hard-code a hex, a font name or a px value the tokens already
+ * carry"). */
+
+:root {
+  /* Archivo arrives via next/font, so point the system's font tokens at that
+   * variable rather than at a font-family string it would have loaded itself. */
+  --font-heading: var(--font-archivo), system-ui, sans-serif;
+  --font-body: var(--font-archivo), system-ui, sans-serif;
+}
+
+/* Per-organization accent.
+ *
+ * The root layout sets --org-accent / --org-accent-ink per request. Defaulting
+ * them to the system's own accent means an org that has set no brand renders
+ * exactly as the design system intends, and a branded org overrides only the
+ * accent role — never the ground, type or elevation, which are what make the
+ * system coherent across tenants. */
+:root {
+  --color-accent: var(--org-accent, #ff2657);
+}
+
+@theme inline {
+  --color-ds-bg: var(--color-bg);
+  --color-ds-surface: var(--color-surface);
+  --color-ds-text: var(--color-text);
+  --color-ds-divider: var(--color-divider);
+  --color-ds-accent: var(--color-accent);
+  --font-sans: var(--font-body);
+  --font-display: var(--font-heading);
+}
+
+html,
+body {
+  height: 100%;
+}

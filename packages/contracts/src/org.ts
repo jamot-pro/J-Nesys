@@ -88,12 +88,62 @@ export const UpdateOrganizationApps = z.object({
 });
 export type UpdateOrganizationApps = z.infer<typeof UpdateOrganizationApps>;
 
+/** Per-organization branding for the org console (apps/console).
+ *
+ * Persisted inside `Organization.blueprint` under the `brand` key rather than
+ * as columns: blueprint is already a free-form record, so branding needs no
+ * migration and stays a presentation concern the kernel does not interpret.
+ *
+ * Every field is optional — an org that has set nothing still renders, using
+ * the caller's fallback palette. */
+export const OrgBranding = z.object({
+  /** Accent colour as #rgb/#rrggbb. */
+  accent: z
+    .string()
+    .regex(/^#(?:[0-9a-fA-F]{3}|[0-9a-fA-F]{6})$/)
+    .optional(),
+  /** Foreground that must remain legible ON the accent. */
+  accentForeground: z
+    .string()
+    .regex(/^#(?:[0-9a-fA-F]{3}|[0-9a-fA-F]{6})$/)
+    .optional(),
+  /** Wordmark shown in the console header; falls back to Organization.logoUrl. */
+  wordmarkUrl: z.string().nullable().optional(),
+  /** Display name for the console, when it differs from the Space name. */
+  displayName: z.string().min(1).max(120).optional(),
+});
+export type OrgBranding = z.infer<typeof OrgBranding>;
+
+/** Public, unauthenticated branding payload for `<slug>.<root>` consoles.
+ *
+ * Deliberately minimal: a logged-out visitor must be able to render a branded
+ * login screen, so this is served without a session. It therefore exposes only
+ * what is already visible on that screen — never members, workspaces, dream,
+ * enabled apps or reputation. */
+export const OrgPublicBranding = z.object({
+  slug: z.string(),
+  displayName: z.string(),
+  logoUrl: z.string().nullable(),
+  branding: OrgBranding,
+});
+export type OrgPublicBranding = z.infer<typeof OrgPublicBranding>;
+
+/** Read branding out of an organization's blueprint. Unknown/invalid brand
+ * data degrades to `{}` rather than throwing — branding must never be able to
+ * break org loading. */
+export function organizationBranding(blueprint: Record<string, unknown>): OrgBranding {
+  const parsed = OrgBranding.safeParse(blueprint?.["brand"] ?? {});
+  return parsed.success ? parsed.data : {};
+}
+
 /** Super-admin-only org settings patch. */
 export const UpdateOrganizationSettings = z.object({
   name: z.string().min(1).optional(),
   slug: z.string().min(1).optional(),
   logoUrl: z.string().min(1).optional(),
   dream: z.string().optional(),
+  /** Console branding, merged into `blueprint.brand` (see OrgBranding). */
+  branding: OrgBranding.optional(),
 });
 export type UpdateOrganizationSettings = z.infer<typeof UpdateOrganizationSettings>;
 

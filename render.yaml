@@ -100,6 +100,7 @@ projects:
             buildFilter:
               paths:
                 - apps/web/**
+                - packages/client/**
                 - packages/contracts/**
                 - package.json
                 - pnpm-lock.yaml
@@ -109,6 +110,30 @@ projects:
               - key: NEXT_PUBLIC_API_URL
                 value: https://api.jamot.pro
               # Root domain used to detect per-org subdomains (e.g. org.jamot.pro).
+              - key: NEXT_PUBLIC_ROOT_DOMAIN
+                value: jamot.pro
+
+          # Per-organization branded consoles. One service serves every org:
+          # the org is resolved per request from the subdomain (src/proxy.ts),
+          # so adding an org needs no deploy. Requires a wildcard custom domain
+          # (*.jamot.pro) pointed at this service.
+          - type: web
+            name: jamot-console
+            runtime: node
+            region: oregon
+            plan: starter
+            buildCommand: corepack enable && pnpm install --frozen-lockfile && pnpm --filter @jamot/console build
+            startCommand: pnpm --filter @jamot/console start
+            buildFilter:
+              paths:
+                - apps/console/**
+                - packages/client/**
+                - package.json
+                - pnpm-lock.yaml
+                - pnpm-workspace.yaml
+            envVars:
+              - key: NEXT_PUBLIC_API_URL
+                value: https://api.jamot.pro
               - key: NEXT_PUBLIC_ROOT_DOMAIN
                 value: jamot.pro
 
