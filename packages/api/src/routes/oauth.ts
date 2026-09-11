@@ -8,6 +8,7 @@ import {
   fetchGoogleProfile,
   provisionUser,
 } from "../auth.js";
+import { safeReturnUrl } from "../return-url.js";
 
 export interface OAuthRoutesOptions {
   repository: JamotRepository;
@@ -47,6 +48,15 @@ export default async function oauthRoutes(
     clearStaleHostOnlySessionCookie(reply);
     const state = randomBytes(16).toString("hex");
     request.session.set("oauthState", state);
+
+    // Per-org consoles live on their own subdomains, so remember where this
+    // round-trip started and return there instead of always landing on the
+    // cockpit. Validated against FRONTEND_URL's site — an unchecked value here
+    // would be an open redirect that hands an attacker a signed-in victim.
+    const query = request.query as { return?: string };
+    const back = safeReturnUrl(query.return, frontendUrl);
+    request.session.set("oauthReturnTo", back ?? undefined);
+
     return reply.redirect(buildGoogleAuthUrl(clientId, redirectUri, state));
   });
 
@@ -91,7 +101,10 @@ export default async function oauthRoutes(
         request.session.set("personId", user.person.id);
       }
 
-      return reply.redirect(frontendUrl);
+      // Re-validate on the way out: the session value was checked when it was
+      // stored, but this keeps the guarantee local to the redirect itself.
+      const back = safeReturnUrl(request.session.get("oauthReturnTo"), frontendUrl);
+      return reply.redirect(back ?? frontendUrl);
     } catch (err) {
       request.log.error(err, "google oauth callback failed");
       return reply.code(502).send({ error: "google oauth failed" });

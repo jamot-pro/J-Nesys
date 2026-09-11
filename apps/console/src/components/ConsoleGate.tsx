@@ -22,6 +22,9 @@ const SECTIONS = [
   { href: "/", label: "Overview" },
   { href: "/leads", label: "Leads" },
   { href: "/outreach", label: "Outreach" },
+  { href: "/discovery", label: "Discovery" },
+  { href: "/commerce", label: "Commerce" },
+  { href: "/roadmap", label: "Not wired" },
 ] as const;
 
 /**
