@@ -3114,3 +3114,84 @@ EMVCo/AP2 as informational references only: the `PaymentProvider` interface (§3
 is the single point where an external standards-compliant rail can be attached
 without touching the kernel. Standards conformance is an edge concern, not a
 kernel feature, for JAMOT 0.1.
+
+---
+
+# 76. Agentic Payment Rails (deferred — not for 0.1 build)
+
+## 76.1 Status
+
+**Deferred.** Recorded here so the design is settled before implementation, not to
+authorise a build. No code in this section may be written until this status line
+changes. Today only `ledger` is a working `PaymentProviderKind`
+(`packages/api/src/app.ts`); `card`, `bank` and `stablecoin` remain enum values
+with no implementation, and `PaymentService.createIntent` rejects unregistered
+kinds. That behaviour is correct and must not be "fixed" by stubbing rails.
+
+## 76.2 Layer separation (the governing rule)
+
+Agentic payments are three independent layers. JAMOT must never collapse them:
+
+| Layer | Question answered | Standard | JAMOT seam |
+|---|---|---|---|
+| Transport identity | Who is calling this MCP server, and what may they invoke? | MCP authorization (§18), OAuth 2.1 + CIMD | Access token, scopes, `actorRoleInSpace` |
+| Payment authority | May this Agent spend on behalf of this Actor/Organization? | **AP2 mandates** | `PaymentIntent.requiresApproval`, `approvedByActorId`, future `mandateRef` (§75.4) |
+| Settlement | How does value actually move? | **x402**, MPP, ACP | `PaymentProvider` (§31) |
+
+The OAuth authorization server (§18) **does not** move money and **is not** the
+payment-authorization layer. AP2 is payment-rail agnostic and requires no specific
+authorization server. Therefore the choice of authorization server is orthogonal to
+the choice of payment rail, and neither may be selected on the other's behalf.
+
+## 76.3 Receiving payment (org MCP servers get paid)
+
+Each Organization's MCP server (§18) may price individual tools. The rail is
+**x402**: HTTP 402 Payment Required returned inside an MCP tool call, settled in
+stablecoin, no account or subscription required of the caller.
+
+Flow:
+
+1. Caller invokes a priced tool without payment;
+2. server returns 402 with payment requirements;
+3. caller settles;
+4. caller retries; server executes and credits the Organization's treasury (§32).
+
+Constraints: stablecoin-only; no physical goods; pricing is an Organization-level
+policy decision, never a kernel default.
+
+## 76.4 Making payment (Agents pay external services)
+
+When a JAMOT Agent calls an external x402-gated endpoint:
+
+- **authority** is proven by an AP2 mandate — a tamper-proof, ECDSA-signed JSON-LD
+  object, in one of two modes:
+  - *real-time* — a human signs a Cart Mandate per transaction;
+  - *delegated* — a human signs an Intent Mandate once; the Agent acts autonomously
+    within it;
+- **settlement** runs through a `stablecoin` `PaymentProvider` implementation.
+
+The mandate reference is persisted per §75.4 so every autonomous spend is
+attributable to a signed human authorization. An Agent spend with no resolvable
+mandate is invalid regardless of token validity.
+
+## 76.5 Governance invariant
+
+**Every payment path routes through the policy engine. No rail may be reachable
+around it.**
+
+Spend caps, budgets (§18) and approval gates are enforced in `packages/core`
+*before* any settlement rail is contacted. A spend cap breach fails inside the
+kernel, never at the rail. Rails are transports; they hold no authority.
+
+Any PR adding a settlement rail must add its policy gates in the same change. A
+rail merged without enforcement is a defect, not an increment.
+
+## 76.6 Build ordering, when unblocked
+
+1. `stablecoin` `PaymentProvider` + policy gates (same change);
+2. x402 receive-side on org MCP endpoints → treasury credit;
+3. AP2 mandate persistence (`mandateRef`) + verification;
+4. pay-side: key custody, delegated mandates, autonomous spend caps.
+
+Receive-side precedes pay-side: it is the maturer half of x402 and defers key
+custody. Steps 3–4 must not begin while 1–2 are unproven.
