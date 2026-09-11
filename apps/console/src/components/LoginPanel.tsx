@@ -1,7 +1,8 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { signIn } from "@jamot/client/auth";
+import { apiBaseUrl } from "@jamot/client/config";
 
 import "@/lib/api-config";
 
@@ -19,6 +20,13 @@ export function LoginPanel({
   const [password, setPassword] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
+  const [returnUrl, setReturnUrl] = useState("");
+
+  // window is unavailable while this renders on the server, so read the current
+  // URL after mount. Until then the Google link has no target and is disabled.
+  useEffect(() => {
+    setReturnUrl(window.location.href);
+  }, []);
 
   async function submit(e: React.FormEvent) {
     e.preventDefault();
@@ -79,6 +87,22 @@ export function LoginPanel({
         >
           {busy ? "Signing in…" : "Sign in"}
         </button>
+
+        {/* A full navigation, not fetch: the OAuth round-trip leaves the origin
+            and comes back. `return` carries this console's URL so the API sends
+            the user here rather than to the cockpit (FRONTEND_URL); the API
+            validates it against its own site before honouring it. */}
+        <a
+          className="btn btn-secondary btn-block"
+          style={{ marginTop: "var(--space-2)" }}
+          href={`${apiBaseUrl()}/api/auth/google?return=${encodeURIComponent(returnUrl)}`}
+        >
+          Continue with Google
+        </a>
+
+        <p className="card-meta" style={{ marginTop: "var(--space-3)" }}>
+          Signing in here signs you in across every Jamot organization you belong to.
+        </p>
       </form>
     </div>
   );
