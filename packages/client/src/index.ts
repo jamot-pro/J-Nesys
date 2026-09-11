@@ -1,4 +1,4 @@
-import { apiBaseUrl } from "./config.js";
+import { apiBaseUrl } from "./config";
 
 export type OrgRole = "owner" | "admin" | "member" | "agent" | "external" | null;
 
