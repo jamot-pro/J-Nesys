@@ -9,6 +9,12 @@
 # run graphiti-mcp on a paid service / private network and set GRAPHITI_ENABLED
 # and GRAPHITI_MCP_URL on the jamot-api service below.
 
+# NOTE: `corepack enable` is deliberately NOT used. Render's Node image ships
+# pnpm at /usr/bin/pnpm on a read-only filesystem, so corepack fails the build
+# with `EROFS: read-only file system, unlink '/usr/bin/pnpm'`. The live
+# jamot-api/web/scheduler/channels services already run without it; this file
+# had drifted and still carried it, which broke the first jamot-console build.
+#
 projects:
   - name: jamot
     environments:
@@ -26,7 +32,9 @@ projects:
             runtime: node
             region: oregon
             plan: starter
-            buildCommand: corepack enable && pnpm install --frozen-lockfile && pnpm --filter @jamot/api build
+            buildCommand: pnpm install --frozen-lockfile && pnpm --filter @jamot/api build
+            # Matches the live jamot-api service, which the blueprint had not recorded.
+            preDeployCommand: pnpm --filter @jamot/core exec tsx scripts/migrate.ts
             startCommand: pnpm --filter @jamot/api exec tsx src/index.ts
             healthCheckPath: /health
             buildFilter:
@@ -95,7 +103,7 @@ projects:
             runtime: node
             region: oregon
             plan: starter
-            buildCommand: corepack enable && pnpm install --frozen-lockfile && pnpm --filter @jamot/web build
+            buildCommand: pnpm install --frozen-lockfile && pnpm --filter @jamot/web build
             startCommand: pnpm --filter @jamot/web start
             buildFilter:
               paths:
@@ -122,7 +130,7 @@ projects:
             runtime: node
             region: oregon
             plan: starter
-            buildCommand: corepack enable && pnpm install --frozen-lockfile && pnpm --filter @jamot/console build
+            buildCommand: pnpm install --frozen-lockfile && pnpm --filter @jamot/console build
             startCommand: pnpm --filter @jamot/console start
             buildFilter:
               paths:
@@ -142,7 +150,7 @@ projects:
             runtime: node
             region: oregon
             plan: starter
-            buildCommand: corepack enable && pnpm install --frozen-lockfile && pnpm --filter @jamot/workers build
+            buildCommand: pnpm install --frozen-lockfile && pnpm --filter @jamot/workers build
             startCommand: pnpm --filter @jamot/workers exec tsx src/scheduler.ts
             buildFilter:
               paths:
@@ -176,7 +184,7 @@ projects:
             runtime: node
             region: oregon
             plan: starter
-            buildCommand: corepack enable && pnpm install --frozen-lockfile && pnpm --filter @jamot/workers build
+            buildCommand: pnpm install --frozen-lockfile && pnpm --filter @jamot/workers build
             startCommand: pnpm --filter @jamot/workers exec tsx src/channel.ts
             buildFilter:
               paths:
