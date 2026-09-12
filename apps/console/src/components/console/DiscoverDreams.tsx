@@ -1,34 +1,11 @@
 "use client";
 
-import { useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
+import { joinDream, leaveDream, listDreams, type DreamListing } from "@jamot/client";
 
-/** Fixture copied verbatim from the mockup's PUBLIC_DREAMS. There is no
- * dreams endpoint yet, so the mockup's own content stands until one exists. */
-interface Dream {
-  id: string;
-  name: string;
-  holder: string;
-  place: string;
-  cat: string;
-  believers: string;
-  pct: number;
-  agents: string;
-  statement: string;
-  need: string;
-  pay: string;
-  joined?: boolean;
-}
-
-const PUBLIC_DREAMS: Dream[] = [
-  { id: "tidal", name: "Tidal Grid", holder: "Mara Jansen", place: "Utrecht", cat: "Energy", believers: "1,232", pct: 62, agents: "14", statement: "Put tidal power on the grid of every small island in the North Sea, owned by the people who live there.", need: "Grid analysts, translators, permit readers", pay: "€40–€120 / task", joined: true },
-  { id: "seedbank", name: "Open Seed Bank", holder: "Ifeoma Adeyemi", place: "Lagos", cat: "Food", believers: "4,870", pct: 41, agents: "31", statement: "A public, free seed library for every climate zone in West Africa, with agents that match seeds to soil.", need: "Agronomists, data entry, field photographers", pay: "€25–€90 / task" },
-  { id: "lumen", name: "Lumen Schools", holder: "Diego Ferraz", place: "Porto", cat: "Education", believers: "2,104", pct: 78, agents: "22", statement: "Every rural school in Portugal gets a tutor agent that speaks the local dialect and never gives up on a student.", need: "Teachers, dialect speakers, curriculum reviewers", pay: "€30–€150 / task", joined: true },
-  { id: "reknit", name: "Reknit", holder: "Hanna Vogel", place: "Leipzig", cat: "Circular", believers: "918", pct: 24, agents: "9", statement: "Make repairing a garment cheaper than replacing it, in every European city, by 2030.", need: "Tailors, logistics planners, pricing analysts", pay: "€20–€75 / task" },
-  { id: "quietsky", name: "Quiet Sky", holder: "Ravi Menon", place: "Bengaluru", cat: "Cities", believers: "3,406", pct: 55, agents: "18", statement: "Measure night noise on every street of one city, then hand the map to the people who can change it.", need: "Field interviewers, supply-chain", pay: "€35–€110 / task" },
-  { id: "ledger", name: "Fair Ledger", holder: "Amara Osei", place: "Accra", cat: "Commerce", believers: "1,677", pct: 33, agents: "12", statement: "Every cocoa farmer sees the final shelf price of their own beans, and can act on it.", need: "Field interviewers, supply-chain", pay: "€30–€95 / task" },
-];
-
-const CATS = ["All", "Energy", "Food", "Education", "Circular", "Cities", "Commerce"];
+/** The mockup's fixed tabs, kept as the spine; anything a dream declares that
+ *  is not one of them is appended, so a new category is never invisible. */
+const BASE_CATS = ["All", "Energy", "Food", "Education", "Circular", "Cities", "Commerce"];
 
 function initials(name: string) {
   return name.split(/\s+/).slice(0, 2).map((w) => w[0]?.toUpperCase() ?? "").join("");
@@ -40,7 +17,46 @@ const MUTED = "color-mix(in srgb, var(--color-text) 74%, transparent)";
  * region (lines 171–228), styles verbatim. */
 export function DiscoverDreams() {
   const [cat, setCat] = useState("All");
-  const results = cat === "All" ? PUBLIC_DREAMS : PUBLIC_DREAMS.filter((d) => d.cat === cat);
+  const [dreams, setDreams] = useState<DreamListing[] | null>(null);
+  const [error, setError] = useState<string | null>(null);
+  const [pending, setPending] = useState<string | null>(null);
+
+  const load = useCallback(async () => {
+    try {
+      setDreams(await listDreams());
+      setError(null);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Could not load dreams.");
+      setDreams([]);
+    }
+  }, []);
+
+  useEffect(() => {
+    void load();
+  }, [load]);
+
+  const cats = useMemo(() => {
+    const extra = (dreams ?? [])
+      .map((d) => d.category)
+      .filter((c) => c && !BASE_CATS.includes(c));
+    return [...BASE_CATS, ...new Set(extra)];
+  }, [dreams]);
+
+  const results = (dreams ?? []).filter((d) => cat === "All" || d.category === cat);
+
+  const toggleJoin = async (dream: DreamListing) => {
+    setPending(dream.organizationId);
+    try {
+      if (dream.joined) await leaveDream(dream.organizationId);
+      else await joinDream(dream.organizationId);
+      await load();
+      setError(null);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "That did not go through.");
+    } finally {
+      setPending(null);
+    }
+  };
 
   return (
     <div data-copilot-region="discover-dreams">
@@ -64,7 +80,7 @@ export function DiscoverDreams() {
       </div>
 
       <div className="seg" style={{ flexWrap: "wrap", margin: "var(--space-4) 0 var(--space-4)" }}>
-        {CATS.map((c) => (
+        {cats.map((c) => (
           <button
             key={c}
             className="seg-opt"
@@ -83,7 +99,7 @@ export function DiscoverDreams() {
       <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill,minmax(300px,1fr))", gap: "var(--space-3)" }}>
         {results.map((d) => (
           <div
-            key={d.id}
+            key={d.organizationId}
             style={{
               display: "flex",
               flexDirection: "column",
@@ -117,7 +133,7 @@ export function DiscoverDreams() {
                   {d.name}
                 </span>
                 <span style={{ fontSize: 12, color: MUTED }}>
-                  {d.holder} · {d.place} · {d.cat}
+                  {[d.holderName, d.place, d.category].filter(Boolean).join(" · ")}
                 </span>
               </span>
             </div>
@@ -125,8 +141,8 @@ export function DiscoverDreams() {
             <p style={{ margin: 0, fontSize: 14, lineHeight: 1.55 }}>{d.statement}</p>
 
             <div style={{ display: "flex", gap: "var(--space-4)", flexWrap: "wrap", fontSize: 12, color: MUTED }}>
-              <span>{d.believers} believers</span>
-              <span>{d.pct}% funded</span>
+              <span>{d.believers.toLocaleString()} believers</span>
+              <span>{d.fundedPct}% funded</span>
               <span>{d.agents} agents</span>
             </div>
 
@@ -142,22 +158,39 @@ export function DiscoverDreams() {
               <span style={{ letterSpacing: "0.08em", textTransform: "uppercase", color: "color-mix(in srgb, var(--color-text) 70%, transparent)" }}>
                 Needs
               </span>{" "}
-              {d.need} · <span style={{ color: "var(--accent-ink)" }}>{d.pay}</span>
+              {d.needs.length > 0 ? d.needs.join(", ") : "Not stated yet"}
+              {d.payBand ? (
+                <>
+                  {" · "}
+                  <span style={{ color: "var(--accent-ink)" }}>{d.payBand}</span>
+                </>
+              ) : null}
             </div>
 
             <div style={{ display: "flex", gap: 8, marginTop: "auto" }}>
-              {d.joined ? (
-                <button className="btn btn-secondary" style={{ justifyContent: "flex-start" }}>Open — joined</button>
-              ) : (
-                <button className="btn btn-primary" style={{ justifyContent: "flex-start" }}>Join this dream</button>
-              )}
+              <button
+                className={d.joined ? "btn btn-secondary" : "btn btn-primary"}
+                style={{ justifyContent: "flex-start" }}
+                disabled={pending === d.organizationId}
+                onClick={() => void toggleJoin(d)}
+              >
+                {d.joined ? "Open — joined" : "Join this dream"}
+              </button>
             </div>
           </div>
         ))}
       </div>
 
-      {results.length === 0 ? (
-        <p style={{ margin: 0, fontSize: 14, color: MUTED }}>No dream matches that yet.</p>
+      {error ? (
+        <p style={{ margin: "var(--space-3) 0 0", fontSize: 14, color: "var(--color-accent)" }}>{error}</p>
+      ) : dreams === null ? (
+        <p style={{ margin: 0, fontSize: 14, color: MUTED }}>Loading dreams…</p>
+      ) : results.length === 0 ? (
+        <p style={{ margin: 0, fontSize: 14, color: MUTED }}>
+          {dreams.length === 0
+            ? "No dream is published yet. A dream appears here as soon as an organization writes one."
+            : "No dream matches that yet."}
+        </p>
       ) : null}
     </div>
   );

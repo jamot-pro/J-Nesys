@@ -103,6 +103,8 @@ import {
   orgNodes,
   peopleLists,
   peopleListMembers,
+  dreamListings,
+  dreamBelievers,
 } from "../schema/index.js";
 import type {
   JamotRepository,
@@ -146,6 +148,7 @@ import type {
   PeopleFilter,
   ModelProviderRecord,
   NewModelProvider,
+  DreamListingRow,
   ProviderModelRecord,
 } from "./repository.js";
 
@@ -815,6 +818,18 @@ function toPaymentRecord(row: typeof paymentRecords.$inferSelect): PaymentRecord
     currency: row.currency,
     providerReference: row.providerReference,
     settledAt: row.settledAt,
+  };
+}
+
+function toDreamListingRow(row: typeof dreamListings.$inferSelect): DreamListingRow {
+  return {
+    organizationId: row.organizationId,
+    holderName: row.holderName,
+    place: row.place,
+    category: row.category,
+    needs: row.needs,
+    payBand: row.payBand,
+    fundedPct: row.fundedPct,
   };
 }
 
@@ -1607,6 +1622,67 @@ export function createPgRepository(db: Db): JamotRepository {
         .where(eq(peopleListMembers.peopleListId, peopleListId))
         .orderBy(peopleListMembers.createdAt);
       return rows.map(toPeopleListMember);
+    },
+
+    async getDreamListing(organizationId) {
+      const [row] = await q
+        .select()
+        .from(dreamListings)
+        .where(eq(dreamListings.organizationId, organizationId))
+        .limit(1);
+      return row ? toDreamListingRow(row) : null;
+    },
+
+    async upsertDreamListing(organizationId, patch) {
+      const [row] = await q
+        .insert(dreamListings)
+        .values({ organizationId, ...patch })
+        .onConflictDoUpdate({
+          target: dreamListings.organizationId,
+          set: { ...patch, updatedAt: new Date().toISOString() },
+        })
+        .returning();
+      if (!row) throw new Error("failed to save dream listing");
+      return toDreamListingRow(row);
+    },
+
+    async listDreamListings() {
+      const rows = await q.select().from(dreamListings);
+      return rows.map(toDreamListingRow);
+    },
+
+    async addDreamBeliever(organizationId, actorId) {
+      await q
+        .insert(dreamBelievers)
+        .values({ organizationId, actorId })
+        .onConflictDoNothing();
+    },
+
+    async removeDreamBeliever(organizationId, actorId) {
+      await q
+        .delete(dreamBelievers)
+        .where(
+          and(
+            eq(dreamBelievers.organizationId, organizationId),
+            eq(dreamBelievers.actorId, actorId),
+          ),
+        );
+    },
+
+    async countDreamBelievers(organizationId) {
+      const rows = await q
+        .select({ id: dreamBelievers.id })
+        .from(dreamBelievers)
+        .where(eq(dreamBelievers.organizationId, organizationId));
+      return rows.length;
+    },
+
+    async listDreamsBelievedIn(actorId) {
+      const rows = await q
+        .select({ organizationId: dreamBelievers.organizationId })
+        .from(dreamBelievers)
+        .where(eq(dreamBelievers.actorId, actorId));
+      return rows.map((r) => r.organizationId);
     },
 
     async createAgent(input: NewAgent) {

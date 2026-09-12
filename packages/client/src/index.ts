@@ -2361,3 +2361,36 @@ export async function updatePerson(
     body: JSON.stringify(body),
   });
 }
+
+/* ---- Discover -------------------------------------------------------- */
+
+export interface DreamListing {
+  organizationId: string;
+  slug: string | null;
+  name: string;
+  logoUrl: string | null;
+  statement: string;
+  holderName: string;
+  place: string;
+  category: string;
+  needs: string[];
+  payBand: string;
+  fundedPct: number;
+  believers: number;
+  agents: number;
+  joined: boolean;
+}
+
+/** The public dream directory. Readable signed out; `joined` needs a session. */
+export async function listDreams(): Promise<DreamListing[]> {
+  const data = await api<{ items: DreamListing[] }>("/api/dreams");
+  return data.items;
+}
+
+export async function joinDream(organizationId: string): Promise<{ believers: number }> {
+  return api<{ believers: number }>(`/api/dreams/${organizationId}/believers`, { method: "POST" });
+}
+
+export async function leaveDream(organizationId: string): Promise<void> {
+  await api<void>(`/api/dreams/${organizationId}/believers`, { method: "DELETE" });
+}

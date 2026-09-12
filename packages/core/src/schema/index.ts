@@ -1312,6 +1312,48 @@ export const leadListMembers = pgTable(
   ],
 );
 
+/**
+ * Public presentation for an organization's dream. The dream statement itself
+ * lives on the organization; this row only carries what the public directory
+ * shows on top of it, and exists only once someone has filled it in.
+ */
+export const dreamListings = pgTable(
+  "dream_listings",
+  {
+    id: uuid("id").defaultRandom().primaryKey(),
+    organizationId: uuid("organization_id")
+      .notNull()
+      .references(() => organizations.id, { onDelete: "cascade" }),
+    holderName: text("holder_name").notNull().default(""),
+    place: text("place").notNull().default(""),
+    category: text("category").notNull().default(""),
+    needs: text("needs").array().notNull().default(sql`'{}'::text[]`),
+    payBand: text("pay_band").notNull().default(""),
+    fundedPct: integer("funded_pct").notNull().default(0),
+    ...timestamps(),
+  },
+  (table) => [uniqueIndex("dream_listings_org_unique").on(table.organizationId)],
+);
+
+/** One actor believing in one organization's dream — the "join" of Discover. */
+export const dreamBelievers = pgTable(
+  "dream_believers",
+  {
+    id: uuid("id").defaultRandom().primaryKey(),
+    organizationId: uuid("organization_id")
+      .notNull()
+      .references(() => organizations.id, { onDelete: "cascade" }),
+    actorId: uuid("actor_id")
+      .notNull()
+      .references(() => actors.id, { onDelete: "cascade" }),
+    ...timestamps(),
+  },
+  (table) => [
+    index("dream_believers_org_idx").on(table.organizationId),
+    uniqueIndex("dream_believers_unique").on(table.organizationId, table.actorId),
+  ],
+);
+
 export const peopleLists = pgTable(
   "people_lists",
   {
