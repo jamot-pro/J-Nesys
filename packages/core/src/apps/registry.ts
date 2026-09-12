@@ -22,9 +22,11 @@ export interface AppRegistry {
 export const SAMPLE_APPS: AppManifest[] = [
   {
     id: "crm",
-    name: "CRM",
+    /* The id stays "crm" — organizations have it stored in enabledAppIds and
+       renaming it would orphan those. The label is what people read. */
+    name: "People",
     version: "1.0.0",
-    description: "Contacts, pipelines and deals.",
+    description: "Every human your agents can act for or reach out to.",
     entities: ["contact", "deal", "pipeline"],
     capabilities: ["contact.manage", "pipeline.track", "deal.close"],
     tools: ["contact.search", "deal.update"],
