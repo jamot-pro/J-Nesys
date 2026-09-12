@@ -290,17 +290,26 @@ export function LeadGen() {
 
       <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit,minmax(320px,1fr))", gap: "var(--space-3)" }}>
         <section style={CARD}>
-          <span style={UPPER}>Tell the agent the target</span>
-          {/* Its own row, at the card's width. Sitting beside the heading with
-              `width:auto` let a long agent name push the control past the
-              card's edge, since a flex item will not shrink below its content
-              unless it is told it may. */}
-          <div className="field" style={{ minWidth: 0 }}>
-            <label htmlFor="lg-sagent">Search agent</label>
+          <div style={{ display: "flex", alignItems: "baseline", gap: 8, flexWrap: "wrap", minWidth: 0 }}>
+            <span style={UPPER}>Tell the agent the target</span>
+            {/* The mockup's compact control, beside the heading. A select is as
+                wide as its widest option, so it needs a ceiling and a shrink
+                floor — without them one long agent name stretched it past the
+                card's edge. */}
             <select
               className="input"
-              id="lg-sagent"
-              style={{ width: "100%", minWidth: 0, maxWidth: "100%", boxSizing: "border-box" }}
+              aria-label="Search agent"
+              title="The agent that runs the search"
+              style={{
+                marginLeft: "auto",
+                height: 32,
+                width: "auto",
+                minWidth: 0,
+                maxWidth: "100%",
+                boxSizing: "border-box",
+                fontSize: 12,
+                textOverflow: "ellipsis",
+              }}
               value={current?.agentId ?? ""}
               disabled={!listId}
               onChange={(e) => void assignAgent("agentId", e.target.value)}
