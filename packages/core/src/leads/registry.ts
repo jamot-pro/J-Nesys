@@ -1,6 +1,7 @@
 import type { LeadProvider, LeadProviderServices } from "./types.js";
 import { createApolloProvider } from "./providers/apollo.js";
 import { createComposioLeadProvider } from "./providers/composio.js";
+import { createGoogleMapsProvider } from "./providers/google-maps.js";
 import { createMcpLeadProvider } from "./providers/mcp.js";
 
 export interface LeadProviderRegistry {
@@ -22,6 +23,7 @@ export function createLeadProviderRegistry(
   // Modular default sources — adding a provider is a registration, not a fork.
   install(createApolloProvider(services));
   install(createComposioLeadProvider(services));
+  install(createGoogleMapsProvider(services));
   install(createMcpLeadProvider(services));
 
   for (const provider of seed) install(provider);
