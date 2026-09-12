@@ -826,6 +826,25 @@ export function organizationsRoutes(
       },
     );
 
+    /** List the org's custom apps.
+     *
+     * DELETE takes a customAppId, but nothing exposed one: the apps payload
+     * identifies apps by slug, so an app registered here could be created and
+     * never removed. This closes that loop. */
+    app.get(
+      "/organizations/:id/apps/custom",
+      { preHandler: rbac.requireOrgAccess("id") },
+      async (request, reply) => {
+        const params = request.params as { id?: string };
+        const id = parse(Id, params.id, reply);
+        if (!id) return;
+        const organization = await repo.getOrganization(id);
+        if (!organization) return fail(reply, 404, "organization not found");
+        const items = await repo.listCustomApps({ organizationId: organization.id });
+        return { items };
+      },
+    );
+
     app.post(
       "/organizations/:id/apps/custom",
       { preHandler: rbac.requireOrgAdmin("id") },

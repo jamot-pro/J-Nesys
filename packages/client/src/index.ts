@@ -2200,3 +2200,44 @@ export async function searchWaMessages(accountId: string, q: string): Promise<Wa
   );
   return data.items;
 }
+
+// --- Custom apps -----------------------------------------------------------
+
+export interface CustomAppManifest {
+  id: string;
+  organizationId: string;
+  slug: string;
+  name: string;
+  version: string;
+  description: string;
+  tools: string[];
+  capabilities: string[];
+  createdAt: string;
+  updatedAt: string;
+}
+
+export async function listCustomApps(organizationId: string): Promise<CustomAppManifest[]> {
+  const data = await api<{ items: CustomAppManifest[] }>(
+    `/api/organizations/${organizationId}/apps/custom`,
+  );
+  return data.items;
+}
+
+export async function createCustomApp(
+  organizationId: string,
+  input: { slug: string; name: string; description?: string; version?: string },
+): Promise<CustomAppManifest> {
+  return api<CustomAppManifest>(`/api/organizations/${organizationId}/apps/custom`, {
+    method: "POST",
+    body: JSON.stringify(input),
+  });
+}
+
+export async function deleteCustomApp(
+  organizationId: string,
+  customAppId: string,
+): Promise<void> {
+  await api<void>(`/api/organizations/${organizationId}/apps/custom/${customAppId}`, {
+    method: "DELETE",
+  });
+}
