@@ -41,8 +41,6 @@ export function AppRail({
   onOpenApp,
   onHome,
   onOpenChannels,
-  onToggleChat,
-  chatOpen,
   onOpenWallet,
   onOpenConfig,
   onCycleTheme,
@@ -53,10 +51,6 @@ export function AppRail({
   onOpenApp: (id: string) => void;
   onHome: () => void;
   onOpenChannels: () => void;
-  onToggleChat: () => void;
-  /** Drives the chat button's label, as the mockup does:
-   * railChatTitle = chatOpen ? 'Hide assistant chat' : 'Open assistant chat'. */
-  chatOpen: boolean;
   onOpenWallet: () => void;
   onOpenConfig: () => void;
   onCycleTheme: () => void;
@@ -159,23 +153,6 @@ export function AppRail({
             so the two read as one control repeated. Inbox tray instead. */}
         <button onClick={onOpenChannels} title="Channels" style={ICON_BTN}>
           <Icon d="M4 13h4l2 3h4l2-3h4M4 13l2.6-7.2A2 2 0 0 1 8.5 5h7a2 2 0 0 1 1.9 1.3L20 13v4a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2z" />
-        </button>
-        {/* The chat control belongs to the rail, as it does in the mockup.
-            A floating pill beside the rail crowded these buttons, so when the
-            panel is closed this fills with the accent instead — attached,
-            unmistakable, and it moves nothing else. */}
-        <button
-          onClick={onToggleChat}
-          aria-label={chatOpen ? "Hide assistant chat" : "Open assistant chat"}
-          title={chatOpen ? "Hide assistant chat" : "Open assistant chat"}
-          style={{
-            ...ICON_BTN,
-            background: chatOpen ? "none" : "var(--color-accent)",
-            color: chatOpen ? "var(--color-text)" : "#fff",
-            boxShadow: chatOpen ? "none" : "var(--shadow-md)",
-          }}
-        >
-          <Icon d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z" />
         </button>
         <button onClick={onOpenWallet} title="Wallet" style={{ ...ICON_BTN, position: "relative" }}>
           <Icon d="M3 8a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2v9a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z" />

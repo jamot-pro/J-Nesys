@@ -4,6 +4,7 @@ import { useCallback, useEffect, useState } from "react";
 import type { OrgPublicBranding } from "@jamot/client/branding";
 
 import { AppRail } from "./AppRail";
+import { ChatReopen } from "./ChatReopen";
 import { ChatPanel } from "./ChatPanel";
 import { Channels } from "./Channels";
 import { DiscoverDreams } from "./DiscoverDreams";
@@ -113,15 +114,15 @@ export function OrgConsole({ branding }: { branding: OrgPublicBranding }) {
     >
       {chatOpen ? (
         <ChatPanel width={chatWidth} onWidthChange={setChatWidth} onCollapse={() => setChatOpen(false)} />
-      ) : null}
+      ) : (
+        <ChatReopen onOpen={() => setChatOpen(true)} />
+      )}
 
       <AppRail
         apps={apps}
         activeId={activeApp}
         onOpenApp={(id) => setActiveApp(id)}
         onHome={() => setActiveApp(null)}
-        onToggleChat={() => setChatOpen((v) => !v)}
-        chatOpen={chatOpen}
         onOpenWallet={() => setActiveApp("wallet")}
         onOpenChannels={() => setActiveApp("channels")}
         onOpenConfig={() => setConfigOpen(true)}
