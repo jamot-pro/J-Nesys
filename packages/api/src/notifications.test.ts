@@ -128,4 +128,48 @@ describe("notifications", () => {
     });
     expect(list.json().items.every((n: { read: boolean }) => n.read)).toBe(true);
   });
+
+  it("read-all accepts the \"personal\" space alias", async () => {
+    const repo = createMemoryRepository();
+    const app = await buildApp({ repository: repo, secret: "test" });
+    const cookie = await registerAndLogin(app, "cara@example.com", "password123", "Cara");
+    const me = await app.inject({ method: "GET", url: "/api/auth/me", headers: { cookie } });
+    const actorId = me.json().actor.id;
+    const spaceId = me.json().actor.personalSpaceId;
+
+    await repo.createNotification({ spaceId, actorId, type: "approval", title: "Needs you" });
+
+    const res = await app.inject({
+      method: "PUT",
+      url: "/api/notifications/read-all?spaceId=personal",
+      headers: { cookie },
+    });
+    expect(res.statusCode).toBe(200);
+
+    const after = await app.inject({
+      method: "GET",
+      url: "/api/notifications?spaceId=personal",
+      headers: { cookie },
+    });
+    expect(after.json().items).toHaveLength(1);
+    expect(after.json().items[0].read).toBe(true);
+  });
+
+  it("carries the target a trigger set, so the reader can be taken there", async () => {
+    const repo = createMemoryRepository();
+    const app = await buildApp({ repository: repo, secret: "test" });
+    const cookie = await registerAndLogin(app, "dan@example.com", "password123", "Dan");
+    const me = await app.inject({ method: "GET", url: "/api/auth/me", headers: { cookie } });
+
+    await repo.createNotification({
+      spaceId: me.json().actor.personalSpaceId,
+      actorId: me.json().actor.id,
+      type: "message",
+      title: "You were assigned: Ship it",
+      targetSection: "tasks",
+    });
+
+    const res = await app.inject({ method: "GET", url: "/api/notifications", headers: { cookie } });
+    expect(res.json().items[0]).toMatchObject({ targetSection: "tasks", read: false });
+  });
 });

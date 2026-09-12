@@ -9,11 +9,12 @@ import { ChatPanel } from "./ChatPanel";
 import { Channels } from "./Channels";
 import { DiscoverDreams } from "./DiscoverDreams";
 import { SystemConfig } from "./SystemConfig";
-import { getOrganizationApps, type AppManifest } from "@jamot/client";
+import { getOrganizationApps, listNotifications, type AppManifest } from "@jamot/client";
 import type { RailApp } from "./mockup-data";
 import { useOrgScope } from "../console-context";
 import { CommerceSection } from "../CommerceSection";
 import { LeadGen } from "./LeadGen";
+import { Notifications } from "./Notifications";
 import { People } from "./People";
 import { OutreachSection } from "../OutreachSection";
 
@@ -32,7 +33,7 @@ const WIRED: Record<string, React.ReactNode> = {
 /** Surfaces that live in the rail's lower group rather than the app catalog:
  * they are part of the console itself, so they cannot be installed or
  * deactivated and must survive a change to the enabled apps. */
-const PLATFORM_SURFACES = new Set(["channels", "wallet", "config"]);
+const PLATFORM_SURFACES = new Set(["channels", "notifications", "wallet", "config"]);
 
 const SUN = "M12 3v2M12 19v2M5.6 5.6l1.4 1.4M17 17l1.4 1.4M3 12h2M19 12h2M5.6 18.4 7 17M17 7l1.4-1.4";
 const MOON = "M21 12.8A9 9 0 1 1 11.2 3a7 7 0 0 0 9.8 9.8z";
@@ -50,7 +51,8 @@ const MOON = "M21 12.8A9 9 0 1 1 11.2 3a7 7 0 0 0 9.8 9.8z";
  * a rail for switching between organizations has nothing to switch to.
  */
 export function OrgConsole({ branding }: { branding: OrgPublicBranding }) {
-  const { organizationId } = useOrgScope();
+  const { organizationId, spaceId } = useOrgScope();
+  const [unread, setUnread] = useState(0);
   const [chatOpen, setChatOpen] = useState(true);
   const [chatWidth, setChatWidth] = useState(360);
   const [activeApp, setActiveApp] = useState<string | null>(null);
@@ -92,6 +94,28 @@ export function OrgConsole({ branding }: { branding: OrgPublicBranding }) {
   }, [apps, activeApp]);
   const [dark, setDark] = useState(true);
 
+  /* The badge is polled rather than pushed: there is no realtime channel for
+     notifications yet, and a stale count is worse than a slightly late one.
+     It also refreshes whenever the reader leaves the notifications surface,
+     so marking things read there is reflected immediately. */
+  useEffect(() => {
+    let cancelled = false;
+    const tick = async () => {
+      try {
+        const items = await listNotifications(spaceId);
+        if (!cancelled) setUnread(items.filter((n) => !n.read).length);
+      } catch {
+        // A failed poll leaves the last known count alone.
+      }
+    };
+    void tick();
+    const timer = setInterval(() => void tick(), 30_000);
+    return () => {
+      cancelled = true;
+      clearInterval(timer);
+    };
+  }, [spaceId, activeApp]);
+
   // The mockup switches theme with body[data-theme], and its own .mark-light /
   // .mark-dark rules key off the same attribute — so the wordmark and logo
   // swap for free rather than needing per-image logic here.
@@ -127,6 +151,8 @@ export function OrgConsole({ branding }: { branding: OrgPublicBranding }) {
         onHome={() => setActiveApp(null)}
         onOpenWallet={() => setActiveApp("wallet")}
         onOpenChannels={() => setActiveApp("channels")}
+        onOpenNotifications={() => setActiveApp("notifications")}
+        unreadCount={unread}
         chatDocked={!chatOpen}
         onOpenConfig={() => setConfigOpen(true)}
         onCycleTheme={() => setDark((v) => !v)}
@@ -149,6 +175,15 @@ export function OrgConsole({ branding }: { branding: OrgPublicBranding }) {
         <div style={{ flex: 1, minHeight: 0, overflowY: "auto", padding: "var(--space-6)" }}>
           {activeApp === null ? (
             <DiscoverDreams />
+          ) : activeApp === "notifications" ? (
+            <Notifications
+              /* Triggers name sections this console may not have ported yet
+                 (tasks, for one). Navigating to one of those would land on the
+                 placeholder, so only known surfaces are followed. */
+              onOpenSection={(section) => {
+                if (WIRED[section] || PLATFORM_SURFACES.has(section)) setActiveApp(section);
+              }}
+            />
           ) : WIRED[activeApp] ? (
             WIRED[activeApp]
           ) : (
