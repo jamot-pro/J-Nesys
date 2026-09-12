@@ -50,6 +50,7 @@ export interface RailApp {
  */
 export const CATALOG_ICON: Record<string, string> = {
   crm: "crm",
+  "agent-configurator": "agents",
   outreach: "outreach",
   "lead-generation": "leadgen",
   "event-management": "tasks",
