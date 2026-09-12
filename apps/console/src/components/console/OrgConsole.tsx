@@ -6,6 +6,7 @@ import type { OrgPublicBranding } from "@jamot/client/branding";
 import { AppRail } from "./AppRail";
 import { ChatPanel } from "./ChatPanel";
 import { ChatReopen } from "./ChatReopen";
+import { Channels } from "./Channels";
 import { DiscoverDreams } from "./DiscoverDreams";
 import { SystemConfig } from "./SystemConfig";
 import { APPS } from "./mockup-data";
@@ -18,6 +19,7 @@ import { OutreachSection } from "../OutreachSection";
  * Commerce.dc.html) — they carry real data in design-system components, and the
  * mockup's own layout for each is still to be ported. */
 const WIRED: Record<string, React.ReactNode> = {
+  channels: <Channels />,
   leadgen: <LeadGen />,
   outreach: <OutreachSection />,
   commerce: <CommerceSection />,
