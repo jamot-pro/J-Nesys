@@ -41,7 +41,12 @@ export default async function notificationsRoutes(
   app.put("/notifications/read-all", { preHandler: requireAuth }, async (request) => {
     const query = request.query as { spaceId?: string };
     const actorId = request.session.actorId!;
-    await repository.markAllNotificationsRead({ actorId, spaceId: query.spaceId });
+    // Same "personal" alias as the listing route: without resolving it here,
+    // Postgres rejects the query on a spaceId that is not a uuid.
+    const spaceId = query.spaceId
+      ? ((await resolveSpaceIdForActor(repository, actorId as Id, query.spaceId as Id)) ?? undefined)
+      : undefined;
+    await repository.markAllNotificationsRead({ actorId, spaceId });
     return { status: "ok" };
   });
 }

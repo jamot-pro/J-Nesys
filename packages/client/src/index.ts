@@ -433,6 +433,9 @@ export interface ApiNotification {
   summary: string;
   read: boolean;
   createdAt?: string;
+  /** Where clicking this should take the reader, when the trigger set one. */
+  targetSection: string | null;
+  targetId: string | null;
 }
 
 export async function listNotifications(
@@ -453,8 +456,10 @@ export async function markNotificationRead(id: string): Promise<void> {
   });
 }
 
-export async function markAllNotificationsRead(): Promise<void> {
-  await api(`/api/notifications/read-all`, {
+/** Scoped to one space when given, so it cannot clear another space's bell. */
+export async function markAllNotificationsRead(spaceId?: string): Promise<void> {
+  const query = spaceId ? `?spaceId=${encodeURIComponent(spaceId)}` : "";
+  await api(`/api/notifications/read-all${query}`, {
     method: "PUT",
   });
 }

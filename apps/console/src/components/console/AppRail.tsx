@@ -41,6 +41,8 @@ export function AppRail({
   onOpenApp,
   onHome,
   onOpenChannels,
+  onOpenNotifications,
+  unreadCount,
   chatDocked,
   onOpenWallet,
   onOpenConfig,
@@ -52,6 +54,9 @@ export function AppRail({
   onOpenApp: (id: string) => void;
   onHome: () => void;
   onOpenChannels: () => void;
+  onOpenNotifications: () => void;
+  /** Unread notifications for this actor; 0 hides the badge entirely. */
+  unreadCount: number;
   /** True while the chat pill is docked at the rail's foot: the lower group
    *  then leaves that slot empty instead of putting an icon under it. */
   chatDocked: boolean;
@@ -158,6 +163,39 @@ export function AppRail({
             so the two read as one control repeated. Inbox tray instead. */}
         <button onClick={onOpenChannels} title="Channels" style={ICON_BTN}>
           <Icon d="M4 13h4l2 3h4l2-3h4M4 13l2.6-7.2A2 2 0 0 1 8.5 5h7a2 2 0 0 1 1.9 1.3L20 13v4a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2z" />
+        </button>
+        <button
+          onClick={onOpenNotifications}
+          title={unreadCount > 0 ? `Notifications (${unreadCount} unread)` : "Notifications"}
+          aria-label={unreadCount > 0 ? `Notifications, ${unreadCount} unread` : "Notifications"}
+          style={{ ...ICON_BTN, position: "relative" }}
+        >
+          <Icon d="M18 16v-5a6 6 0 1 0-12 0v5l-2 3h16zM10 22h4" />
+          {unreadCount > 0 ? (
+            <span
+              aria-hidden
+              style={{
+                position: "absolute",
+                top: 6,
+                right: 6,
+                minWidth: 15,
+                height: 15,
+                padding: "0 4px",
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "center",
+                borderRadius: 999,
+                background: "var(--color-accent)",
+                color: "#fff",
+                fontFamily: "var(--font-heading)",
+                fontWeight: 800,
+                fontSize: 9,
+                lineHeight: 1,
+              }}
+            >
+              {unreadCount > 9 ? "9+" : unreadCount}
+            </span>
+          ) : null}
         </button>
         <button onClick={onOpenWallet} title="Wallet" style={{ ...ICON_BTN, position: "relative" }}>
           <Icon d="M3 8a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2v9a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z" />
