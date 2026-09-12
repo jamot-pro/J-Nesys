@@ -84,6 +84,7 @@ import type {
   PeopleFilter,
   ModelProviderRecord,
   NewModelProvider,
+  DreamListingRow,
   ProviderModelRecord,
 } from "./repository.js";
 
@@ -122,6 +123,8 @@ export function createMemoryRepository(): JamotRepository {
   const purchaseOrderStore = new Map<string, PurchaseOrder>();
   const paymentIntentStore = new Map<string, PaymentIntent>();
   const paymentRecordStore = new Map<string, PaymentRecord>();
+  const dreamListingStore = new Map<string, DreamListingRow>();
+  const dreamBelieverStore = new Set<string>();
   const peopleListStore = new Map<string, PeopleList>();
   const peopleListMemberStore = new Map<string, PeopleListMember>();
   const leadListStore = new Map<string, LeadList>();
@@ -517,6 +520,47 @@ export function createMemoryRepository(): JamotRepository {
       });
       people.set(person.id, person);
       return person;
+    },
+
+    async getDreamListing(organizationId) {
+      return dreamListingStore.get(organizationId) ?? null;
+    },
+
+    async upsertDreamListing(organizationId, patch) {
+      const existing = dreamListingStore.get(organizationId) ?? {
+        organizationId,
+        holderName: "",
+        place: "",
+        category: "",
+        needs: [],
+        payBand: "",
+        fundedPct: 0,
+      };
+      const next = { ...existing, ...patch, organizationId };
+      dreamListingStore.set(organizationId, next);
+      return next;
+    },
+
+    async listDreamListings() {
+      return [...dreamListingStore.values()];
+    },
+
+    async addDreamBeliever(organizationId, actorId) {
+      dreamBelieverStore.add(`${organizationId}:${actorId}`);
+    },
+
+    async removeDreamBeliever(organizationId, actorId) {
+      dreamBelieverStore.delete(`${organizationId}:${actorId}`);
+    },
+
+    async countDreamBelievers(organizationId) {
+      return [...dreamBelieverStore].filter((k) => k.startsWith(`${organizationId}:`)).length;
+    },
+
+    async listDreamsBelievedIn(actorId) {
+      return [...dreamBelieverStore]
+        .filter((k) => k.endsWith(`:${actorId}`))
+        .map((k) => k.slice(0, k.lastIndexOf(":")));
     },
 
     async createPeopleList(input) {

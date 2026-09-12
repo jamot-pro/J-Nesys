@@ -190,3 +190,37 @@ export const ReadinessReport = z.object({
   updatedAt: Timestamp,
 });
 export type ReadinessReport = z.infer<typeof ReadinessReport>;
+/**
+ * A dream as the public Discover directory shows it: the organization's own
+ * dream statement plus the presentation fields, with counts that are derived
+ * rather than stored — believers are rows, agents are the org's real agents.
+ */
+export const DreamListing = z.object({
+  organizationId: Id,
+  slug: z.string().nullable().default(null),
+  name: z.string(),
+  logoUrl: z.string().nullable().default(null),
+  statement: z.string(),
+  holderName: z.string().default(""),
+  place: z.string().default(""),
+  category: z.string().default(""),
+  needs: z.array(z.string()).default([]),
+  payBand: z.string().default(""),
+  fundedPct: z.number().int().min(0).max(100).default(0),
+  believers: z.number().int().min(0).default(0),
+  agents: z.number().int().min(0).default(0),
+  /** Whether the caller already believes in this dream. */
+  joined: z.boolean().default(false),
+});
+export type DreamListing = z.infer<typeof DreamListing>;
+
+/** The presentation fields a dream holder can edit. */
+export const DreamListingPatch = z.object({
+  holderName: z.string().max(200).optional(),
+  place: z.string().max(200).optional(),
+  category: z.string().max(80).optional(),
+  needs: z.array(z.string().max(120)).max(20).optional(),
+  payBand: z.string().max(80).optional(),
+  fundedPct: z.number().int().min(0).max(100).optional(),
+});
+export type DreamListingPatch = z.infer<typeof DreamListingPatch>;

@@ -166,6 +166,17 @@ export interface NewLeadPerson {
   membershipSpaceIds?: string[];
 }
 
+/** The stored half of a dream listing; the rest of a listing is derived. */
+export interface DreamListingRow {
+  organizationId: string;
+  holderName: string;
+  place: string;
+  category: string;
+  needs: string[];
+  payBand: string;
+  fundedPct: number;
+}
+
 export interface NewPeopleList {
   spaceId: string;
   organizationId?: string | null;
@@ -685,6 +696,18 @@ export interface JamotRepository {
   addPeopleListMember(peopleListId: string, personId: string): Promise<PeopleListMember>;
   removePeopleListMember(peopleListId: string, personId: string): Promise<void>;
   listPeopleListMembers(peopleListId: string): Promise<PeopleListMember[]>;
+
+  /** Public presentation for a dream, absent until someone fills it in. */
+  getDreamListing(organizationId: string): Promise<DreamListingRow | null>;
+  upsertDreamListing(
+    organizationId: string,
+    patch: Partial<Omit<DreamListingRow, "organizationId">>,
+  ): Promise<DreamListingRow>;
+  listDreamListings(): Promise<DreamListingRow[]>;
+  addDreamBeliever(organizationId: string, actorId: string): Promise<void>;
+  removeDreamBeliever(organizationId: string, actorId: string): Promise<void>;
+  countDreamBelievers(organizationId: string): Promise<number>;
+  listDreamsBelievedIn(actorId: string): Promise<string[]>;
 
   // agents
   createAgent(input: NewAgent): Promise<Agent>;
