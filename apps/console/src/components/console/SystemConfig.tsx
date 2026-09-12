@@ -16,7 +16,6 @@ import {
 import { useConsole, useOrgScope } from "../console-context";
 import { AppsConfig } from "./AppsConfig";
 import {
-  ActorsSection,
   ConnectorsSection,
   MemorySection,
   ProfileSection,
@@ -36,7 +35,6 @@ const SECTIONS = [
   { id: "apps", label: "Apps", blurb: "Tools available inside the platform. Activated apps appear in the rail; order here is rail order." },
   { id: "skills", label: "Skills", blurb: "What agents know how to do." },
   { id: "memory", label: "Memory", blurb: "What the organization remembers." },
-  { id: "actors", label: "Actors", blurb: "Every human and agent the platform knows." },
 ] as const;
 
 type SectionId = (typeof SECTIONS)[number]["id"];
@@ -169,7 +167,6 @@ function SectionBody({ id }: { id: SectionId }) {
   if (id === "apps") return <AppsConfig />;
   if (id === "connectors") return <ConnectorsSection />;
   if (id === "skills") return <SkillsSection />;
-  if (id === "actors") return <ActorsSection />;
   if (id === "memory") return <MemorySection />;
   return <NotWired what="Dreamspace" />;
 }

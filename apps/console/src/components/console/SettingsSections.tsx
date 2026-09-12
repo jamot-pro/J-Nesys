@@ -9,7 +9,6 @@ import {
   deleteSkill,
   forgetMemory,
   getMe,
-  listActors,
   listConnectors,
   listMemory,
   listSkills,
@@ -18,7 +17,6 @@ import {
   updateOwnActor,
   updateOwnProfile,
   updateSkill,
-  type ApiActor,
   type ApiConnector,
   type ApiMemoryEntry,
   type ApiSkill,
@@ -331,92 +329,6 @@ export function SkillsSection() {
       >
         Add skill
       </button>
-    </>
-  );
-}
-
-/* ---- Actors ----------------------------------------------------------- */
-
-/**
- * Actors — every human and agent the platform knows.
- *
- * The API allows an actor to rename only itself, so this is a roster with one
- * editable row: yours. Presenting the others as editable would be a lie the
- * server would refuse.
- */
-export function ActorsSection() {
-  const { data, error, note, busy, run } = useSection<{ actors: ApiActor[]; me: MeResponse }>(async () => {
-    const [actors, me] = await Promise.all([listActors(), getMe()]);
-    return { actors, me };
-  });
-  const [ownName, setOwnName] = useState("");
-
-  useEffect(() => {
-    if (data) setOwnName(data.me.actor.displayName ?? "");
-  }, [data]);
-
-  if (!data) return <Feedback error={error} note={error ? null : "Loading actors…"} />;
-
-  const { actors, me } = data;
-  const humans = actors.filter((a) => a.type === "human");
-  const agents = actors.filter((a) => a.type !== "human");
-
-  return (
-    <>
-      <Feedback error={error} note={note} />
-
-      <div style={{ display: "flex", gap: "var(--space-4)", flexWrap: "wrap", marginBottom: "var(--space-3)", fontSize: 12, color: MUTED }}>
-        <span>{humans.length} human{humans.length === 1 ? "" : "s"}</span>
-        <span>{agents.length} agent{agents.length === 1 ? "" : "s"}</span>
-      </div>
-
-      <table className="table">
-        <thead>
-          <tr><th>Name</th><th>Type</th><th>Id</th><th /></tr>
-        </thead>
-        <tbody>
-          {actors.map((a) => {
-            const isMe = a.id === me.actor.id;
-            return (
-              <tr key={a.id}>
-                <td>
-                  {isMe ? (
-                    <input
-                      className="input"
-                      style={{ height: 30, maxWidth: 240 }}
-                      value={ownName}
-                      onChange={(e) => setOwnName(e.target.value)}
-                    />
-                  ) : (
-                    a.displayName
-                  )}
-                </td>
-                <td><span className="tag tag-neutral">{a.type}</span></td>
-                <td style={{ fontFamily: "ui-monospace,'SF Mono',Menlo,monospace", fontSize: 12, color: DIM }}>
-                  {a.id.slice(0, 8)}
-                </td>
-                <td style={{ whiteSpace: "nowrap" }}>
-                  {isMe ? (
-                    <button
-                      className="btn btn-secondary"
-                      disabled={busy || ownName.trim() === a.displayName}
-                      onClick={() => void run(() => updateOwnActor(a.id, { displayName: ownName.trim() }), "Renamed.")}
-                    >
-                      Rename
-                    </button>
-                  ) : (
-                    <span style={{ fontSize: 12, color: DIM }}>—</span>
-                  )}
-                </td>
-              </tr>
-            );
-          })}
-        </tbody>
-      </table>
-      <p style={{ margin: "var(--space-3) 0 0", fontSize: 12, color: DIM }}>
-        An actor can only be renamed by itself — the API refuses anything else, so the other rows are
-        shown rather than offered.
-      </p>
     </>
   );
 }
