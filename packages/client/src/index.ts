@@ -872,10 +872,16 @@ export async function createComposioConnection(input: {
   toolkit: string;
   sharing: "user" | "organization";
   organizationId?: string | null;
+  /** Defaults to the current page, so the round-trip returns here. */
+  returnTo?: string;
 }): Promise<{ redirectUrl: string; state: string }> {
   return api("/api/composio/connections", {
     method: "POST",
-    body: JSON.stringify(input),
+    body: JSON.stringify({
+      ...input,
+      returnTo:
+        input.returnTo ?? (typeof window !== "undefined" ? window.location.href : undefined),
+    }),
   });
 }
 
@@ -2462,7 +2468,12 @@ export async function getGoogleStatus(spaceId: string): Promise<GoogleConnectorS
  * through the API's callback, so it cannot be done with XHR.
  */
 export function googleConnectUrl(spaceId: string): string {
-  return `${apiBaseUrl()}/api/google/start?spaceId=${encodeURIComponent(spaceId)}`;
+  /* Come back to the page the flow started on. Every console shares this API,
+     so without this the callback lands on FRONTEND_URL — the cockpit — and it
+     reads as the whole UI having reverted. */
+  const params = new URLSearchParams({ spaceId });
+  if (typeof window !== "undefined") params.set("returnTo", window.location.href);
+  return `${apiBaseUrl()}/api/google/start?${params.toString()}`;
 }
 
 export async function syncGoogle(spaceId: string): Promise<{
