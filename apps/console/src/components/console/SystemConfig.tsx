@@ -1,19 +1,27 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import {
   createChannelAccount,
-  listActors,
   listChannelAccounts,
-  listConnectors,
   listEnabledModels,
+  createModelProvider,
+  deleteModelProvider,
   listModelProviders,
-  listSkills,
+  testModelProvider,
+  type ApiModelProvider,
   type ApiChannelAccount,
 } from "@jamot/client";
 
 import { useConsole, useOrgScope } from "../console-context";
 import { AppsConfig } from "./AppsConfig";
+import {
+  ActorsSection,
+  ConnectorsSection,
+  MemorySection,
+  ProfileSection,
+  SkillsSection,
+} from "./SettingsSections";
 import { WhatsAppPairing } from "./WhatsAppPairing";
 
 const MUTED = "color-mix(in srgb, var(--color-text) 76%, transparent)";
@@ -155,35 +163,17 @@ function NotWired({ what }: { what: string }) {
 }
 
 function SectionBody({ id }: { id: SectionId }) {
+  if (id === "profile") return <ProfileSection />;
   if (id === "channels") return <ChannelsSection />;
   if (id === "models") return <ModelsSection />;
   if (id === "apps") return <AppsConfig />;
-  if (id === "connectors") return <SimpleList label="Connectors" load={() => listConnectors().then((x) => x.map((c) => `${c.provider} · ${c.type} · ${c.status}`))} />;
-  if (id === "skills") return <SimpleList label="Skills" load={() => listSkills().then((x) => x.map((s) => s.name))} />;
-  if (id === "actors") return <SimpleList label="Actors" load={() => listActors().then((x) => x.map((a) => `${a.displayName} · ${a.type}`))} />;
-  return <NotWired what={id === "profile" ? "Profile" : id === "workspace" ? "Dreamspace" : "Memory"} />;
+  if (id === "connectors") return <ConnectorsSection />;
+  if (id === "skills") return <SkillsSection />;
+  if (id === "actors") return <ActorsSection />;
+  if (id === "memory") return <MemorySection />;
+  return <NotWired what="Dreamspace" />;
 }
 
-function SimpleList({ label, load }: { label: string; load: () => Promise<string[]> }) {
-  const [items, setItems] = useState<string[] | null>(null);
-  const [error, setError] = useState<string | null>(null);
-  useEffect(() => {
-    let cancelled = false;
-    void load()
-      .then((v) => !cancelled && setItems(v))
-      .catch((e) => !cancelled && setError(e instanceof Error ? e.message : "Could not load."));
-    return () => { cancelled = true; };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
-  if (error) return <p style={{ color: "var(--accent-ink)", fontSize: 14 }}>{error}</p>;
-  if (!items) return <p style={{ opacity: 0.6, fontSize: 14 }}>Loading…</p>;
-  if (items.length === 0) return <p style={{ color: MUTED, fontSize: 14 }}>No {label.toLowerCase()} yet.</p>;
-  return (
-    <ul style={{ margin: 0, paddingLeft: "1.1rem", fontSize: 14, lineHeight: 1.9 }}>
-      {items.map((t, i) => <li key={i}>{t}</li>)}
-    </ul>
-  );
-}
 
 /** Channels — the section that matters for WhatsApp and Telegram. */
 function ChannelsSection() {
@@ -272,55 +262,160 @@ function ChannelsSection() {
 }
 
 /** Models — what the chat depends on. */
+/**
+ * Models — which providers exist, whether each one answers, and what is
+ * enabled. Adding a provider tests it immediately: the API returns the test
+ * result with the created provider, so a bad key is reported at once rather
+ * than surfacing later as a 503 in the chat panel.
+ */
 function ModelsSection() {
-  const [providers, setProviders] = useState<{ id: string; name: string; status: string }[] | null>(null);
+  const [providers, setProviders] = useState<ApiModelProvider[] | null>(null);
   const [enabled, setEnabled] = useState<string[]>([]);
   const [error, setError] = useState<string | null>(null);
+  const [note, setNote] = useState<string | null>(null);
+  const [busy, setBusy] = useState(false);
 
-  useEffect(() => {
-    let cancelled = false;
-    void (async () => {
-      try {
-        const [p, e] = await Promise.all([listModelProviders(), listEnabledModels().catch(() => [])]);
-        if (cancelled) return;
-        setProviders(p.map((x) => ({ id: x.id, name: x.name, status: x.status })));
-        setEnabled(e.map((m) => `${m.providerName} · ${m.modelId}`));
-      } catch (err) {
-        if (!cancelled) setError(err instanceof Error ? err.message : "Could not load models.");
-      }
-    })();
-    return () => { cancelled = true; };
+  const [name, setName] = useState("");
+  const [baseUrl, setBaseUrl] = useState("");
+  const [apiKey, setApiKey] = useState("");
+
+  const refresh = useCallback(async () => {
+    const [p, e] = await Promise.all([listModelProviders(), listEnabledModels().catch(() => [])]);
+    setProviders(p);
+    setEnabled(e.map((m) => `${m.providerName} · ${m.modelId}`));
   }, []);
 
-  if (error) return <p style={{ color: "var(--accent-ink)", fontSize: 14 }}>{error}</p>;
-  if (!providers) return <p style={{ opacity: 0.6, fontSize: 14 }}>Loading…</p>;
+  useEffect(() => {
+    void refresh().catch((err) =>
+      setError(err instanceof Error ? err.message : "Could not load models."),
+    );
+  }, [refresh]);
+
+  async function run(fn: () => Promise<unknown>, done?: string) {
+    setBusy(true);
+    setNote(null);
+    try {
+      await fn();
+      await refresh();
+      setError(null);
+      if (done) setNote(done);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "That did not go through.");
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  if (!providers && !error) return <p style={{ opacity: 0.6, fontSize: 14 }}>Loading…</p>;
 
   return (
     <>
-      {providers.length === 0 ? (
+      {error ? <p style={{ color: "var(--accent-ink)", fontSize: 14 }}>{error}</p> : null}
+      {note ? <p style={{ color: MUTED, fontSize: 13 }}>{note}</p> : null}
+
+      {(providers ?? []).length === 0 ? (
         <div className="card">
           <div className="card-kicker">Chat depends on this</div>
           <div className="card-title">No model provider configured</div>
           <p className="card-body">
             Without a provider the assistant cannot answer: the runtime returns 503 and the chat panel
-            reports it. Add a provider to enable chat.
+            reports it. Add a provider below to enable chat.
           </p>
         </div>
       ) : (
         <table className="table">
-          <thead><tr><th>Provider</th><th>Status</th></tr></thead>
+          <thead><tr><th>Provider</th><th>Endpoint</th><th>Status</th><th /></tr></thead>
           <tbody>
-            {providers.map((p) => (
+            {(providers ?? []).map((p) => (
               <tr key={p.id}>
                 <td>{p.name}</td>
+                <td style={{ color: MUTED, fontFamily: "ui-monospace,'SF Mono',Menlo,monospace", fontSize: 12 }}>
+                  {p.baseUrl}
+                </td>
                 <td>
                   <span className={p.status === "ok" ? "tag tag-accent" : "tag tag-neutral"}>{p.status}</span>
+                </td>
+                <td style={{ whiteSpace: "nowrap" }}>
+                  <button
+                    className="btn btn-secondary"
+                    disabled={busy}
+                    onClick={() =>
+                      void run(async () => {
+                        const result = await testModelProvider(p.id);
+                        setNote(
+                          result.test?.ok
+                            ? `${p.name} answered.`
+                            : `${p.name} did not answer: ${result.test?.error ?? "unknown error"}`,
+                        );
+                      })
+                    }
+                  >
+                    Test
+                  </button>
+                  <button
+                    className="btn btn-ghost"
+                    disabled={busy}
+                    onClick={() => void run(() => deleteModelProvider(p.id))}
+                  >
+                    Remove
+                  </button>
                 </td>
               </tr>
             ))}
           </tbody>
         </table>
       )}
+
+      <h3 style={{ fontSize: 15, margin: "var(--space-6) 0 var(--space-3)" }}>Add a provider</h3>
+      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "var(--space-3)" }}>
+        <div className="field">
+          <label htmlFor="mp-name">Name</label>
+          <input className="input" id="mp-name" placeholder="Anthropic" value={name} onChange={(e) => setName(e.target.value)} />
+        </div>
+        <div className="field">
+          <label htmlFor="mp-url">Base URL</label>
+          <input className="input" id="mp-url" placeholder="https://api.anthropic.com/v1" value={baseUrl} onChange={(e) => setBaseUrl(e.target.value)} />
+        </div>
+      </div>
+      <div className="field" style={{ marginTop: "var(--space-3)" }}>
+        <label htmlFor="mp-key">API key</label>
+        <input
+          className="input"
+          id="mp-key"
+          type="password"
+          autoComplete="off"
+          value={apiKey}
+          onChange={(e) => setApiKey(e.target.value)}
+        />
+      </div>
+      <p style={{ margin: "var(--space-2) 0 0", fontSize: 12, color: "color-mix(in srgb, var(--color-text) 72%, transparent)" }}>
+        Stored encrypted by the API and never shown again.
+      </p>
+      <button
+        className="btn btn-primary"
+        style={{ marginTop: "var(--space-3)" }}
+        disabled={busy || !name.trim() || !baseUrl.trim() || !apiKey}
+        onClick={() =>
+          void run(async () => {
+            const created = await createModelProvider({
+              name: name.trim(),
+              baseUrl: baseUrl.trim(),
+              apiKey,
+            });
+            setName("");
+            setBaseUrl("");
+            setApiKey("");
+            setNote(
+              created.test?.ok
+                ? "Provider added and it answered."
+                : `Provider added, but it did not answer: ${created.test?.error ?? "unknown error"}`,
+            );
+          })
+        }
+      >
+        Add provider
+      </button>
+
       <h3 style={{ fontSize: 15, margin: "var(--space-6) 0 var(--space-3)" }}>
         Enabled models <span style={{ opacity: 0.5 }}>({enabled.length})</span>
       </h3>
