@@ -1468,7 +1468,7 @@ export interface OutreachCampaign {
   spaceId: string;
   name: string;
   description: string;
-  listId: string;
+  peopleListId: string;
   agentId: string;
   goal: string;
   status: OutreachCampaignStatus;
@@ -1594,7 +1594,7 @@ export interface CreateOutreachCampaignInput {
   spaceId: string;
   name: string;
   description?: string;
-  listId: string;
+  peopleListId: string;
   agentId: string;
   goal: string;
   steps?: Array<{
@@ -1627,7 +1627,7 @@ export async function updateOutreachCampaign(
   input: Partial<{
     name: string;
     description: string;
-    listId: string;
+    peopleListId: string;
     agentId: string;
     goal: string;
     status: OutreachCampaignStatus;
@@ -2507,21 +2507,3 @@ export async function setLeadProviderKey(
   });
 }
 
-/** Builds an outreach list from a People list, keeping the link to its source. */
-export async function createOutreachListFromPeople(
-  spaceId: string,
-  peopleListId: string,
-  name?: string,
-): Promise<OutreachList> {
-  return api<OutreachList>("/api/outreach/lists/from-people", {
-    method: "POST",
-    body: JSON.stringify({ spaceId, peopleListId, name }),
-  });
-}
-
-/** Refreshes an imported list's members from the People list behind it. */
-export async function syncOutreachList(listId: string): Promise<OutreachList> {
-  return api<OutreachList>(`/api/outreach/lists/${encodeURIComponent(listId)}/sync`, {
-    method: "POST",
-  });
-}

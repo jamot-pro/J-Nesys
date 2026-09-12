@@ -1900,7 +1900,7 @@ export function createMemoryRepository(): JamotRepository {
         spaceId: input.spaceId,
         name: input.name,
         description: input.description ?? "",
-        listId: input.listId,
+        peopleListId: input.peopleListId,
         agentId: input.agentId,
         goal: input.goal,
         status: input.status ?? "draft",

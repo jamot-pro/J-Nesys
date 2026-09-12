@@ -594,6 +594,14 @@ export function peopleRoutes(repo: JamotRepository) {
         return fail(reply, 403, "no access to this space");
       }
 
+      /* Outreach campaigns work these same lists, so deleting one here would
+         orphan a running campaign just as it would from the Outreach screen. */
+      const campaigns = await repo.listOutreachCampaigns({ spaceId: list.spaceId });
+      const inUse = campaigns.filter((campaign) => campaign.peopleListId === listId);
+      if (inUse.length > 0) {
+        return fail(reply, 409, `${inUse.length} outreach campaign(s) still work this list`);
+      }
+
       await repo.deletePeopleList(listId);
       reply.code(204);
     });

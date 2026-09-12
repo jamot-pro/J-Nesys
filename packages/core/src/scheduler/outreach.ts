@@ -46,9 +46,14 @@ export function createOutreachProcessor(repo: JamotRepository): OutreachProcesso
 
         const [steps, list] = await Promise.all([
           repo.listOutreachSteps(campaign.id),
-          repo.getOutreachList(campaign.listId),
+          repo.getPeopleList(campaign.peopleListId),
         ]);
-        if (!list || list.memberPersonIds.length === 0) continue;
+        if (!list) continue;
+        /* Membership is a join table now, not a column on the list. */
+        const memberPersonIds = (await repo.listPeopleListMembers(list.id)).map(
+          (member) => member.personId,
+        );
+        if (memberPersonIds.length === 0) continue;
 
         const agent = await repo.getAgent(campaign.agentId);
         if (!agent) continue;
@@ -59,7 +64,7 @@ export function createOutreachProcessor(repo: JamotRepository): OutreachProcesso
           if (dueAt > now) continue;
           const scheduledAt = dueAt.toISOString();
 
-          for (const personId of list.memberPersonIds) {
+          for (const personId of memberPersonIds) {
             const existing = await repo.findOutreachSend(
               campaign.id,
               step.id,

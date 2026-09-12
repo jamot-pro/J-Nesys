@@ -9,15 +9,11 @@ import {
   getOutreachCampaignDetail,
   listOutreachCampaigns,
   listOutreachLists,
-  listPeopleLists,
-  createOutreachListFromPeople,
-  syncOutreachList,
   pauseOutreachCampaign,
   type ApiAgent,
   type OutreachCampaign,
   type OutreachCampaignDetail,
   type OutreachList,
-  type PeopleList,
 } from "@jamot/client";
 
 import { useOrgScope } from "./console-context";
@@ -38,11 +34,6 @@ export function OutreachSection() {
   const { spaceId } = useOrgScope();
 
   const [lists, setLists] = useState<OutreachList[] | null>(null);
-  /* Outreach lists and People lists are separate tables, so a list curated in
-     People does not appear here until it is imported. Offer that here rather
-     than leaving the dropdown empty with no explanation. */
-  const [peopleLists, setPeopleLists] = useState<PeopleList[]>([]);
-  const [importing, setImporting] = useState(false);
   const [campaigns, setCampaigns] = useState<OutreachCampaign[] | null>(null);
   const [agents, setAgents] = useState<ApiAgent[]>([]);
   const [detail, setDetail] = useState<OutreachCampaignDetail | null>(null);
@@ -63,17 +54,15 @@ export function OutreachSection() {
     let cancelled = false;
     void (async () => {
       try {
-        const [l, c, a, pl] = await Promise.all([
+        const [l, c, a] = await Promise.all([
           listOutreachLists(spaceId),
           listOutreachCampaigns(spaceId),
           getAgents().catch(() => [] as ApiAgent[]),
-          listPeopleLists(spaceId).catch(() => [] as PeopleList[]),
         ]);
         if (cancelled) return;
         setLists(l);
         setCampaigns(c);
         setAgents(a);
-        setPeopleLists(pl);
         if (l[0]) setListId(l[0].id);
         if (a[0]) setAgentId(a[0].id);
       } catch (err) {
@@ -105,7 +94,7 @@ export function OutreachSection() {
       await createOutreachCampaign({
         spaceId,
         name: name.trim(),
-        listId,
+        peopleListId: listId,
         agentId,
         goal: goal.trim(),
       });
@@ -133,59 +122,13 @@ export function OutreachSection() {
         </p>
       ) : null}
 
-      {peopleLists.length > 0 ? (
-        <div className="card" style={{ marginBottom: "var(--space-4)" }}>
-          <div className="card-kicker">From People</div>
-          <div className="card-title">Work a list you already curated</div>
-          <p className="card-body">
-            Outreach keeps its own lists, so a list built in People has to be brought over once. The
-            copy stays linked to its source and can be refreshed.
-          </p>
-          <div style={{ display: "flex", flexWrap: "wrap", gap: 8, marginTop: "var(--space-3)" }}>
-            {peopleLists.map((pl) => {
-              const already = (lists ?? []).find((l) => l.sourcePeopleListId === pl.id);
-              return (
-                <button
-                  key={pl.id}
-                  type="button"
-                  className={already ? "btn btn-secondary" : "btn btn-primary"}
-                  disabled={importing}
-                  onClick={() =>
-                    void (async () => {
-                      setImporting(true);
-                      try {
-                        const list = already
-                          ? await syncOutreachList(already.id)
-                          : await createOutreachListFromPeople(spaceId, pl.id);
-                        const refreshed = await listOutreachLists(spaceId);
-                        setLists(refreshed);
-                        setListId(list.id);
-                        setError(null);
-                      } catch (err) {
-                        setError(err instanceof Error ? err.message : "Could not bring that list over.");
-                      } finally {
-                        setImporting(false);
-                      }
-                    })()
-                  }
-                >
-                  {already ? `Refresh ${pl.name}` : `Import ${pl.name}`} ({pl.people.length})
-                </button>
-              );
-            })}
-          </div>
-        </div>
-      ) : null}
-
       {lists && lists.length === 0 ? (
         <div className="card" style={{ marginBottom: "var(--space-4)" }}>
           <div className="card-kicker">Before you can start</div>
           <div className="card-title">No outreach list yet</div>
           <p className="card-body">
-            A campaign works a list of people.{" "}
-            {peopleLists.length > 0
-              ? "Import one from People above."
-              : "Build one in the People app first, then bring it over here."}
+            A campaign works a list of people. Build one in the People app — it appears here as soon
+            as it exists, because it is the same list.
           </p>
         </div>
       ) : null}
