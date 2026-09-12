@@ -67,7 +67,11 @@ export function ConsoleRoot({ branding }: { branding: OrgPublicBranding }) {
     return <Centered>Checking your session…</Centered>;
   }
   if (phase === "signed-out") {
-    return <LoginPanel displayName={branding.displayName} onSignedIn={() => void load()} />;
+    return <LoginPanel
+        displayName={branding.displayName}
+        logoUrl={branding.logoUrl}
+        onSignedIn={() => void load()}
+      />;
   }
   if (phase === "error") {
     return (

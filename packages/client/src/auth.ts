@@ -47,3 +47,35 @@ export async function signOut(): Promise<void> {
     // regardless, and a stale server session expires on its own.
   }
 }
+
+/**
+ * Creates an account and signs it in.
+ *
+ * Registration and login are two calls on the API — POST /api/people creates
+ * the person, and only /api/auth/login sets the session cookie — so this does
+ * both rather than leaving a new account standing at the sign-in screen.
+ */
+export async function signUp(
+  email: string,
+  password: string,
+  displayName?: string,
+): Promise<SignInResult> {
+  try {
+    const res = await fetch(`${apiBaseUrl()}/api/people`, {
+      method: "POST",
+      credentials: "include",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ email, password, displayName: displayName || undefined }),
+    });
+    if (!res.ok) {
+      const body = (await res.json().catch(() => ({}))) as { error?: string };
+      if (res.status === 409) {
+        return { ok: false, error: "That email already has an account. Sign in instead." };
+      }
+      return { ok: false, error: body.error ?? "Could not create the account." };
+    }
+    return await signIn(email, password);
+  } catch {
+    return { ok: false, error: "Could not reach the server." };
+  }
+}
