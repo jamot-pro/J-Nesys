@@ -9,7 +9,7 @@ import { DiscoverDreams } from "./DiscoverDreams";
 import { SystemConfig } from "./SystemConfig";
 import { APPS } from "./mockup-data";
 import { CommerceSection } from "../CommerceSection";
-import { LeadsSection } from "../LeadsSection";
+import { LeadGen } from "./LeadGen";
 import { OutreachSection } from "../OutreachSection";
 
 /** Rail apps that already have a backend behind them. Their screens are not
@@ -17,7 +17,7 @@ import { OutreachSection } from "../OutreachSection";
  * Commerce.dc.html) — they carry real data in design-system components, and the
  * mockup's own layout for each is still to be ported. */
 const WIRED: Record<string, React.ReactNode> = {
-  leadgen: <LeadsSection />,
+  leadgen: <LeadGen />,
   outreach: <OutreachSection />,
   commerce: <CommerceSection />,
 };
