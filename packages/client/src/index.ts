@@ -2399,3 +2399,19 @@ export async function joinDream(organizationId: string): Promise<{ believers: nu
 export async function leaveDream(organizationId: string): Promise<void> {
   await api<void>(`/api/dreams/${organizationId}/believers`, { method: "DELETE" });
 }
+
+/** Only status and configuration are patchable — the route accepts no more. */
+export async function updateConnector(
+  id: string,
+  patch: { status?: "connected" | "disconnected" | "error"; configuration?: Record<string, unknown> },
+): Promise<ApiConnector> {
+  return api<ApiConnector>(`/api/connectors/${encodeURIComponent(id)}`, {
+    method: "PATCH",
+    body: JSON.stringify(patch),
+  });
+}
+
+/** Deletes the connector and the secret behind it, in that order. */
+export async function deleteConnector(id: string): Promise<void> {
+  await api<void>(`/api/connectors/${encodeURIComponent(id)}`, { method: "DELETE" });
+}
