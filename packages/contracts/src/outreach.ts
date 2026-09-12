@@ -68,7 +68,7 @@ export const OutreachCampaign = EntityBase.extend({
   name: z.string().min(1),
   description: z.string().default(""),
   /** Source list (People CRM) that defines who is reached out to. */
-  listId: Id,
+  peopleListId: Id,
   /** Agent (Actor) responsible for executing the sequence. */
   agentId: Id,
   /** What the assigned agent should achieve (e.g. "book a demo call"). */
@@ -116,7 +116,7 @@ export const CreateOutreachCampaign = z.object({
   spaceId: Id,
   name: z.string().min(1),
   description: z.string().optional(),
-  listId: Id,
+  peopleListId: Id,
   agentId: Id,
   goal: z.string().min(1),
   steps: z.array(CreateOutreachStep).optional(),
@@ -126,7 +126,7 @@ export type CreateOutreachCampaign = z.infer<typeof CreateOutreachCampaign>;
 export const UpdateOutreachCampaign = z.object({
   name: z.string().min(1).optional(),
   description: z.string().optional(),
-  listId: Id.optional(),
+  peopleListId: Id.optional(),
   agentId: Id.optional(),
   goal: z.string().min(1).optional(),
   status: OutreachCampaignStatus.optional(),

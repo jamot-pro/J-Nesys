@@ -106,7 +106,7 @@ export function CreateCampaign({
         name: name.trim(),
         goal: goal.trim(),
         description: description.trim(),
-        listId,
+        peopleListId: listId,
         agentId,
         steps: steps.map((step, index) => ({
           position: index,

@@ -1187,9 +1187,11 @@ export const outreachCampaigns = pgTable(
       .references(() => spaces.id),
     name: text("name").notNull(),
     description: text("description").notNull().default(""),
-    listId: uuid("list_id")
+    /* Campaigns work a People list. `list_id` — the old outreach_lists
+       reference — survives in the table but nothing reads or writes it. */
+    peopleListId: uuid("people_list_id")
       .notNull()
-      .references(() => outreachLists.id),
+      .references(() => peopleLists.id),
     agentId: uuid("agent_id")
       .notNull()
       .references(() => agents.id),
@@ -1200,7 +1202,7 @@ export const outreachCampaigns = pgTable(
   },
   (table) => [
     index("outreach_campaigns_space_id_idx").on(table.spaceId),
-    index("outreach_campaigns_list_id_idx").on(table.listId),
+    index("outreach_campaigns_people_list_id_idx").on(table.peopleListId),
   ],
 );
 

@@ -498,7 +498,7 @@ export interface NewOutreachCampaign {
   spaceId: string;
   name: string;
   description?: string;
-  listId: string;
+  peopleListId: string;
   agentId: string;
   goal: string;
   status?: OutreachCampaign["status"];
@@ -1056,7 +1056,7 @@ export interface JamotRepository {
         OutreachCampaign,
         | "name"
         | "description"
-        | "listId"
+        | "peopleListId"
         | "agentId"
         | "goal"
         | "status"

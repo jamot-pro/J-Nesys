@@ -122,7 +122,7 @@ describe("outreach", () => {
       payload: {
         spaceId,
         name: "Demo push",
-        listId,
+        peopleListId: listId,
         agentId,
         goal: "Book a demo call",
         steps: [
