@@ -10,13 +10,12 @@ import {
   listEnabledModels,
   listModelProviders,
   listSkills,
-  listWaAccounts,
   setOrganizationApps,
   type ApiChannelAccount,
-  type ApiWaAccount,
 } from "@jamot/client";
 
 import { useConsole, useOrgScope } from "../console-context";
+import { WhatsAppPairing } from "./WhatsAppPairing";
 
 const MUTED = "color-mix(in srgb, var(--color-text) 76%, transparent)";
 
@@ -191,19 +190,15 @@ function SimpleList({ label, load }: { label: string; load: () => Promise<string
 function ChannelsSection() {
   const { spaceId } = useOrgScope();
   const [channels, setChannels] = useState<ApiChannelAccount[] | null>(null);
-  const [wa, setWa] = useState<ApiWaAccount[]>([]);
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   const [label, setLabel] = useState("");
   const [token, setToken] = useState("");
 
   async function refresh() {
-    const [c, w] = await Promise.all([
-      listChannelAccounts(spaceId),
-      listWaAccounts(spaceId).catch(() => [] as ApiWaAccount[]),
-    ]);
-    setChannels(c);
-    setWa(w);
+    // WhatsApp accounts are owned by <WhatsAppPairing/>, which polls their
+    // state; fetching them here too would double the traffic for no gain.
+    setChannels(await listChannelAccounts(spaceId));
   }
 
   useEffect(() => {
@@ -231,27 +226,8 @@ function ChannelsSection() {
     <>
       {error ? <p style={{ color: "var(--accent-ink)", fontSize: 14 }}>{error}</p> : null}
 
-      <h3 style={{ fontSize: 15, margin: "0 0 var(--space-3)" }}>
-        WhatsApp <span style={{ opacity: 0.5 }}>({wa.length})</span>
-      </h3>
-      {wa.length === 0 ? (
-        <p style={{ color: MUTED, fontSize: 14 }}>
-          No WhatsApp account. Pairing must be done from a residential network — WhatsApp refuses the
-          handshake from datacenter IPs.
-        </p>
-      ) : (
-        <table className="table">
-          <thead><tr><th>Label</th><th>Status</th></tr></thead>
-          <tbody>
-            {wa.map((a) => (
-              <tr key={a.id}>
-                <td>{a.label}</td>
-                <td><span className="tag tag-neutral">{a.state?.status ?? a.status ?? "unknown"}</span></td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
-      )}
+      <h3 style={{ fontSize: 15, margin: "0 0 var(--space-3)" }}>WhatsApp</h3>
+      <WhatsAppPairing />
 
       <h3 style={{ fontSize: 15, margin: "var(--space-6) 0 var(--space-3)" }}>
         Telegram and Matrix {channels ? <span style={{ opacity: 0.5 }}>({channels.length})</span> : null}

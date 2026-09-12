@@ -2101,3 +2101,44 @@ export async function listWaAccounts(spaceId: string): Promise<ApiWaAccount[]> {
   );
   return data.items;
 }
+
+export interface WaAccountState {
+  connection?: string;
+  /** Raw pairing payload; render it as a QR code for the phone to scan. */
+  qr?: string;
+  phone?: string;
+}
+
+export async function createWaAccount(input: {
+  spaceId: string;
+  label: string;
+}): Promise<ApiWaAccount> {
+  return api<ApiWaAccount>("/api/wa/accounts", {
+    method: "POST",
+    body: JSON.stringify(input),
+  });
+}
+
+export async function getWaAccountState(id: string): Promise<WaAccountState> {
+  return api<WaAccountState>(`/api/wa/accounts/${id}/state`);
+}
+
+/** Wipe the stored session and start a fresh pairing. */
+export async function resetWaAccount(id: string): Promise<void> {
+  await api<void>(`/api/wa/accounts/${id}/reset`, { method: "POST" });
+}
+
+export async function logoutWaAccount(id: string): Promise<void> {
+  await api<void>(`/api/wa/accounts/${id}/logout`, { method: "POST" });
+}
+
+/** Import a session paired elsewhere (see wa-pair.ts) as base64 file contents. */
+export async function importWaSession(
+  id: string,
+  files: Record<string, string>,
+): Promise<void> {
+  await api<void>(`/api/wa/accounts/${id}/session`, {
+    method: "POST",
+    body: JSON.stringify({ files }),
+  });
+}
