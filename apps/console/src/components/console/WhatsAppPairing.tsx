@@ -5,6 +5,7 @@ import QRCode from "qrcode";
 import {
   createWaAccount,
   getWaAccountState,
+  importWaSession,
   listWaAccounts,
   resetWaAccount,
   type ApiWaAccount,
@@ -38,6 +39,8 @@ export function WhatsAppPairing() {
   const [busy, setBusy] = useState(false);
   const [waited, setWaited] = useState(0);
   const timer = useRef<ReturnType<typeof setInterval> | null>(null);
+  const [importing, setImporting] = useState(false);
+  const [imported, setImported] = useState<string | null>(null);
 
   const refresh = useCallback(async () => {
     setAccounts(await listWaAccounts(spaceId));
@@ -123,6 +126,47 @@ export function WhatsAppPairing() {
     }
   }
 
+  /**
+   * Imports a session paired elsewhere. The files are read in the browser and
+   * sent base64-encoded, which is what POST /wa/accounts/:id/session expects.
+   * Resuming an imported session is a different handshake from pairing a new
+   * one, and WhatsApp accepts it from this server's IP — which is why this
+   * route exists at all.
+   */
+  async function importSession(id: string, fileList: FileList) {
+    setImporting(true);
+    setError(null);
+    setImported(null);
+    try {
+      const files: Record<string, string> = {};
+      for (const file of Array.from(fileList)) {
+        const relative =
+          (file as File & { webkitRelativePath?: string }).webkitRelativePath || file.name;
+        /* Keep the path below the chosen directory: the adapter recreates the
+           tree, and the directory's own name is not part of it. */
+        const name = relative.includes("/") ? relative.slice(relative.indexOf("/") + 1) : relative;
+        const buffer = new Uint8Array(await file.arrayBuffer());
+        let binary = "";
+        for (const byte of buffer) binary += String.fromCharCode(byte);
+        files[name] = btoa(binary);
+      }
+      if (Object.keys(files).length === 0) throw new Error("no files chosen");
+      if (!Object.keys(files).some((n) => n.endsWith("creds.json"))) {
+        throw new Error("that folder has no creds.json — pick the session directory itself");
+      }
+
+      await importWaSession(id, files);
+      setImported(`Imported ${Object.keys(files).length} files. Waiting for the connection…`);
+      setWaited(0);
+      setSelected(id);
+      await refresh();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Could not import that session.");
+    } finally {
+      setImporting(false);
+    }
+  }
+
   const connected = state?.connection === "open";
   // ~30s of polling with no QR and no connection is the datacenter-IP symptom.
   const stalled = Boolean(selected) && !connected && !state?.qr && waited >= 10;
@@ -188,17 +232,56 @@ export function WhatsAppPairing() {
               <p className="card-body">
                 No QR after {waited * 3}s. WhatsApp refuses the new-pairing handshake from datacenter
                 IPs, which is what this server is on — the connection loops without ever producing a
-                code.
+                code. Resuming a session it already knows is a different handshake, and that one it
+                accepts, so pair once from your own network and hand the result over.
               </p>
               <p className="card-body" style={{ marginTop: "var(--space-2)" }}>
-                Pair from a residential network instead, then import the session:
+                Run this on your own machine. It prints the QR in the terminal, then signs in and
+                uploads the paired session here on its own:
               </p>
               <pre style={{ marginTop: "var(--space-2)", padding: "var(--space-3)", background: "var(--color-surface)", borderRadius: "var(--radius-sm)", fontSize: 12, overflowX: "auto" }}>
-pnpm --filter @jamot/workers exec tsx src/wa-pair.ts --out .wa-pair
+{`pnpm --filter @jamot/workers exec tsx src/wa-pair.ts \\
+  --api ${typeof window === "undefined" ? "https://api.jamot.pro" : window.location.origin.replace("://", "://api.")} \\
+  --email you@example.com --account ${selected}`}
               </pre>
+              <p className="card-body" style={{ marginTop: "var(--space-3)" }}>
+                Or pair without <code>--api</code> and upload the session directory here:
+              </p>
             </>
           ) : (
             <p className="card-body">Waiting for a pairing code…</p>
+          )}
+
+          {connected ? null : (
+            <div style={{ marginTop: "var(--space-4)", paddingTop: "var(--space-3)", borderTop: "1px solid var(--color-divider)" }}>
+              <label
+                className="btn btn-secondary"
+                style={{ justifyContent: "flex-start", cursor: importing ? "default" : "pointer" }}
+              >
+                {importing ? "Importing…" : "Import a paired session"}
+                <input
+                  type="file"
+                  multiple
+                  /* Chrome and Safari let this pick a whole directory; other
+                     browsers fall back to a multi-file picker, which works too. */
+                  {...({ webkitdirectory: "", directory: "" } as Record<string, string>)}
+                  disabled={importing}
+                  style={{ display: "none" }}
+                  onChange={(e) => {
+                    const files = e.target.files;
+                    e.target.value = "";
+                    if (files && files.length > 0 && selected) void importSession(selected, files);
+                  }}
+                />
+              </label>
+              <p className="card-body" style={{ marginTop: "var(--space-2)", fontSize: 12, color: MUTED }}>
+                Choose the session directory produced by <code>wa-pair</code> (the one holding{" "}
+                <code>creds.json</code>). Nothing leaves your machine except that directory.
+              </p>
+              {imported ? (
+                <p className="card-body" style={{ marginTop: "var(--space-2)", fontSize: 12 }}>{imported}</p>
+              ) : null}
+            </div>
           )}
         </div>
       ) : null}
