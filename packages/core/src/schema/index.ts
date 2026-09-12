@@ -1164,6 +1164,11 @@ export const outreachLists = pgTable(
       .references(() => spaces.id),
     name: text("name").notNull(),
     description: text("description").notNull().default(""),
+    /* The People list this was built from, when it was. Kept so the members
+       can be refreshed later rather than drifting from their source. */
+    sourcePeopleListId: uuid("source_people_list_id").references(() => peopleLists.id, {
+      onDelete: "set null",
+    }),
     memberPersonIds: uuid("member_person_ids")
       .array()
       .notNull()

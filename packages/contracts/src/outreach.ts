@@ -9,6 +9,8 @@ export const OutreachList = EntityBase.extend({
   description: z.string().default(""),
   /** Person ids (People rows) that belong to this list. */
   memberPersonIds: z.array(Id).default([]),
+  /** The People list this was built from, when it was. */
+  sourcePeopleListId: Id.nullable().default(null),
 });
 export type OutreachList = z.infer<typeof OutreachList>;
 

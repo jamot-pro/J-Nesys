@@ -899,6 +899,7 @@ function toOutreachList(row: OutreachListRow): OutreachList {
     name: row.name,
     description: row.description,
     memberPersonIds: row.memberPersonIds as Id[],
+    sourcePeopleListId: (row.sourcePeopleListId as Id | null) ?? null,
   };
 }
 
@@ -3243,6 +3244,7 @@ export function createPgRepository(db: Db): JamotRepository {
           name: input.name,
           description: input.description ?? "",
           memberPersonIds: input.memberPersonIds ?? [],
+          sourcePeopleListId: input.sourcePeopleListId ?? null,
         })
         .returning();
       if (!row) throw new Error("failed to create outreach list");

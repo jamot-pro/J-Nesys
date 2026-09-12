@@ -1862,6 +1862,7 @@ export function createMemoryRepository(): JamotRepository {
         name: input.name,
         description: input.description ?? "",
         memberPersonIds: input.memberPersonIds ?? [],
+        sourcePeopleListId: input.sourcePeopleListId ?? null,
       });
       outreachLists.set(list.id, list);
       return list;
