@@ -2241,3 +2241,123 @@ export async function deleteCustomApp(
     method: "DELETE",
   });
 }
+
+/* ---- People ---------------------------------------------------------- */
+
+export interface PeopleNote {
+  when: string;
+  text: string;
+}
+
+/** A person as the People screen sees them: summary plus the CRM fields. */
+export interface PeopleListPerson {
+  id: string;
+  actorId: string;
+  displayName: string;
+  firstName: string | null;
+  lastName: string | null;
+  email: string | null;
+  phone: string | null;
+  avatarUrl: string | null;
+  channels: string[];
+  relationship: string | null;
+  lastInteractionAt: string | null;
+  createdAt?: string;
+  website: string;
+  publicProfile: string;
+  context: string;
+  aura: number;
+  notes: PeopleNote[];
+}
+
+export interface PeopleList {
+  id: string;
+  spaceId: string;
+  organizationId: string | null;
+  createdBy: string | null;
+  name: string;
+  createdAt: string;
+  updatedAt: string;
+  people: PeopleListPerson[];
+}
+
+export async function listPeopleLists(spaceId: string): Promise<PeopleList[]> {
+  const data = await api<{ items: PeopleList[] }>(
+    `/api/people/lists?spaceId=${encodeURIComponent(spaceId)}`,
+  );
+  return data.items;
+}
+
+export async function createPeopleList(spaceId: string, name: string): Promise<PeopleList> {
+  return api<PeopleList>("/api/people/lists", {
+    method: "POST",
+    body: JSON.stringify({ spaceId, name }),
+  });
+}
+
+export async function renamePeopleList(listId: string, name: string): Promise<PeopleList> {
+  return api<PeopleList>(`/api/people/lists/${listId}`, {
+    method: "PATCH",
+    body: JSON.stringify({ name }),
+  });
+}
+
+export async function deletePeopleList(listId: string): Promise<void> {
+  await api<void>(`/api/people/lists/${listId}`, { method: "DELETE" });
+}
+
+export async function addPersonToList(listId: string, personId: string): Promise<void> {
+  await api<unknown>(`/api/people/lists/${listId}/members`, {
+    method: "POST",
+    body: JSON.stringify({ personId }),
+  });
+}
+
+export async function removePersonFromList(listId: string, personId: string): Promise<void> {
+  await api<void>(`/api/people/lists/${listId}/members/${personId}`, { method: "DELETE" });
+}
+
+/** Creates a contact — a person without login credentials. */
+export async function createContact(
+  spaceId: string,
+  input: { firstName?: string; lastName?: string; email?: string; phone?: string },
+): Promise<{ person: { id: string } }> {
+  return api<{ person: { id: string } }>("/api/people/contacts", {
+    method: "POST",
+    body: JSON.stringify({ spaceId, ...input }),
+  });
+}
+
+/**
+ * Updates a person. The CRM-only fields (website, public profile, context,
+ * aura, notes) live in `profile.selfDescribed`, which is what the API expects;
+ * callers here pass them flat and this puts them where they belong.
+ */
+export async function updatePerson(
+  personId: string,
+  patch: {
+    firstName?: string | null;
+    lastName?: string | null;
+    email?: string | null;
+    phone?: string | null;
+    website?: string;
+    publicProfile?: string;
+    context?: string;
+    aura?: number;
+    notes?: PeopleNote[];
+  },
+): Promise<unknown> {
+  const selfDescribed: Record<string, { value: unknown }> = {};
+  for (const key of ["website", "publicProfile", "context", "aura", "notes"] as const) {
+    if (patch[key] !== undefined) selfDescribed[key] = { value: patch[key] };
+  }
+  const body: Record<string, unknown> = {};
+  for (const key of ["firstName", "lastName", "email", "phone"] as const) {
+    if (patch[key] !== undefined) body[key] = patch[key];
+  }
+  if (Object.keys(selfDescribed).length > 0) body.profile = { selfDescribed };
+  return api<unknown>(`/api/people/${personId}`, {
+    method: "PATCH",
+    body: JSON.stringify(body),
+  });
+}

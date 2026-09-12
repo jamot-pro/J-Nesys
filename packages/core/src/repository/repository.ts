@@ -10,6 +10,8 @@ import type {
   Identity,
   LeadList,
   LeadListMember,
+  PeopleList,
+  PeopleListMember,
   CustomAppManifest,
   MergeCandidate,
   Notification,
@@ -162,6 +164,13 @@ export interface NewLeadPerson {
   email?: string | null;
   profile?: Person["profile"];
   membershipSpaceIds?: string[];
+}
+
+export interface NewPeopleList {
+  spaceId: string;
+  organizationId?: string | null;
+  createdBy?: string | null;
+  name: string;
 }
 
 export interface NewLeadList {
@@ -667,6 +676,15 @@ export interface JamotRepository {
   ): Promise<LeadListMember | null>;
   listLeadListMembers(leadListId: string): Promise<LeadListMember[]>;
   deleteLeadListMembers(leadListId: string): Promise<void>;
+
+  createPeopleList(input: NewPeopleList): Promise<PeopleList>;
+  getPeopleList(id: string): Promise<PeopleList | null>;
+  listPeopleLists(filter: { spaceId: string }): Promise<PeopleList[]>;
+  renamePeopleList(id: string, name: string): Promise<PeopleList | null>;
+  deletePeopleList(id: string): Promise<void>;
+  addPeopleListMember(peopleListId: string, personId: string): Promise<PeopleListMember>;
+  removePeopleListMember(peopleListId: string, personId: string): Promise<void>;
+  listPeopleListMembers(peopleListId: string): Promise<PeopleListMember[]>;
 
   // agents
   createAgent(input: NewAgent): Promise<Agent>;

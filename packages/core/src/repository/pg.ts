@@ -24,6 +24,8 @@ import type {
   Event,
   Identity,
   LeadList,
+  PeopleList,
+  PeopleListMember,
   LeadListMember,
   CustomAppManifest,
   MergeCandidate,
@@ -99,6 +101,8 @@ import {
   leadListMembers,
   orgEdges,
   orgNodes,
+  peopleLists,
+  peopleListMembers,
 } from "../schema/index.js";
 import type {
   JamotRepository,
@@ -814,6 +818,28 @@ function toPaymentRecord(row: typeof paymentRecords.$inferSelect): PaymentRecord
   };
 }
 
+function toPeopleList(row: typeof peopleLists.$inferSelect): PeopleList {
+  return {
+    id: row.id as Id,
+    spaceId: row.spaceId as Id,
+    organizationId: (row.organizationId as Id | null) ?? null,
+    createdBy: (row.createdBy as Id | null) ?? null,
+    name: row.name,
+    createdAt: normalizePgTimestamp(row.createdAt),
+    updatedAt: normalizePgTimestamp(row.updatedAt),
+  };
+}
+
+function toPeopleListMember(row: typeof peopleListMembers.$inferSelect): PeopleListMember {
+  return {
+    id: row.id as Id,
+    peopleListId: row.peopleListId as Id,
+    personId: row.personId as Id,
+    createdAt: normalizePgTimestamp(row.createdAt),
+    updatedAt: normalizePgTimestamp(row.updatedAt),
+  };
+}
+
 function toLeadList(row: LeadListRow): LeadList {
   return {
     id: row.id as Id,
@@ -1505,6 +1531,82 @@ export function createPgRepository(db: Db): JamotRepository {
       await q
         .delete(leadListMembers)
         .where(eq(leadListMembers.leadListId, leadListId));
+    },
+
+    async createPeopleList(input) {
+      const [row] = await q
+        .insert(peopleLists)
+        .values({
+          organizationId: input.organizationId ?? null,
+          spaceId: input.spaceId,
+          createdBy: input.createdBy ?? null,
+          name: input.name,
+        })
+        .returning();
+      if (!row) throw new Error("failed to create people list");
+      return toPeopleList(row);
+    },
+
+    async getPeopleList(id) {
+      const [row] = await q.select().from(peopleLists).where(eq(peopleLists.id, id)).limit(1);
+      return row ? toPeopleList(row) : null;
+    },
+
+    async listPeopleLists(filter) {
+      const rows = await q
+        .select()
+        .from(peopleLists)
+        .where(eq(peopleLists.spaceId, filter.spaceId))
+        .orderBy(peopleLists.createdAt);
+      return rows.map(toPeopleList);
+    },
+
+    async renamePeopleList(id, name) {
+      const [row] = await q
+        .update(peopleLists)
+        .set({ name, updatedAt: new Date().toISOString() })
+        .where(eq(peopleLists.id, id))
+        .returning();
+      return row ? toPeopleList(row) : null;
+    },
+
+    async deletePeopleList(id) {
+      await q.delete(peopleLists).where(eq(peopleLists.id, id));
+    },
+
+    async addPeopleListMember(peopleListId, personId) {
+      /* The unique index makes a repeated add a no-op rather than an error,
+         so dropping the same person on a list twice is harmless. */
+      const [row] = await q
+        .insert(peopleListMembers)
+        .values({ peopleListId, personId })
+        .onConflictDoUpdate({
+          target: [peopleListMembers.peopleListId, peopleListMembers.personId],
+          set: { updatedAt: new Date().toISOString() },
+        })
+        .returning();
+      if (!row) throw new Error("failed to add person to list");
+      return toPeopleListMember(row);
+    },
+
+    async removePeopleListMember(peopleListId, personId) {
+      await q
+        .delete(peopleListMembers)
+        .where(
+          and(
+            eq(peopleListMembers.peopleListId, peopleListId),
+            eq(peopleListMembers.personId, personId),
+          ),
+        );
+    },
+
+    async listPeopleListMembers(peopleListId) {
+      const rows = await q
+        .select()
+        .from(peopleListMembers)
+        .where(eq(peopleListMembers.peopleListId, peopleListId))
+        .orderBy(peopleListMembers.createdAt);
+      return rows.map(toPeopleListMember);
     },
 
     async createAgent(input: NewAgent) {
