@@ -3,18 +3,17 @@
 import { useEffect, useState } from "react";
 import {
   createChannelAccount,
-  getOrganizationApps,
   listActors,
   listChannelAccounts,
   listConnectors,
   listEnabledModels,
   listModelProviders,
   listSkills,
-  setOrganizationApps,
   type ApiChannelAccount,
 } from "@jamot/client";
 
 import { useConsole, useOrgScope } from "../console-context";
+import { AppsConfig } from "./AppsConfig";
 import { WhatsAppPairing } from "./WhatsAppPairing";
 
 const MUTED = "color-mix(in srgb, var(--color-text) 76%, transparent)";
@@ -158,7 +157,7 @@ function NotWired({ what }: { what: string }) {
 function SectionBody({ id }: { id: SectionId }) {
   if (id === "channels") return <ChannelsSection />;
   if (id === "models") return <ModelsSection />;
-  if (id === "apps") return <AppsSection />;
+  if (id === "apps") return <AppsConfig />;
   if (id === "connectors") return <SimpleList label="Connectors" load={() => listConnectors().then((x) => x.map((c) => `${c.provider} · ${c.type} · ${c.status}`))} />;
   if (id === "skills") return <SimpleList label="Skills" load={() => listSkills().then((x) => x.map((s) => s.name))} />;
   if (id === "actors") return <SimpleList label="Actors" load={() => listActors().then((x) => x.map((a) => `${a.displayName} · ${a.type}`))} />;
@@ -333,60 +332,5 @@ function ModelsSection() {
         </ul>
       )}
     </>
-  );
-}
-
-/** Apps — the mockup says "Activated apps appear in the rail". */
-function AppsSection() {
-  const { organizationId } = useOrgScope();
-  const [apps, setApps] = useState<{ id: string; name: string; enabled: boolean }[] | null>(null);
-  const [busy, setBusy] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-
-  async function refresh() {
-    const data = await getOrganizationApps(organizationId);
-    setApps(data.apps.map((a) => ({ id: a.id, name: a.name, enabled: a.enabled })));
-  }
-
-  useEffect(() => {
-    void refresh().catch((e) => setError(e instanceof Error ? e.message : "Could not load apps."));
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [organizationId]);
-
-  async function toggle(id: string) {
-    if (!apps) return;
-    setBusy(true);
-    setError(null);
-    try {
-      const next = apps.filter((a) => (a.id === id ? !a.enabled : a.enabled)).map((a) => a.id);
-      await setOrganizationApps(organizationId, next);
-      await refresh();
-    } catch (err) {
-      setError(err instanceof Error ? err.message : "Could not update apps.");
-    } finally {
-      setBusy(false);
-    }
-  }
-
-  if (error) return <p style={{ color: "var(--accent-ink)", fontSize: 14 }}>{error}</p>;
-  if (!apps) return <p style={{ opacity: 0.6, fontSize: 14 }}>Loading…</p>;
-
-  return (
-    <table className="table">
-      <thead><tr><th>App</th><th>State</th><th /></tr></thead>
-      <tbody>
-        {apps.map((a) => (
-          <tr key={a.id}>
-            <td>{a.name}</td>
-            <td><span className={a.enabled ? "tag tag-accent" : "tag tag-neutral"}>{a.enabled ? "enabled" : "off"}</span></td>
-            <td>
-              <button type="button" className="btn btn-secondary" disabled={busy} onClick={() => void toggle(a.id)}>
-                {a.enabled ? "Disable" : "Enable"}
-              </button>
-            </td>
-          </tr>
-        ))}
-      </tbody>
-    </table>
   );
 }

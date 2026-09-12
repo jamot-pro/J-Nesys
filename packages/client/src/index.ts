@@ -2142,3 +2142,102 @@ export async function importWaSession(
     body: JSON.stringify({ files }),
   });
 }
+
+// --- WhatsApp conversations (Baileys-backed) --------------------------------
+
+export interface WaChat {
+  jid: string;
+  name: string;
+  lastMessage: string;
+  /** Unix seconds. */
+  timestamp: number;
+  unread: number;
+  isGroup: boolean;
+}
+
+export interface WaMessage {
+  id: string;
+  jid: string;
+  fromMe: boolean;
+  text: string;
+  timestamp: number;
+  mediaType: string | null;
+}
+
+export async function listWaChats(accountId: string): Promise<WaChat[]> {
+  const data = await api<{ items: WaChat[] }>(`/api/wa/accounts/${accountId}/chats`);
+  return data.items;
+}
+
+export async function getWaMessages(
+  accountId: string,
+  jid: string,
+  opts?: { limit?: number; before?: number },
+): Promise<WaMessage[]> {
+  const params = new URLSearchParams({ jid });
+  if (opts?.limit) params.set("limit", String(opts.limit));
+  if (opts?.before) params.set("before", String(opts.before));
+  const data = await api<{ items: WaMessage[] }>(
+    `/api/wa/accounts/${accountId}/messages?${params.toString()}`,
+  );
+  return data.items;
+}
+
+export async function sendWaMessage(
+  accountId: string,
+  jid: string,
+  text: string,
+): Promise<void> {
+  await api<{ ok: true }>(`/api/wa/accounts/${accountId}/send`, {
+    method: "POST",
+    body: JSON.stringify({ jid, text }),
+  });
+}
+
+export async function searchWaMessages(accountId: string, q: string): Promise<WaMessage[]> {
+  const data = await api<{ items: WaMessage[] }>(
+    `/api/wa/accounts/${accountId}/search?q=${encodeURIComponent(q)}`,
+  );
+  return data.items;
+}
+
+// --- Custom apps -----------------------------------------------------------
+
+export interface CustomAppManifest {
+  id: string;
+  organizationId: string;
+  slug: string;
+  name: string;
+  version: string;
+  description: string;
+  tools: string[];
+  capabilities: string[];
+  createdAt: string;
+  updatedAt: string;
+}
+
+export async function listCustomApps(organizationId: string): Promise<CustomAppManifest[]> {
+  const data = await api<{ items: CustomAppManifest[] }>(
+    `/api/organizations/${organizationId}/apps/custom`,
+  );
+  return data.items;
+}
+
+export async function createCustomApp(
+  organizationId: string,
+  input: { slug: string; name: string; description?: string; version?: string },
+): Promise<CustomAppManifest> {
+  return api<CustomAppManifest>(`/api/organizations/${organizationId}/apps/custom`, {
+    method: "POST",
+    body: JSON.stringify(input),
+  });
+}
+
+export async function deleteCustomApp(
+  organizationId: string,
+  customAppId: string,
+): Promise<void> {
+  await api<void>(`/api/organizations/${organizationId}/apps/custom/${customAppId}`, {
+    method: "DELETE",
+  });
+}

@@ -1,14 +1,17 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import type { OrgPublicBranding } from "@jamot/client/branding";
 
 import { AppRail } from "./AppRail";
 import { ChatPanel } from "./ChatPanel";
 import { ChatReopen } from "./ChatReopen";
+import { Channels } from "./Channels";
 import { DiscoverDreams } from "./DiscoverDreams";
 import { SystemConfig } from "./SystemConfig";
-import { APPS } from "./mockup-data";
+import { getOrganizationApps, type AppManifest } from "@jamot/client";
+import type { RailApp } from "./mockup-data";
+import { useOrgScope } from "../console-context";
 import { CommerceSection } from "../CommerceSection";
 import { LeadGen } from "./LeadGen";
 import { OutreachSection } from "../OutreachSection";
@@ -18,10 +21,16 @@ import { OutreachSection } from "../OutreachSection";
  * Commerce.dc.html) — they carry real data in design-system components, and the
  * mockup's own layout for each is still to be ported. */
 const WIRED: Record<string, React.ReactNode> = {
-  leadgen: <LeadGen />,
+  channels: <Channels />,
+  "lead-generation": <LeadGen />,
   outreach: <OutreachSection />,
   commerce: <CommerceSection />,
 };
+
+/** Surfaces that live in the rail's lower group rather than the app catalog:
+ * they are part of the console itself, so they cannot be installed or
+ * deactivated and must survive a change to the enabled apps. */
+const PLATFORM_SURFACES = new Set(["channels", "wallet", "config"]);
 
 const SUN = "M12 3v2M12 19v2M5.6 5.6l1.4 1.4M17 17l1.4 1.4M3 12h2M19 12h2M5.6 18.4 7 17M17 7l1.4-1.4";
 const MOON = "M21 12.8A9 9 0 1 1 11.2 3a7 7 0 0 0 9.8 9.8z";
@@ -39,10 +48,46 @@ const MOON = "M21 12.8A9 9 0 1 1 11.2 3a7 7 0 0 0 9.8 9.8z";
  * a rail for switching between organizations has nothing to switch to.
  */
 export function OrgConsole({ branding }: { branding: OrgPublicBranding }) {
+  const { organizationId } = useOrgScope();
   const [chatOpen, setChatOpen] = useState(true);
   const [chatWidth, setChatWidth] = useState(360);
   const [activeApp, setActiveApp] = useState<string | null>(null);
   const [configOpen, setConfigOpen] = useState(false);
+  const [apps, setApps] = useState<RailApp[]>([]);
+
+  // The rail is the organization's enabled apps, in enabledAppIds order —
+  // which is what the Apps settings claims ("Activated apps appear in the
+  // rail; order here is rail order"). Reloaded when the settings dialog
+  // closes, since that is where the list changes.
+  const loadApps = useCallback(async () => {
+    try {
+      const allocation = await getOrganizationApps(organizationId);
+      const byId = new Map<string, AppManifest & { enabled: boolean }>(
+        allocation.apps.map((a) => [a.id, a]),
+      );
+      setApps(
+        allocation.enabledAppIds
+          .map((id) => byId.get(id))
+          .filter((a): a is AppManifest & { enabled: boolean } => Boolean(a))
+          .map((a) => ({ id: a.id, title: a.name, icon: a.id, blurb: a.description })),
+      );
+    } catch {
+      // A rail that cannot load its apps should still render the shell.
+      setApps([]);
+    }
+  }, [organizationId]);
+
+  useEffect(() => {
+    void loadApps();
+  }, [loadApps]);
+
+  // Deactivating the app you are looking at used to leave its screen up with
+  // no title, because the rail no longer carried it. Fall back to Discover
+  // unless the open surface is a platform one, which is not installable.
+  useEffect(() => {
+    if (!activeApp || PLATFORM_SURFACES.has(activeApp)) return;
+    if (!apps.some((a) => a.id === activeApp)) setActiveApp(null);
+  }, [apps, activeApp]);
   const [dark, setDark] = useState(true);
 
   // The mockup switches theme with body[data-theme], and its own .mark-light /
@@ -52,7 +97,7 @@ export function OrgConsole({ branding }: { branding: OrgPublicBranding }) {
     document.body.dataset.theme = dark ? "dark" : "light";
   }, [dark]);
 
-  const current = APPS.find((a) => a.id === activeApp) ?? null;
+  const current = apps.find((a) => a.id === activeApp) ?? null;
 
   return (
     <div
@@ -74,13 +119,14 @@ export function OrgConsole({ branding }: { branding: OrgPublicBranding }) {
       )}
 
       <AppRail
-        apps={APPS}
+        apps={apps}
         activeId={activeApp}
         onOpenApp={(id) => setActiveApp(id)}
         onHome={() => setActiveApp(null)}
         onToggleChat={() => setChatOpen((v) => !v)}
         chatOpen={chatOpen}
         onOpenWallet={() => setActiveApp("wallet")}
+        onOpenChannels={() => setActiveApp("channels")}
         onOpenConfig={() => setConfigOpen(true)}
         onCycleTheme={() => setDark((v) => !v)}
         themeIcon={dark ? SUN : MOON}
@@ -142,7 +188,14 @@ export function OrgConsole({ branding }: { branding: OrgPublicBranding }) {
         </div>
       </main>
 
-      {configOpen ? <SystemConfig onClose={() => setConfigOpen(false)} /> : null}
+      {configOpen ? (
+        <SystemConfig
+          onClose={() => {
+            setConfigOpen(false);
+            void loadApps();
+          }}
+        />
+      ) : null}
     </div>
   );
 }
