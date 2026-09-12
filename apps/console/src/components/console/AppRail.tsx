@@ -158,10 +158,20 @@ export function AppRail({
         <button onClick={onOpenChannels} title="Channels" style={ICON_BTN}>
           <Icon d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z" />
         </button>
+        {/* The chat control belongs to the rail, as it does in the mockup.
+            A floating pill beside the rail crowded these buttons, so when the
+            panel is closed this fills with the accent instead — attached,
+            unmistakable, and it moves nothing else. */}
         <button
           onClick={onToggleChat}
+          aria-label={chatOpen ? "Hide assistant chat" : "Open assistant chat"}
           title={chatOpen ? "Hide assistant chat" : "Open assistant chat"}
-          style={ICON_BTN}
+          style={{
+            ...ICON_BTN,
+            background: chatOpen ? "none" : "var(--color-accent)",
+            color: chatOpen ? "var(--color-text)" : "#fff",
+            boxShadow: chatOpen ? "none" : "var(--shadow-md)",
+          }}
         >
           <Icon d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z" />
         </button>
