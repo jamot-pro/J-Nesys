@@ -22,7 +22,7 @@ import { createWhatsAppAdapter } from "@jamot/core/channels";
  *
  * Usage:
  *   pnpm --filter @jamot/workers exec tsx src/wa-pair.ts [--out <dir>] [--png <file>] [--timeout <sec>] [--reset]
- *     [--api <url>] [--email <address>] [--space <id>] [--label <name>] [--account <id>]
+ *     [--api <url>] [--email <address>] [--org <slug>] [--space <id>] [--label <name>] [--account <id>]
  */
 
 interface CliArgs {
@@ -35,6 +35,7 @@ interface CliArgs {
   space?: string;
   label: string;
   account?: string;
+  org?: string;
 }
 
 function parseArgs(argv: string[]): CliArgs {
@@ -54,12 +55,13 @@ function parseArgs(argv: string[]): CliArgs {
     else if (a === "--api") args.api = argv[++i];
     else if (a === "--email") args.email = argv[++i];
     else if (a === "--space") args.space = argv[++i];
+    else if (a === "--org") args.org = argv[++i];
     else if (a === "--label") args.label = argv[++i] ?? args.label;
     else if (a === "--account") args.account = argv[++i];
     else if (a === "--help") {
       console.log(
         "Usage: wa-pair [--out <dir>] [--png <file>] [--timeout <sec>] [--reset]\n" +
-          "               [--api <url>] [--email <address>] [--space <id>] [--label <name>] [--account <id>]\n\n" +
+          "               [--api <url>] [--email <address>] [--org <slug>] [--space <id>]\n               [--label <name>] [--account <id>]\n\n" +
           "Without --api the session is only written to disk. With it, the session\n" +
           "is uploaded to that API and the account is polled until it connects.\n" +
           "The password comes from JAMOT_PASSWORD, or is prompted for.",
@@ -159,10 +161,46 @@ async function uploadSession(args: CliArgs, dir: string, files: string[]): Promi
   if (!accountId) {
     let spaceId = args.space;
     if (!spaceId) {
-      const me = await apiFetch(session, "/api/auth/me");
-      if (!me.ok) throw new Error(`could not read the signed-in actor (${me.status})`);
-      spaceId = ((await me.json()) as { actor?: { personalSpaceId?: string } }).actor
-        ?.personalSpaceId;
+      /* The console works in the organization's space, not the personal one,
+         so an account parked in the personal space would never appear in its
+         Settings. Resolve the organization first and fall back only when the
+         actor belongs to none. */
+      const orgs = await apiFetch(session, "/api/organizations");
+      const items = orgs.ok
+        ? ((await orgs.json()) as {
+            items?: { organization: { id: string; slug: string | null }; space: { id: string; name: string } }[];
+          }).items ?? []
+        : [];
+      const wanted = args.org
+        ? items.filter((o) => o.organization.slug === args.org)
+        : items;
+
+      if (args.org && wanted.length === 0) {
+        throw new Error(
+          `no organization with slug "${args.org}" — you belong to: ${
+            items.map((o) => o.organization.slug ?? o.space.name).join(", ") || "none"
+          }`,
+        );
+      }
+      if (wanted.length > 1) {
+        throw new Error(
+          `you belong to several organizations — pass --org <slug> (${wanted
+            .map((o) => o.organization.slug ?? o.space.name)
+            .join(", ")})`,
+        );
+      }
+      if (wanted.length === 1) {
+        spaceId = wanted[0]!.space.id;
+        console.log(
+          `[wa-pair] using organization "${wanted[0]!.organization.slug ?? wanted[0]!.space.name}"`,
+        );
+      } else {
+        const me = await apiFetch(session, "/api/auth/me");
+        if (!me.ok) throw new Error(`could not read the signed-in actor (${me.status})`);
+        spaceId = ((await me.json()) as { actor?: { personalSpaceId?: string } }).actor
+          ?.personalSpaceId;
+        console.log("[wa-pair] no organization found — using your personal space");
+      }
       if (!spaceId) throw new Error("no space to attach the account to — pass --space");
     }
     const listed = await apiFetch(
