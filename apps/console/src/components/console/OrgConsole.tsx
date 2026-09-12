@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useState } from "react";
 import type { OrgPublicBranding } from "@jamot/client/branding";
 
+import { AgentConfigurator } from "./AgentConfigurator";
 import { AppRail } from "./AppRail";
 import { ChatReopen } from "./ChatReopen";
 import { ChatPanel } from "./ChatPanel";
@@ -23,6 +24,7 @@ import { OutreachSection } from "../OutreachSection";
  * Commerce.dc.html) — they carry real data in design-system components, and the
  * mockup's own layout for each is still to be ported. */
 const WIRED: Record<string, React.ReactNode> = {
+  "agent-configurator": <AgentConfigurator />,
   channels: <Channels />,
   crm: <People />,
   "lead-generation": <LeadGen />,
