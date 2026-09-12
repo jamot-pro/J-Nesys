@@ -13,6 +13,7 @@ import {
 import { fetchGoogleProfile } from "../auth.js";
 import { actorRoleInSpace, requireAuth } from "../rbac.js";
 import { fail, parse } from "../util.js";
+import { safeReturnUrl } from "../return-url.js";
 
 const GOOGLE_CONNECTOR_PROVIDER = "google";
 
@@ -67,15 +68,30 @@ export function googleConnectorRoutes(
         return fail(reply, 501, "Google OAuth is not configured: missing GOOGLE_CONNECTOR_REDIRECT_URI");
       }
 
-      const query = parse(z.object({ spaceId: Id }), request.query, reply);
+      const query = parse(
+        z.object({ spaceId: Id, returnTo: z.string().optional() }),
+        request.query,
+        reply,
+      );
       if (!query) return;
 
       const actorId = request.session.actorId!;
       const role = await actorRoleInSpace(repo, actorId as never, query.spaceId);
       if (!role) return fail(reply, 403, "no access to this space");
 
+      /* Every console shares this API, so the round-trip has to come back to
+         the surface it started from. Without this the callback always landed
+         on FRONTEND_URL — the cockpit — which reads as the whole UI reverting. */
+      const returnTo = safeReturnUrl(
+        query.returnTo,
+        process.env.FRONTEND_URL ?? "https://mvp.jamot.pro",
+      );
+
       const state = randomUUID();
-      request.session.set("googleConnectorState", JSON.stringify({ state, spaceId: query.spaceId }));
+      request.session.set(
+        "googleConnectorState",
+        JSON.stringify({ state, spaceId: query.spaceId, returnTo }),
+      );
       return reply.redirect(buildGoogleConnectorAuthUrl(clientId, redirectUri, state));
     });
 
@@ -86,6 +102,21 @@ export function googleConnectorRoutes(
         overrides?.redirectUri,
       );
       const frontendUrl = process.env.FRONTEND_URL ?? "https://mvp.jamot.pro";
+      /* Read the stored return target before any early exit below uses it. */
+      let storedReturn: string | null = null;
+      try {
+        storedReturn = (
+          JSON.parse(request.session.get("googleConnectorState") ?? "{}") as {
+            returnTo?: string | null;
+          }
+        ).returnTo ?? null;
+      } catch {
+        storedReturn = null;
+      }
+      const back = (outcome: string) =>
+        storedReturn
+          ? `${storedReturn}${storedReturn.includes("?") ? "&" : "?"}google=${outcome}`
+          : `${frontendUrl}/settings?google=${outcome}`;
       if (!clientId) {
         return fail(reply, 501, "Google OAuth is not configured: missing GOOGLE_CLIENT_ID");
       }
@@ -98,7 +129,7 @@ export function googleConnectorRoutes(
 
       const query = request.query as { code?: string; state?: string; error?: string };
       if (query.error) {
-        return reply.redirect(`${frontendUrl}/settings?google=denied`);
+        return reply.redirect(back("denied"));
       }
 
       const rawState = request.session.get("googleConnectorState");
@@ -106,7 +137,7 @@ export function googleConnectorRoutes(
         ? (JSON.parse(rawState) as { state?: string; spaceId?: string })
         : {};
       if (!query.code || !query.state || query.state !== parsed.state || !parsed.spaceId) {
-        return reply.redirect(`${frontendUrl}/settings?google=error`);
+        return reply.redirect(back("error"));
       }
       request.session.set("googleConnectorState", "");
 
@@ -118,7 +149,7 @@ export function googleConnectorRoutes(
           query.code,
         );
         if (!tokens.refreshToken) {
-          return reply.redirect(`${frontendUrl}/settings?google=error`);
+          return reply.redirect(back("error"));
         }
         const profile = await fetchGoogleProfile(tokens.accessToken);
 
@@ -142,7 +173,7 @@ export function googleConnectorRoutes(
           void syncService()
             .syncConnector({ ...existing, configuration: { ...existing.configuration, email: profile.email } })
             .catch((err) => request.log.error(err, "google sync failed"));
-          return reply.redirect(`${frontendUrl}/settings?google=success`);
+          return reply.redirect(back("success"));
         }
 
         const ref = `google/refresh-token/${randomUUID()}`;
@@ -170,10 +201,10 @@ export function googleConnectorRoutes(
           .syncConnector(connector)
           .catch((err) => request.log.error(err, "google sync failed"));
 
-        return reply.redirect(`${frontendUrl}/settings?google=success`);
+        return reply.redirect(back("success"));
       } catch (err) {
         request.log.error(err, "google connector callback failed");
-        return reply.redirect(`${frontendUrl}/settings?google=error`);
+        return reply.redirect(back("error"));
       }
     });
 

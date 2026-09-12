@@ -7,6 +7,7 @@ import type { JamotRepository } from "../repository.js";
 import { requireAuth } from "../rbac.js";
 import { actorRoleInSpace, ROLE_WEIGHT } from "../rbac.js";
 import { fail, parse } from "../util.js";
+import { safeReturnUrl } from "../return-url.js";
 
 export interface ComposioRoutesOptions {
   repository: JamotRepository;
@@ -18,6 +19,10 @@ const ConnectBody = z.object({
   toolkit: z.string().min(1),
   sharing: ConnectorSharing.default("user"),
   organizationId: Id.nullable().optional(),
+  /** Where to come back to. Every console shares this API, so without it the
+   *  callback lands on FRONTEND_URL — the cockpit — rather than the console
+   *  the flow started from. */
+  returnTo: z.string().optional(),
 });
 
 const SetKeyBody = z.object({
@@ -148,6 +153,9 @@ export default async function composioRoutes(
       const body = parse(ConnectBody, request.body, reply);
       if (!body) return;
 
+      const returnTo = safeReturnUrl(body.returnTo, frontendUrl());
+      if (returnTo) request.session.set("composioReturnTo", returnTo);
+
       const organizationId = body.organizationId ?? null;
       if (organizationId) {
         if (body.sharing === "organization") {
@@ -187,11 +195,13 @@ export default async function composioRoutes(
       connected_account_id?: string;
       error?: string;
     };
-    const base = frontendUrl();
+    const stored = request.session.get("composioReturnTo") as string | undefined;
+    const base = safeReturnUrl(stored, frontendUrl()) ?? frontendUrl();
+    const join = base.includes("?") ? "&" : "?";
     const state = query.state ?? "";
     if (query.error || !state) {
       return reply.redirect(
-        `${base}?composio=error&message=${encodeURIComponent(query.error ?? "missing state")}`,
+        `${base}${join}composio=error&message=${encodeURIComponent(query.error ?? "missing state")}`,
       );
     }
     try {
@@ -199,10 +209,10 @@ export default async function composioRoutes(
         state,
         connectedAccountId: query.connected_account_id,
       });
-      return reply.redirect(`${base}?composio=success&state=${encodeURIComponent(state)}`);
+      return reply.redirect(`${base}${join}composio=success&state=${encodeURIComponent(state)}`);
     } catch (err) {
       return reply.redirect(
-        `${base}?composio=error&message=${encodeURIComponent(
+        `${base}${join}composio=error&message=${encodeURIComponent(
           err instanceof Error ? err.message : "callback failed",
         )}`,
       );

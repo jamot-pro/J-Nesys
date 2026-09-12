@@ -9,6 +9,8 @@ declare module "fastify" {
      * start on their own subdomain, not FRONTEND_URL). */
     oauthReturnTo?: string;
     googleConnectorState?: string;
+    /** Where to return after a Composio connection round-trip. */
+    composioReturnTo?: string;
   }
 
   interface FastifyRequest {
