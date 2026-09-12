@@ -332,6 +332,71 @@ export default async function waRoutes(
     return { internalHostname: process.env.RENDER_INTERNAL_HOSTNAME ?? null };
   });
 
+  /**
+   * What the server itself can see about WhatsApp pairing.
+   *
+   * "No QR appeared" has several very different causes — the manager was never
+   * configured, the session disk is not writable, or WhatsApp is refusing this
+   * egress — and they are indistinguishable from the browser. This reports
+   * each of them, plus the public IP the handshake leaves from, so the pairing
+   * screen can say which one it is instead of spinning.
+   *
+   * The proxy is reported as a boolean: its URL carries credentials.
+   */
+  app.get("/wa/diagnostics", { preHandler: requireAuth }, async () => {
+    const sessionDir = process.env.WHATSAPP_SESSION_DIR ?? null;
+
+    let sessionDirWritable: boolean | null = null;
+    if (sessionDir) {
+      try {
+        const { mkdirSync, writeFileSync, rmSync } = await import("node:fs");
+        const probe = `${sessionDir}/.write-probe`;
+        mkdirSync(sessionDir, { recursive: true });
+        writeFileSync(probe, "ok");
+        rmSync(probe, { force: true });
+        sessionDirWritable = true;
+      } catch {
+        sessionDirWritable = false;
+      }
+    }
+
+    /* The egress address is the whole question when WhatsApp refuses to pair:
+       a datacenter address is refused where a residential one is accepted. */
+    let egressIp: string | null = null;
+    try {
+      const res = await fetch("https://api.ipify.org?format=json", {
+        signal: AbortSignal.timeout(4000),
+      });
+      if (res.ok) egressIp = ((await res.json()) as { ip?: string }).ip ?? null;
+    } catch {
+      egressIp = null;
+    }
+
+    const accounts = manager
+      ? manager.list().map((adapter) => {
+          const state = adapter.getState();
+          return {
+            connection: state.connection,
+            hasQr: Boolean(state.qr),
+            sawQr: state.sawQr ?? false,
+            attempts: state.attempts ?? 0,
+            lastCloseCode: state.lastCloseCode ?? null,
+            lastError: state.lastError ?? null,
+            lastEventAt: state.lastEventAt ?? null,
+          };
+        })
+      : [];
+
+    return {
+      managerConfigured: Boolean(manager),
+      sessionDir,
+      sessionDirWritable,
+      proxyConfigured: Boolean(process.env.WHATSAPP_PROXY_URL),
+      egressIp,
+      accounts,
+    };
+  });
+
   app.post(
     "/wa/channels",
     { preHandler: [requireAuth, resolveSpaceFromQuery] },
