@@ -174,8 +174,8 @@ type OrgEdgeRow = typeof orgEdges.$inferSelect;
 function toOrgNode(row: OrgNodeRow): OrgNode {
   return {
     id: row.id as Id,
-    createdAt: row.createdAt,
-    updatedAt: row.updatedAt,
+    createdAt: normalizePgTimestamp(row.createdAt),
+    updatedAt: normalizePgTimestamp(row.updatedAt),
     organizationId: row.organizationId as Id,
     kind: row.kind,
     name: row.name,
@@ -188,8 +188,8 @@ function toOrgNode(row: OrgNodeRow): OrgNode {
 function toOrgEdge(row: OrgEdgeRow): OrgEdge {
   return {
     id: row.id as Id,
-    createdAt: row.createdAt,
-    updatedAt: row.updatedAt,
+    createdAt: normalizePgTimestamp(row.createdAt),
+    updatedAt: normalizePgTimestamp(row.updatedAt),
     organizationId: row.organizationId as Id,
     fromNodeId: row.fromNodeId as Id,
     toNodeId: row.toNodeId as Id,
@@ -241,8 +241,8 @@ function toActor(row: ActorRow): Actor {
     status: row.status,
     externalIdentities: row.externalIdentities,
     personalSpaceId: (row.personalSpaceId as Id | null) ?? null,
-    createdAt: row.createdAt,
-    updatedAt: row.updatedAt,
+    createdAt: normalizePgTimestamp(row.createdAt),
+    updatedAt: normalizePgTimestamp(row.updatedAt),
   };
 }
 
@@ -261,8 +261,8 @@ function toPerson(row: typeof people.$inferSelect): Person {
     profile: row.profile,
     membershipSpaceIds: row.membershipSpaceIds as Id[],
     reputation: row.reputation,
-    createdAt: row.createdAt,
-    updatedAt: row.updatedAt,
+    createdAt: normalizePgTimestamp(row.createdAt),
+    updatedAt: normalizePgTimestamp(row.updatedAt),
   };
 }
 
@@ -278,8 +278,8 @@ function toIdentity(row: IdentityRow): Identity {
     verified: row.verified,
     confidence: row.confidence,
     source: row.source,
-    createdAt: row.createdAt,
-    updatedAt: row.updatedAt,
+    createdAt: normalizePgTimestamp(row.createdAt),
+    updatedAt: normalizePgTimestamp(row.updatedAt),
   };
 }
 
@@ -296,8 +296,8 @@ function toModelProviderRecord(row: ModelProviderRow): ModelProviderRecord {
     status: (row.status as ModelProviderRecord["status"]) ?? "unknown",
     lastTestedAt: row.lastTestedAt ?? null,
     lastError: row.lastError ?? null,
-    createdAt: row.createdAt,
-    updatedAt: row.updatedAt,
+    createdAt: normalizePgTimestamp(row.createdAt),
+    updatedAt: normalizePgTimestamp(row.updatedAt),
   };
 }
 
@@ -310,8 +310,8 @@ function toProviderModelRecord(row: ProviderModelRow): ProviderModelRecord {
     modelId: row.modelId,
     discovered: row.discovered,
     enabled: row.enabled,
-    createdAt: row.createdAt,
-    updatedAt: row.updatedAt,
+    createdAt: normalizePgTimestamp(row.createdAt),
+    updatedAt: normalizePgTimestamp(row.updatedAt),
   };
 }
 
@@ -326,16 +326,16 @@ function toMergeCandidate(row: MergeCandidateRow): MergeCandidate {
     reason: row.reason,
     detail: row.detail,
     status: MergeCandidateStatus.parse(row.status),
-    createdAt: row.createdAt,
-    updatedAt: row.updatedAt,
+    createdAt: normalizePgTimestamp(row.createdAt),
+    updatedAt: normalizePgTimestamp(row.updatedAt),
   };
 }
 
 function toAgent(row: AgentRow): Agent {
   return {
     id: row.id as Id,
-    createdAt: row.createdAt,
-    updatedAt: row.updatedAt,
+    createdAt: normalizePgTimestamp(row.createdAt),
+    updatedAt: normalizePgTimestamp(row.updatedAt),
     actorId: row.actorId as Id,
     ownerId: row.ownerId as Id,
     organizationIds: row.organizationIds as Id[],
@@ -373,8 +373,8 @@ type EventRow = typeof events.$inferSelect;
 function toRelationship(row: RelationshipRow): Relationship {
   return {
     id: row.id as Id,
-    createdAt: row.createdAt,
-    updatedAt: row.updatedAt,
+    createdAt: normalizePgTimestamp(row.createdAt),
+    updatedAt: normalizePgTimestamp(row.updatedAt),
     fromActorId: row.fromActorId as Id,
     toActorId: row.toActorId as Id,
     kind: row.kind as Relationship["kind"],
@@ -394,11 +394,31 @@ function toEvent(row: EventRow): Event {
   };
 }
 
+/**
+ * Normalises a Postgres timestamp into RFC 3339.
+ *
+ * The timestamp columns are declared `mode: "string"`, so the driver returns
+ * Postgres's own rendering — "2026-09-11 14:30:00+00", with a space and a
+ * two-digit offset. The Timestamp contract is
+ * `z.string().datetime({ offset: true })`, which requires the "T" separator
+ * and a full offset, so those values fail validation.
+ *
+ * Most routes never parse entities on the way out, which is why this stayed
+ * invisible: only /organizations/resolve calls SubdomainResolution.parse, and
+ * it returned 500 for every organization in Postgres. Normalising here — at
+ * the repository boundary, where rows become domain objects — fixes it for
+ * every entity at once. Already-ISO values and Date objects pass through
+ * unchanged in meaning, so this is safe to apply everywhere.
+ */
+export function normalizePgTimestamp(value: string | Date): string {
+  return value instanceof Date ? value.toISOString() : new Date(value).toISOString();
+}
+
 function toSpace(row: SpaceRow): Space {
   return {
     id: row.id as Id,
-    createdAt: row.createdAt,
-    updatedAt: row.updatedAt,
+    createdAt: normalizePgTimestamp(row.createdAt),
+    updatedAt: normalizePgTimestamp(row.updatedAt),
     kind: row.kind,
     ownerActorId: row.ownerActorId as Id,
     name: row.name,
@@ -408,8 +428,8 @@ function toSpace(row: SpaceRow): Space {
 function toOrganization(row: OrganizationRow): Organization {
   return {
     id: row.id as Id,
-    createdAt: row.createdAt,
-    updatedAt: row.updatedAt,
+    createdAt: normalizePgTimestamp(row.createdAt),
+    updatedAt: normalizePgTimestamp(row.updatedAt),
     spaceId: row.spaceId as Id,
     slug: row.slug,
     logoUrl: row.logoUrl,
@@ -424,8 +444,8 @@ function toOrganization(row: OrganizationRow): Organization {
 function toWorkspace(row: WorkspaceRow): Workspace {
   return {
     id: row.id as Id,
-    createdAt: row.createdAt,
-    updatedAt: row.updatedAt,
+    createdAt: normalizePgTimestamp(row.createdAt),
+    updatedAt: normalizePgTimestamp(row.updatedAt),
     organizationId: row.organizationId as Id,
     spaceId: row.spaceId as Id,
     name: row.name,
@@ -436,8 +456,8 @@ function toWorkspace(row: WorkspaceRow): Workspace {
 function toRole(row: RoleRow): Role {
   return {
     id: row.id as Id,
-    createdAt: row.createdAt,
-    updatedAt: row.updatedAt,
+    createdAt: normalizePgTimestamp(row.createdAt),
+    updatedAt: normalizePgTimestamp(row.updatedAt),
     actorId: row.actorId as Id,
     spaceId: row.spaceId as Id,
     kind: row.kind,
@@ -448,8 +468,8 @@ function toRole(row: RoleRow): Role {
 function toTask(row: TaskRow): Task {
   return {
     id: row.id as Id,
-    createdAt: row.createdAt,
-    updatedAt: row.updatedAt,
+    createdAt: normalizePgTimestamp(row.createdAt),
+    updatedAt: normalizePgTimestamp(row.updatedAt),
     spaceId: row.spaceId as Id,
     projectId: (row.projectId as Id | null) ?? null,
     listId: (row.listId as Id | null) ?? null,
@@ -468,8 +488,8 @@ function toTask(row: TaskRow): Task {
 function toTaskList(row: TaskListRow): TaskList {
   return {
     id: row.id as Id,
-    createdAt: row.createdAt,
-    updatedAt: row.updatedAt,
+    createdAt: normalizePgTimestamp(row.createdAt),
+    updatedAt: normalizePgTimestamp(row.updatedAt),
     spaceId: row.spaceId as Id,
     name: row.name,
     position: row.position,
@@ -479,8 +499,8 @@ function toTaskList(row: TaskListRow): TaskList {
 function toTaskAttachment(row: TaskAttachmentRow): TaskAttachment {
   return {
     id: row.id as Id,
-    createdAt: row.createdAt,
-    updatedAt: row.updatedAt,
+    createdAt: normalizePgTimestamp(row.createdAt),
+    updatedAt: normalizePgTimestamp(row.updatedAt),
     taskId: row.taskId as Id,
     name: row.name,
     mimeType: row.mimeType,
@@ -492,8 +512,8 @@ function toTaskAttachment(row: TaskAttachmentRow): TaskAttachment {
 function toSkill(row: SkillRow): Skill {
   return {
     id: row.id as Id,
-    createdAt: row.createdAt,
-    updatedAt: row.updatedAt,
+    createdAt: normalizePgTimestamp(row.createdAt),
+    updatedAt: normalizePgTimestamp(row.updatedAt),
     ownerActorId: (row.ownerActorId as Id | null) ?? null,
     ownerOrganizationId: (row.ownerOrganizationId as Id | null) ?? null,
     name: row.name,
@@ -513,8 +533,8 @@ function toSkill(row: SkillRow): Skill {
 function toConnector(row: ConnectorRow): Connector {
   return {
     id: row.id as Id,
-    createdAt: row.createdAt,
-    updatedAt: row.updatedAt,
+    createdAt: normalizePgTimestamp(row.createdAt),
+    updatedAt: normalizePgTimestamp(row.updatedAt),
     provider: row.provider,
     type: row.type,
     ownerActorId: (row.ownerActorId as Id | null) ?? null,
@@ -531,8 +551,8 @@ function toConnector(row: ConnectorRow): Connector {
 function toCapability(row: CapabilityRow): Capability {
   return {
     id: row.id as Id,
-    createdAt: row.createdAt,
-    updatedAt: row.updatedAt,
+    createdAt: normalizePgTimestamp(row.createdAt),
+    updatedAt: normalizePgTimestamp(row.updatedAt),
     name: row.name,
     skillId: row.skillId as Id,
     connectorId: row.connectorId as Id,
@@ -566,8 +586,8 @@ function toNotification(row: NotificationRow): Notification {
     read: row.read,
     targetSection: row.targetSection,
     targetId: row.targetId as Id | null,
-    createdAt: row.createdAt,
-    updatedAt: row.updatedAt,
+    createdAt: normalizePgTimestamp(row.createdAt),
+    updatedAt: normalizePgTimestamp(row.updatedAt),
   };
 }
 
@@ -588,8 +608,8 @@ function toCustomApp(row: CustomAppRow): CustomAppManifest {
     canvas: row.canvas,
     permissions: row.permissions,
     createdByActorId: row.createdByActorId as Id,
-    createdAt: row.createdAt,
-    updatedAt: row.updatedAt,
+    createdAt: normalizePgTimestamp(row.createdAt),
+    updatedAt: normalizePgTimestamp(row.updatedAt),
   };
 }
 
@@ -614,8 +634,8 @@ function toComposioOAuthState(row: ComposioOAuthStateRow): ComposioOAuthStateRec
     apiKeyScope: row.apiKeyScope,
     redirectUri: row.redirectUri,
     consumed: row.consumed,
-    createdAt: row.createdAt,
-    updatedAt: row.updatedAt,
+    createdAt: normalizePgTimestamp(row.createdAt),
+    updatedAt: normalizePgTimestamp(row.updatedAt),
     expiresAt: row.expiresAt,
   };
 }
@@ -623,8 +643,8 @@ function toComposioOAuthState(row: ComposioOAuthStateRow): ComposioOAuthStateRec
 function toSupplier(row: typeof suppliers.$inferSelect): Supplier {
   return {
     id: row.id as Id,
-    createdAt: row.createdAt,
-    updatedAt: row.updatedAt,
+    createdAt: normalizePgTimestamp(row.createdAt),
+    updatedAt: normalizePgTimestamp(row.updatedAt),
     actorId: row.actorId as Id,
     organizationId: (row.organizationId as Id | null) ?? null,
     onboardingStatus: row.onboardingStatus as Supplier["onboardingStatus"],
@@ -637,8 +657,8 @@ function toSupplier(row: typeof suppliers.$inferSelect): Supplier {
 function toProduct(row: typeof productBase.$inferSelect): Product {
   return {
     id: row.id as Id,
-    createdAt: row.createdAt,
-    updatedAt: row.updatedAt,
+    createdAt: normalizePgTimestamp(row.createdAt),
+    updatedAt: normalizePgTimestamp(row.updatedAt),
     spaceId: (row.spaceId as Id | null) ?? null,
     gtin: row.gtin,
     sku: row.sku,
@@ -657,8 +677,8 @@ function toProduct(row: typeof productBase.$inferSelect): Product {
 function toCatalog(row: typeof catalogs.$inferSelect): Catalog {
   return {
     id: row.id as Id,
-    createdAt: row.createdAt,
-    updatedAt: row.updatedAt,
+    createdAt: normalizePgTimestamp(row.createdAt),
+    updatedAt: normalizePgTimestamp(row.updatedAt),
     ownerOrganizationId: row.ownerOrganizationId as Id,
     name: row.name,
     version: row.version,
@@ -674,8 +694,8 @@ function toCatalog(row: typeof catalogs.$inferSelect): Catalog {
 function toCatalogOffer(row: typeof catalogOffers.$inferSelect): CatalogOffer {
   return {
     id: row.id as Id,
-    createdAt: row.createdAt,
-    updatedAt: row.updatedAt,
+    createdAt: normalizePgTimestamp(row.createdAt),
+    updatedAt: normalizePgTimestamp(row.updatedAt),
     catalogId: row.catalogId as Id,
     productId: row.productId as Id,
     sellerOrganizationId: row.sellerOrganizationId as Id,
@@ -698,8 +718,8 @@ function toCatalogOffer(row: typeof catalogOffers.$inferSelect): CatalogOffer {
 function toBuyerAgreement(row: typeof buyerAgreements.$inferSelect): BuyerAgreement {
   return {
     id: row.id as Id,
-    createdAt: row.createdAt,
-    updatedAt: row.updatedAt,
+    createdAt: normalizePgTimestamp(row.createdAt),
+    updatedAt: normalizePgTimestamp(row.updatedAt),
     catalogOfferId: row.catalogOfferId as Id,
     buyerOrganizationId: row.buyerOrganizationId as Id,
     priceTiers: row.priceTiers as BuyerAgreement["priceTiers"],
@@ -711,8 +731,8 @@ function toBuyerAgreement(row: typeof buyerAgreements.$inferSelect): BuyerAgreem
 function toQuoteRequest(row: typeof quoteRequests.$inferSelect): QuoteRequest {
   return {
     id: row.id as Id,
-    createdAt: row.createdAt,
-    updatedAt: row.updatedAt,
+    createdAt: normalizePgTimestamp(row.createdAt),
+    updatedAt: normalizePgTimestamp(row.updatedAt),
     buyerOrganizationId: row.buyerOrganizationId as Id,
     spaceId: (row.spaceId as Id | null) ?? null,
     title: row.title,
@@ -727,8 +747,8 @@ function toQuoteRequest(row: typeof quoteRequests.$inferSelect): QuoteRequest {
 function toQuote(row: typeof quotes.$inferSelect): Quote {
   return {
     id: row.id as Id,
-    createdAt: row.createdAt,
-    updatedAt: row.updatedAt,
+    createdAt: normalizePgTimestamp(row.createdAt),
+    updatedAt: normalizePgTimestamp(row.updatedAt),
     quoteRequestId: row.quoteRequestId as Id,
     sellerOrganizationId: row.sellerOrganizationId as Id,
     spaceId: (row.spaceId as Id | null) ?? null,
@@ -745,8 +765,8 @@ function toQuote(row: typeof quotes.$inferSelect): Quote {
 function toPurchaseOrder(row: typeof purchaseOrders.$inferSelect): PurchaseOrder {
   return {
     id: row.id as Id,
-    createdAt: row.createdAt,
-    updatedAt: row.updatedAt,
+    createdAt: normalizePgTimestamp(row.createdAt),
+    updatedAt: normalizePgTimestamp(row.updatedAt),
     quoteId: row.quoteId as Id,
     buyerOrganizationId: row.buyerOrganizationId as Id,
     sellerOrganizationId: row.sellerOrganizationId as Id,
@@ -763,8 +783,8 @@ function toPurchaseOrder(row: typeof purchaseOrders.$inferSelect): PurchaseOrder
 function toPaymentIntent(row: typeof paymentIntents.$inferSelect): PaymentIntent {
   return {
     id: row.id as Id,
-    createdAt: row.createdAt,
-    updatedAt: row.updatedAt,
+    createdAt: normalizePgTimestamp(row.createdAt),
+    updatedAt: normalizePgTimestamp(row.updatedAt),
     purchaseOrderId: row.purchaseOrderId as Id,
     buyerOrganizationId: row.buyerOrganizationId as Id,
     sellerOrganizationId: row.sellerOrganizationId as Id,
@@ -783,8 +803,8 @@ function toPaymentIntent(row: typeof paymentIntents.$inferSelect): PaymentIntent
 function toPaymentRecord(row: typeof paymentRecords.$inferSelect): PaymentRecord {
   return {
     id: row.id as Id,
-    createdAt: row.createdAt,
-    updatedAt: row.updatedAt,
+    createdAt: normalizePgTimestamp(row.createdAt),
+    updatedAt: normalizePgTimestamp(row.updatedAt),
     paymentIntentId: row.paymentIntentId as Id,
     spaceId: (row.spaceId as Id | null) ?? null,
     paidAmount: Number(row.paidAmount),
@@ -797,8 +817,8 @@ function toPaymentRecord(row: typeof paymentRecords.$inferSelect): PaymentRecord
 function toLeadList(row: LeadListRow): LeadList {
   return {
     id: row.id as Id,
-    createdAt: row.createdAt,
-    updatedAt: row.updatedAt,
+    createdAt: normalizePgTimestamp(row.createdAt),
+    updatedAt: normalizePgTimestamp(row.updatedAt),
     organizationId: (row.organizationId as Id | null) ?? null,
     spaceId: row.spaceId as Id,
     createdBy: (row.createdBy as Id | null) ?? null,
@@ -818,8 +838,8 @@ function toLeadList(row: LeadListRow): LeadList {
 function toLeadListMember(row: LeadListMemberRow): LeadListMember {
   return {
     id: row.id as Id,
-    createdAt: row.createdAt,
-    updatedAt: row.updatedAt,
+    createdAt: normalizePgTimestamp(row.createdAt),
+    updatedAt: normalizePgTimestamp(row.updatedAt),
     leadListId: row.leadListId as Id,
     personId: row.personId as Id,
     providerId: row.providerId,
@@ -832,8 +852,8 @@ function toLeadListMember(row: LeadListMemberRow): LeadListMember {
 function toOutreachList(row: OutreachListRow): OutreachList {
   return {
     id: row.id as Id,
-    createdAt: row.createdAt,
-    updatedAt: row.updatedAt,
+    createdAt: normalizePgTimestamp(row.createdAt),
+    updatedAt: normalizePgTimestamp(row.updatedAt),
     spaceId: row.spaceId as Id,
     name: row.name,
     description: row.description,
@@ -844,8 +864,8 @@ function toOutreachList(row: OutreachListRow): OutreachList {
 function toOutreachCampaign(row: OutreachCampaignRow): OutreachCampaign {
   return {
     id: row.id as Id,
-    createdAt: row.createdAt,
-    updatedAt: row.updatedAt,
+    createdAt: normalizePgTimestamp(row.createdAt),
+    updatedAt: normalizePgTimestamp(row.updatedAt),
     spaceId: row.spaceId as Id,
     name: row.name,
     description: row.description,
@@ -860,8 +880,8 @@ function toOutreachCampaign(row: OutreachCampaignRow): OutreachCampaign {
 function toOutreachStep(row: OutreachStepRow): OutreachStep {
   return {
     id: row.id as Id,
-    createdAt: row.createdAt,
-    updatedAt: row.updatedAt,
+    createdAt: normalizePgTimestamp(row.createdAt),
+    updatedAt: normalizePgTimestamp(row.updatedAt),
     campaignId: row.campaignId as Id,
     position: row.position,
     sendAfterDays: row.sendAfterDays,
@@ -875,8 +895,8 @@ function toOutreachStep(row: OutreachStepRow): OutreachStep {
 function toOutreachSend(row: OutreachSendRow): OutreachSend {
   return {
     id: row.id as Id,
-    createdAt: row.createdAt,
-    updatedAt: row.updatedAt,
+    createdAt: normalizePgTimestamp(row.createdAt),
+    updatedAt: normalizePgTimestamp(row.updatedAt),
     campaignId: row.campaignId as Id,
     stepId: row.stepId as Id,
     personId: row.personId as Id,

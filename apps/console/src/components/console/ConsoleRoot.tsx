@@ -51,7 +51,15 @@ export function ConsoleRoot({ branding }: { branding: OrgPublicBranding }) {
       );
       setPhase("ready");
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Could not load this organization.");
+      // The previous copy blamed access for every failure, which was wrong and
+      // actively misleading: a 500 from the API rendered as "access is decided
+      // by the API". Only say that when the API actually refused.
+      const message = err instanceof Error ? err.message : "the request failed";
+      setError(
+        /forbidden|no access/i.test(message)
+          ? "you are not a member of this organization."
+          : message,
+      );
       setPhase("error");
     }
   }, [branding.slug]);
@@ -75,7 +83,7 @@ export function ConsoleRoot({ branding }: { branding: OrgPublicBranding }) {
   if (phase === "error") {
     return (
       <Centered>
-        {error} — access to <strong>{branding.slug}</strong> is decided by the API, not this console.
+        Could not open <strong>{branding.slug}</strong>: {error}
       </Centered>
     );
   }
