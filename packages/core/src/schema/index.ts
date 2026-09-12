@@ -1274,6 +1274,11 @@ export const leadLists = pgTable(
       .notNull()
       .default(sql`'{}'::jsonb`),
     area: jsonb("area").$type<LeadArea | null>(),
+    /* The agents that work this list: one searches, one enriches. */
+    agentId: uuid("agent_id").references(() => agents.id, { onDelete: "set null" }),
+    enrichmentAgentId: uuid("enrichment_agent_id").references(() => agents.id, {
+      onDelete: "set null",
+    }),
     providerId: text("provider_id").notNull(),
     providerConfig: jsonb("provider_config")
       .$type<Record<string, unknown>>()

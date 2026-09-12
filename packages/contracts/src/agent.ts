@@ -96,6 +96,8 @@ export type Agent = z.infer<typeof Agent>;
 /** Partial update body for `PATCH /agents/:id`. All fields optional. */
 export const UpdateAgentBody = z
   .object({
+    /** The agent's display name. Stored on its actor, not on the agent row. */
+    name: z.string().min(1).max(200).optional(),
     role: z.string().nullable().optional(),
     purpose: z.string().nullable().optional(),
     description: z.string().nullable().optional(),

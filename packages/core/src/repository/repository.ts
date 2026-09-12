@@ -192,6 +192,8 @@ export interface NewLeadList {
   description?: string;
   persona?: LeadList["persona"];
   area?: LeadList["area"];
+  agentId?: string | null;
+  enrichmentAgentId?: string | null;
   providerId: string;
   providerConfig?: Record<string, unknown>;
   status?: LeadList["status"];
@@ -672,6 +674,8 @@ export interface JamotRepository {
         | "description"
         | "persona"
         | "area"
+        | "agentId"
+        | "enrichmentAgentId"
         | "providerId"
         | "providerConfig"
         | "status"

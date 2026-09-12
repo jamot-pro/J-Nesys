@@ -173,6 +173,8 @@ export interface ApiEvent {
 }
 
 export type UpdateAgentBody = {
+  /** Display name. Kept on the agent's actor, not on the agent row. */
+  name?: string;
   role?: string | null;
   purpose?: string | null;
   description?: string | null;
@@ -1749,6 +1751,10 @@ export interface LeadList {
   description: string;
   persona: LeadPersona;
   area: LeadArea | null;
+  /** The agent that runs a search on this list, when one is assigned. */
+  agentId: string | null;
+  /** The agent that enriches what the search found. */
+  enrichmentAgentId: string | null;
   providerId: string;
   providerConfig: Record<string, unknown>;
   status: LeadListStatus;
@@ -1828,6 +1834,8 @@ export async function updateLeadList(
     description: string;
     persona: LeadPersona;
     area: LeadArea | null;
+    agentId: string | null;
+    enrichmentAgentId: string | null;
     providerId: string;
     providerConfig: Record<string, unknown>;
   }>,

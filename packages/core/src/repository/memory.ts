@@ -644,6 +644,8 @@ export function createMemoryRepository(): JamotRepository {
         description: input.description ?? "",
         persona: input.persona ?? {},
         area: input.area ?? null,
+        agentId: input.agentId ?? null,
+        enrichmentAgentId: input.enrichmentAgentId ?? null,
         providerId: input.providerId,
         providerConfig: input.providerConfig ?? {},
         status: input.status ?? "draft",
