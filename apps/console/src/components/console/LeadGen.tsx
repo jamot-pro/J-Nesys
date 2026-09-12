@@ -60,6 +60,9 @@ interface LogLine {
 }
 
 const CARD: React.CSSProperties = {
+  /* Without this a wide child — a select carrying a long agent name — pushes
+     the card past its grid track instead of being clipped to it. */
+  minWidth: 0,
   border: "1px solid var(--color-divider)",
   borderRadius: "var(--radius-md)",
   background: "var(--color-bg)",
@@ -127,7 +130,9 @@ export function LeadGen() {
   /** An agent's name lives on its actor; role is what it does, not what it is. */
   const agentName = useCallback(
     (agent: ApiAgent) =>
-      actors.find((a) => a.id === agent.actorId)?.displayName ?? agent.role ?? agent.id.slice(0, 8),
+      actors.find((a) => a.id === agent.actorId)?.displayName ??
+      agent.role ??
+      `Untitled agent · ${agent.id.slice(0, 8)}`,
     [actors],
   );
 
@@ -285,12 +290,17 @@ export function LeadGen() {
 
       <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit,minmax(320px,1fr))", gap: "var(--space-3)" }}>
         <section style={CARD}>
-          <div style={{ display: "flex", alignItems: "baseline", gap: 8, flexWrap: "wrap" }}>
-            <span style={UPPER}>Tell the agent the target</span>
+          <span style={UPPER}>Tell the agent the target</span>
+          {/* Its own row, at the card's width. Sitting beside the heading with
+              `width:auto` let a long agent name push the control past the
+              card's edge, since a flex item will not shrink below its content
+              unless it is told it may. */}
+          <div className="field" style={{ minWidth: 0 }}>
+            <label htmlFor="lg-sagent">Search agent</label>
             <select
               className="input"
-              aria-label="Search agent"
-              style={{ marginLeft: "auto", height: 32, width: "auto", fontSize: 12 }}
+              id="lg-sagent"
+              style={{ width: "100%", minWidth: 0, maxWidth: "100%", boxSizing: "border-box" }}
               value={current?.agentId ?? ""}
               disabled={!listId}
               onChange={(e) => void assignAgent("agentId", e.target.value)}
@@ -559,6 +569,7 @@ export function LeadGen() {
           <select
             className="input"
             id="lg-eagent"
+            style={{ width: "100%", minWidth: 0, maxWidth: "100%", boxSizing: "border-box" }}
             value={current?.enrichmentAgentId ?? ""}
             disabled={!listId}
             onChange={(e) => void assignAgent("enrichmentAgentId", e.target.value)}
