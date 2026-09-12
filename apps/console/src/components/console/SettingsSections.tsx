@@ -17,10 +17,12 @@ import {
   googleConnectUrl,
   listComposioConnections,
   listComposioToolkits,
+  listLeadProviders,
   listConnectors,
   listMemory,
   listSkills,
   setComposioKey,
+  setLeadProviderKey,
   storeMemory,
   syncGoogle,
   updateConnector,
@@ -31,6 +33,7 @@ import {
   type ComposioConnection,
   type ComposioToolkit,
   type GoogleConnectorStatus,
+  type LeadProviderView,
   type ApiMemoryEntry,
   type ApiSkill,
   type MeResponse,
@@ -707,6 +710,106 @@ function ComposioBlock() {
   );
 }
 
+
+/* ---- Lead providers --------------------------------------------------- */
+
+/** Which providers take an API key, and what to call it on screen. */
+const PROVIDER_KEY_LABEL: Record<string, string> = {
+  apollo: "Apollo API key",
+  "google-maps": "Apify token",
+};
+
+/**
+ * Lead providers — the sources Lead generation draws from.
+ *
+ * Their keys live here rather than on the Lead generation screen: a key is a
+ * credential, and credentials belong with the other connectors.
+ *
+ * Keys are write-only. Nothing reads one back, so a configured provider shows
+ * as configured and the field stays empty; replacing a key means entering the
+ * new one, never editing the old.
+ */
+function LeadProvidersBlock() {
+  const { organizationId, spaceId } = useOrgScope();
+  const { data: providers, error, note, busy, run } = useSection<LeadProviderView[]>(() =>
+    listLeadProviders(spaceId, organizationId),
+  );
+  const [keys, setKeys] = useState<Record<string, string>>({});
+
+  return (
+    <>
+      <h3 style={{ fontSize: 15, margin: "var(--space-6) 0 var(--space-3)" }}>Lead providers</h3>
+      <Feedback error={error} note={note} />
+
+      {providers === null ? (
+        <p style={{ fontSize: 14, color: MUTED }}>Loading providers…</p>
+      ) : providers.length === 0 ? (
+        <p style={{ fontSize: 14, color: MUTED }}>No lead provider is registered.</p>
+      ) : (
+        <table className="table">
+          <thead>
+            <tr><th>Provider</th><th>Status</th><th>Key</th></tr>
+          </thead>
+          <tbody>
+            {providers.map((p) => {
+              const keyLabel = PROVIDER_KEY_LABEL[p.id];
+              return (
+                <tr key={p.id}>
+                  <td>
+                    {p.label}
+                    <span style={{ display: "block", fontSize: 12, color: DIM }}>{p.detail}</span>
+                  </td>
+                  <td>
+                    <span className={p.configured ? "tag tag-accent" : "tag tag-neutral"}>
+                      {p.configured ? "configured" : "not configured"}
+                    </span>
+                  </td>
+                  <td>
+                    {keyLabel ? (
+                      <span style={{ display: "flex", gap: "var(--space-2)", alignItems: "center" }}>
+                        <input
+                          className="input"
+                          type="password"
+                          autoComplete="off"
+                          placeholder={p.configured ? "Replace the key" : keyLabel}
+                          style={{ height: 32, minWidth: 200, fontSize: 12 }}
+                          value={keys[p.id] ?? ""}
+                          onChange={(e) => setKeys((k) => ({ ...k, [p.id]: e.target.value }))}
+                        />
+                        <button
+                          className="btn btn-secondary"
+                          style={{ height: 32, fontSize: 12 }}
+                          disabled={busy || !(keys[p.id] ?? "").length}
+                          onClick={() =>
+                            void run(async () => {
+                              await setLeadProviderKey(p.id, organizationId, keys[p.id]!);
+                              setKeys((k) => ({ ...k, [p.id]: "" }));
+                            }, `${p.label} key stored.`)
+                          }
+                        >
+                          Save
+                        </button>
+                      </span>
+                    ) : (
+                      <span style={{ fontSize: 12, color: DIM }}>
+                        Configured through its connection, not a key
+                      </span>
+                    )}
+                  </td>
+                </tr>
+              );
+            })}
+          </tbody>
+        </table>
+      )}
+      <p style={{ margin: "var(--space-3) 0 0", fontSize: 12, color: DIM }}>
+        Stored encrypted against this organization and never read back. Google Maps searches by area
+        and trade through Apify; Lead generation picks the first configured provider.
+      </p>
+    </>
+  );
+}
+
 /* ---- Connectors ------------------------------------------------------- */
 
 /**
@@ -728,6 +831,7 @@ export function ConnectorsSection() {
     <>
       <GoogleBlock />
       <ComposioBlock />
+      <LeadProvidersBlock />
 
       <h3 style={{ fontSize: 15, margin: "var(--space-6) 0 var(--space-3)" }}>Key-based connectors</h3>
       <Feedback error={error} note={note} />
