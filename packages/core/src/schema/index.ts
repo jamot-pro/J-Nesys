@@ -1312,6 +1312,43 @@ export const leadListMembers = pgTable(
   ],
 );
 
+export const peopleLists = pgTable(
+  "people_lists",
+  {
+    id: uuid("id").defaultRandom().primaryKey(),
+    organizationId: uuid("organization_id").references(() => organizations.id),
+    spaceId: uuid("space_id")
+      .notNull()
+      .references(() => spaces.id),
+    createdBy: uuid("created_by").references(() => actors.id),
+    name: text("name").notNull(),
+    ...timestamps(),
+  },
+  (table) => [
+    index("people_lists_space_id_idx").on(table.spaceId),
+    index("people_lists_org_id_idx").on(table.organizationId),
+  ],
+);
+
+export const peopleListMembers = pgTable(
+  "people_list_members",
+  {
+    id: uuid("id").defaultRandom().primaryKey(),
+    peopleListId: uuid("people_list_id")
+      .notNull()
+      .references(() => peopleLists.id, { onDelete: "cascade" }),
+    personId: uuid("person_id")
+      .notNull()
+      .references(() => people.id, { onDelete: "cascade" }),
+    ...timestamps(),
+  },
+  (table) => [
+    index("people_list_members_list_idx").on(table.peopleListId),
+    index("people_list_members_person_idx").on(table.personId),
+    uniqueIndex("people_list_members_unique").on(table.peopleListId, table.personId),
+  ],
+);
+
 export const sessions = pgTable("sessions", {
   id: uuid("id").defaultRandom().primaryKey(),
   actorId: uuid("actor_id"),

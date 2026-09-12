@@ -75,3 +75,49 @@ export const PeoplePage = z.object({
   perPage: z.number().int().min(1),
 });
 export type PeoplePage = z.infer<typeof PeoplePage>;
+
+/**
+ * A named grouping of people inside one space — the "lists" the People screen
+ * is built around. Membership is explicit: a person can sit in several lists,
+ * or in none, and deleting a list never deletes the people in it.
+ */
+export const PeopleList = z.object({
+  id: Id,
+  spaceId: Id,
+  organizationId: Id.nullable().default(null),
+  createdBy: Id.nullable().default(null),
+  name: z.string().min(1),
+  createdAt: Timestamp,
+  updatedAt: Timestamp,
+});
+export type PeopleList = z.infer<typeof PeopleList>;
+
+export const PeopleListMember = z.object({
+  id: Id,
+  peopleListId: Id,
+  personId: Id,
+  createdAt: Timestamp,
+  updatedAt: Timestamp,
+});
+export type PeopleListMember = z.infer<typeof PeopleListMember>;
+
+/**
+ * A person as the People screen needs them: the summary plus the CRM fields
+ * that live in `profile.selfDescribed` (website, public profile, context,
+ * aura, notes), lifted out so the screen does not have to know that layout.
+ */
+export const PeopleListPerson = PersonSummary.extend({
+  website: z.string().default(""),
+  /** The person's own public profile URL, empty until they are onboarded. */
+  publicProfile: z.string().default(""),
+  context: z.string().default(""),
+  aura: z.number().min(0).max(100).default(0),
+  notes: z.array(z.object({ when: z.string(), text: z.string() })).default([]),
+});
+export type PeopleListPerson = z.infer<typeof PeopleListPerson>;
+
+/** A list together with the people in it, in the order they were added. */
+export const PeopleListWithMembers = PeopleList.extend({
+  people: z.array(PeopleListPerson).default([]),
+});
+export type PeopleListWithMembers = z.infer<typeof PeopleListWithMembers>;

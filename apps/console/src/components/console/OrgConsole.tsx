@@ -14,6 +14,7 @@ import type { RailApp } from "./mockup-data";
 import { useOrgScope } from "../console-context";
 import { CommerceSection } from "../CommerceSection";
 import { LeadGen } from "./LeadGen";
+import { People } from "./People";
 import { OutreachSection } from "../OutreachSection";
 
 /** Rail apps that already have a backend behind them. Their screens are not
@@ -22,6 +23,7 @@ import { OutreachSection } from "../OutreachSection";
  * mockup's own layout for each is still to be ported. */
 const WIRED: Record<string, React.ReactNode> = {
   channels: <Channels />,
+  crm: <People />,
   "lead-generation": <LeadGen />,
   outreach: <OutreachSection />,
   commerce: <CommerceSection />,

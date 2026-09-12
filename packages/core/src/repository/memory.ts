@@ -11,6 +11,8 @@ import {
   Identity,
   LeadList,
   LeadListMember,
+  PeopleList,
+  PeopleListMember,
   CustomAppManifest,
   MergeCandidate,
   Notification,
@@ -120,6 +122,8 @@ export function createMemoryRepository(): JamotRepository {
   const purchaseOrderStore = new Map<string, PurchaseOrder>();
   const paymentIntentStore = new Map<string, PaymentIntent>();
   const paymentRecordStore = new Map<string, PaymentRecord>();
+  const peopleListStore = new Map<string, PeopleList>();
+  const peopleListMemberStore = new Map<string, PeopleListMember>();
   const leadListStore = new Map<string, LeadList>();
   const leadListMemberStore = new Map<string, LeadListMember>();
   const outreachLists = new Map<string, OutreachList>();
@@ -513,6 +517,75 @@ export function createMemoryRepository(): JamotRepository {
       });
       people.set(person.id, person);
       return person;
+    },
+
+    async createPeopleList(input) {
+      const list = PeopleList.parse({
+        id: uuid(),
+        spaceId: input.spaceId,
+        organizationId: input.organizationId ?? null,
+        createdBy: input.createdBy ?? null,
+        name: input.name,
+        createdAt: now(),
+        updatedAt: now(),
+      });
+      peopleListStore.set(list.id, list);
+      return list;
+    },
+
+    async getPeopleList(id) {
+      return peopleListStore.get(id) ?? null;
+    },
+
+    async listPeopleLists(filter) {
+      return [...peopleListStore.values()]
+        .filter((l) => l.spaceId === filter.spaceId)
+        .sort((a, b) => a.createdAt.localeCompare(b.createdAt));
+    },
+
+    async renamePeopleList(id, name) {
+      const existing = peopleListStore.get(id);
+      if (!existing) return null;
+      const updated = PeopleList.parse({ ...existing, name, updatedAt: now() });
+      peopleListStore.set(id, updated);
+      return updated;
+    },
+
+    async deletePeopleList(id) {
+      peopleListStore.delete(id);
+      for (const [key, m] of peopleListMemberStore) {
+        if (m.peopleListId === id) peopleListMemberStore.delete(key);
+      }
+    },
+
+    async addPeopleListMember(peopleListId, personId) {
+      const existing = [...peopleListMemberStore.values()].find(
+        (m) => m.peopleListId === peopleListId && m.personId === personId,
+      );
+      if (existing) return existing;
+      const member = PeopleListMember.parse({
+        id: uuid(),
+        peopleListId,
+        personId,
+        createdAt: now(),
+        updatedAt: now(),
+      });
+      peopleListMemberStore.set(member.id, member);
+      return member;
+    },
+
+    async removePeopleListMember(peopleListId, personId) {
+      for (const [key, m] of peopleListMemberStore) {
+        if (m.peopleListId === peopleListId && m.personId === personId) {
+          peopleListMemberStore.delete(key);
+        }
+      }
+    },
+
+    async listPeopleListMembers(peopleListId) {
+      return [...peopleListMemberStore.values()]
+        .filter((m) => m.peopleListId === peopleListId)
+        .sort((a, b) => a.createdAt.localeCompare(b.createdAt));
     },
 
     async createLeadList(input: NewLeadList) {

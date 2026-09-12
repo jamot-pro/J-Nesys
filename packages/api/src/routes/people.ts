@@ -136,6 +136,38 @@ async function toSummary(
   };
 }
 
+/** Reads one `profile.selfDescribed` attribute back out as a plain value. */
+function attr(person: Person, key: string): unknown {
+  return person.profile?.selfDescribed?.[key]?.value;
+}
+
+/**
+ * The People screen's view of a person: the summary plus the CRM fields kept
+ * in `profile.selfDescribed`, so the screen never touches that layout itself.
+ */
+async function toListPerson(
+  repo: JamotRepository,
+  person: Person,
+  spaceId: string,
+) {
+  const summary = await toSummary(repo, person, spaceId);
+  const notes = attr(person, "notes");
+  const aura = attr(person, "aura");
+  return {
+    ...summary,
+    website: String(attr(person, "website") ?? ""),
+    publicProfile: String(attr(person, "publicProfile") ?? ""),
+    context: String(attr(person, "context") ?? ""),
+    aura: typeof aura === "number" ? Math.max(0, Math.min(100, aura)) : 0,
+    notes: Array.isArray(notes)
+      ? (notes as { when?: unknown; text?: unknown }[]).map((n) => ({
+          when: String(n?.when ?? ""),
+          text: String(n?.text ?? ""),
+        }))
+      : [],
+  };
+}
+
 export function peopleRoutes(repo: JamotRepository) {
   return async function (app: FastifyInstance): Promise<void> {
     app.post("/people", async (request, reply) => {
@@ -475,6 +507,136 @@ export function peopleRoutes(repo: JamotRepository) {
         if (!identity) return fail(reply, 404, "identity not found");
 
         await repo.removeIdentity(identityId);
+        reply.code(204);
+      },
+    );
+
+    /* ---- People lists -------------------------------------------------- */
+    /* Named groupings of people inside one space. Membership is explicit and
+       many-to-many; removing a person from a list never deletes the person. */
+
+    const listAccess = async (actorId: string, spaceId: string) =>
+      Boolean(await actorRoleInSpace(repo, actorId as Id, spaceId as Id));
+
+    app.get("/people/lists", { preHandler: requireAuth }, async (request, reply) => {
+      const query = parse(z.object({ spaceId: Id }), request.query, reply);
+      if (!query) return;
+      const actorId = request.session.actorId!;
+      if (!(await listAccess(actorId, query.spaceId))) {
+        return fail(reply, 403, "no access to this space");
+      }
+
+      const lists = await repo.listPeopleLists({ spaceId: query.spaceId });
+      return {
+        items: await Promise.all(
+          lists.map(async (list) => {
+            const members = await repo.listPeopleListMembers(list.id);
+            const people = (
+              await Promise.all(members.map((m) => repo.getPerson(m.personId)))
+            ).filter((person): person is NonNullable<typeof person> => person !== null);
+            return {
+              ...list,
+              people: await Promise.all(
+                people.map((person) => toListPerson(repo, person, query.spaceId)),
+              ),
+            };
+          }),
+        ),
+      };
+    });
+
+    app.post("/people/lists", { preHandler: requireAuth }, async (request, reply) => {
+      const body = parse(
+        z.object({ spaceId: Id, name: z.string().min(1).max(200) }),
+        request.body,
+        reply,
+      );
+      if (!body) return;
+      const actorId = request.session.actorId!;
+      if (!(await listAccess(actorId, body.spaceId))) {
+        return fail(reply, 403, "no access to this space");
+      }
+
+      /* Spaces carry no organization id of their own; the list belongs to the
+         space, and the organization is reachable through it when needed. */
+      const list = await repo.createPeopleList({
+        spaceId: body.spaceId,
+        organizationId: null,
+        createdBy: actorId,
+        name: body.name,
+      });
+      reply.code(201);
+      return { ...list, people: [] };
+    });
+
+    app.patch("/people/lists/:listId", { preHandler: requireAuth }, async (request, reply) => {
+      const listId = parse(Id, (request.params as { listId?: string }).listId, reply);
+      if (!listId) return;
+      const body = parse(z.object({ name: z.string().min(1).max(200) }), request.body, reply);
+      if (!body) return;
+
+      const list = await repo.getPeopleList(listId);
+      if (!list) return fail(reply, 404, "list not found");
+      if (!(await listAccess(request.session.actorId!, list.spaceId))) {
+        return fail(reply, 403, "no access to this space");
+      }
+
+      return await repo.renamePeopleList(listId, body.name);
+    });
+
+    app.delete("/people/lists/:listId", { preHandler: requireAuth }, async (request, reply) => {
+      const listId = parse(Id, (request.params as { listId?: string }).listId, reply);
+      if (!listId) return;
+
+      const list = await repo.getPeopleList(listId);
+      if (!list) return fail(reply, 404, "list not found");
+      if (!(await listAccess(request.session.actorId!, list.spaceId))) {
+        return fail(reply, 403, "no access to this space");
+      }
+
+      await repo.deletePeopleList(listId);
+      reply.code(204);
+    });
+
+    app.post(
+      "/people/lists/:listId/members",
+      { preHandler: requireAuth },
+      async (request, reply) => {
+        const listId = parse(Id, (request.params as { listId?: string }).listId, reply);
+        if (!listId) return;
+        const body = parse(z.object({ personId: Id }), request.body, reply);
+        if (!body) return;
+
+        const list = await repo.getPeopleList(listId);
+        if (!list) return fail(reply, 404, "list not found");
+        if (!(await listAccess(request.session.actorId!, list.spaceId))) {
+          return fail(reply, 403, "no access to this space");
+        }
+        const person = await repo.getPerson(body.personId);
+        if (!person) return fail(reply, 404, "person not found");
+
+        reply.code(201);
+        return await repo.addPeopleListMember(listId, body.personId);
+      },
+    );
+
+    app.delete(
+      "/people/lists/:listId/members/:personId",
+      { preHandler: requireAuth },
+      async (request, reply) => {
+        const params = request.params as { listId?: string; personId?: string };
+        const listId = parse(Id, params.listId, reply);
+        if (!listId) return;
+        const personId = parse(Id, params.personId, reply);
+        if (!personId) return;
+
+        const list = await repo.getPeopleList(listId);
+        if (!list) return fail(reply, 404, "list not found");
+        if (!(await listAccess(request.session.actorId!, list.spaceId))) {
+          return fail(reply, 403, "no access to this space");
+        }
+
+        await repo.removePeopleListMember(listId, personId);
         reply.code(204);
       },
     );
