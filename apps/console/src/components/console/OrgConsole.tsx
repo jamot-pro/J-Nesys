@@ -6,9 +6,8 @@ import type { OrgPublicBranding } from "@jamot/client/branding";
 import { AppRail } from "./AppRail";
 import { ChatPanel } from "./ChatPanel";
 import { DiscoverDreams } from "./DiscoverDreams";
-import { OrgRail, type RailOrg } from "./OrgRail";
 import { SystemConfig } from "./SystemConfig";
-import { APPS, initialsOf } from "./mockup-data";
+import { APPS } from "./mockup-data";
 import { CommerceSection } from "../CommerceSection";
 import { LeadsSection } from "../LeadsSection";
 import { OutreachSection } from "../OutreachSection";
@@ -33,14 +32,12 @@ const MOON = "M21 12.8A9 9 0 1 1 11.2 3a7 7 0 0 0 9.8 9.8z";
  * only thing taken from the existing system is the API: the organization and
  * session come from the backend, everything else still renders the mockup's
  * own content until the matching endpoint is wired.
+ *
+ * One deliberate departure from the mockup: there is no org rail. This console
+ * is mono-org — it serves the single organization named by the subdomain — so
+ * a rail for switching between organizations has nothing to switch to.
  */
-export function OrgConsole({
-  branding,
-  orgs,
-}: {
-  branding: OrgPublicBranding;
-  orgs: RailOrg[];
-}) {
+export function OrgConsole({ branding }: { branding: OrgPublicBranding }) {
   const [chatOpen, setChatOpen] = useState(true);
   const [chatWidth, setChatWidth] = useState(360);
   const [activeApp, setActiveApp] = useState<string | null>(null);
@@ -91,7 +88,6 @@ export function OrgConsole({
         style={{
           flex: 1,
           minWidth: 0,
-          order: 2,
           display: "flex",
           flexDirection: "column",
           background: "var(--color-bg)",
@@ -143,11 +139,7 @@ export function OrgConsole({
         </div>
       </main>
 
-      <OrgRail orgs={orgs} onPick={() => {}} onOpenSwitcher={() => {}} />
-
       {configOpen ? <SystemConfig onClose={() => setConfigOpen(false)} /> : null}
     </div>
   );
 }
-
-export { initialsOf };

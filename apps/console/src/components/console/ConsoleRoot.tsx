@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
-import { getMe, getOrganizations, resolveOrganizationBySubdomain, type MeResponse, type SubdomainResolution } from "@jamot/client";
+import { getMe, resolveOrganizationBySubdomain, type MeResponse, type SubdomainResolution } from "@jamot/client";
 import type { OrgPublicBranding } from "@jamot/client/branding";
 
 import { CopilotKit } from "@copilotkit/react-core/v2";
@@ -10,8 +10,6 @@ import "@/lib/api-config";
 import { ConsoleProvider } from "../console-context";
 import { LoginPanel } from "../LoginPanel";
 import { OrgConsole } from "./OrgConsole";
-import { initialsOf } from "./mockup-data";
-import type { RailOrg } from "./OrgRail";
 
 type Phase = "checking" | "signed-out" | "loading" | "ready" | "error";
 
@@ -25,7 +23,6 @@ export function ConsoleRoot({ branding }: { branding: OrgPublicBranding }) {
   const [phase, setPhase] = useState<Phase>("checking");
   const [me, setMe] = useState<MeResponse | null>(null);
   const [resolution, setResolution] = useState<SubdomainResolution | null>(null);
-  const [orgs, setOrgs] = useState<RailOrg[]>([]);
   const [error, setError] = useState<string | null>(null);
 
   const load = useCallback(async () => {
@@ -41,16 +38,6 @@ export function ConsoleRoot({ branding }: { branding: OrgPublicBranding }) {
     try {
       const res = await resolveOrganizationBySubdomain(branding.slug);
       setResolution(res);
-      const mine = await getOrganizations().catch(() => []);
-      setOrgs(
-        mine.map((item) => ({
-          id: item.organization.id,
-          name: item.space.name,
-          initials: initialsOf(item.space.name),
-          unread: 0,
-          active: item.organization.id === res.organization.id,
-        })),
-      );
       setPhase("ready");
     } catch (err) {
       // The previous copy blamed access for every failure, which was wrong and
@@ -99,7 +86,7 @@ export function ConsoleRoot({ branding }: { branding: OrgPublicBranding }) {
   return (
     <ConsoleProvider value={{ me, resolution, branding }}>
       <CopilotKit runtimeUrl="/api/copilotkit">
-        <OrgConsole branding={branding} orgs={orgs} />
+        <OrgConsole branding={branding} />
       </CopilotKit>
     </ConsoleProvider>
   );
