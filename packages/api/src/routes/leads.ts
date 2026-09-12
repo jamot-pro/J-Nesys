@@ -5,6 +5,7 @@ import type { JamotRepository } from "../repository.js";
 import type { LeadGenerationService } from "@jamot/core/leads";
 import { actorRoleInSpace, createRbac, requireAuth } from "../rbac.js";
 import { fail, parse } from "../util.js";
+import type { SecretStore } from "@jamot/core/secrets/secret-store";
 
 /** Verifies the acting actor is a member of `spaceId` (org or personal). */
 function requireSpaceMember(repo: JamotRepository) {
@@ -33,9 +34,13 @@ const RunBody = z.object({
 
 export default async function leadsRoutes(
   app: FastifyInstance,
-  opts: { repository: JamotRepository; leads: LeadGenerationService },
+  opts: {
+    repository: JamotRepository;
+    leads: LeadGenerationService;
+    secretStore: SecretStore;
+  },
 ): Promise<void> {
-  const { repository: repo, leads } = opts;
+  const { repository: repo, leads, secretStore } = opts;
   const { requireSpaceAccess } = createRbac(repo);
   const canAccessSpace = requireSpaceMember(repo);
 
@@ -129,6 +134,59 @@ export default async function leadsRoutes(
       config: {},
     });
     return { items: views };
+  });
+
+  /**
+   * Stores the API key a provider needs.
+   *
+   * Only the refs the providers actually read are writable, so this cannot be
+   * used as a general secret-writing endpoint. Keys are write-only: there is
+   * no route that reads one back, and the provider list reports configured or
+   * not rather than the value.
+   */
+  const PROVIDER_KEY_REFS: Record<string, string> = {
+    apollo: "leads/apollo",
+    "google-maps": "leads/apify",
+  };
+
+  app.put("/lead-providers/:id/key", { preHandler: requireAuth }, async (request, reply) => {
+    const providerId = (request.params as { id?: string }).id ?? "";
+    const base = PROVIDER_KEY_REFS[providerId];
+    if (!base) return fail(reply, 404, "that provider takes no API key");
+
+    const body = parse(
+      z.object({
+        apiKey: z.string().trim().min(1).max(500),
+        organizationId: Id.optional(),
+      }),
+      request.body,
+      reply,
+    );
+    if (!body) return;
+
+    /* Scoping a key to an organization requires belonging to it; the platform
+       fallback key is deliberately not writable from here. */
+    if (!body.organizationId) {
+      return fail(reply, 400, "organizationId is required");
+    }
+    const organization = await repo.getOrganization(body.organizationId);
+    if (!organization) return fail(reply, 404, "organization not found");
+    const role = await actorRoleInSpace(
+      repo,
+      request.session.actorId as never,
+      organization.spaceId,
+    );
+    if (!role) return fail(reply, 403, "no access to this organization");
+
+    await repo.putSecret({
+      ref: `${base}/${body.organizationId}`,
+      scope: "organization",
+      ownerActorId: null,
+      ownerOrganizationId: body.organizationId,
+      ciphertext: secretStore.encrypt(body.apiKey),
+    });
+
+    return { configured: true };
   });
 
   // --- Run + leads -----------------------------------------------------------

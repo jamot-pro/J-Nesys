@@ -274,7 +274,7 @@ export async function buildApp(opts: BuildAppOptions) {
   await app.register(procurementRoutes, { prefix: "/api", commerce });
   await app.register(paymentsRoutes, { prefix: "/api", payments });
   await app.register(outreachRoutes, { prefix: "/api", repository: opts.repository });
-  await app.register(leadsRoutes, { prefix: "/api", repository: opts.repository, leads });
+  await app.register(leadsRoutes, { prefix: "/api", repository: opts.repository, leads, secretStore });
 
   return app;
 }

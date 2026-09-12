@@ -2489,3 +2489,18 @@ export async function syncGoogle(spaceId: string): Promise<{
 export async function disconnectGoogle(connectorId: string): Promise<void> {
   await api<void>(`/api/google/${encodeURIComponent(connectorId)}`, { method: "DELETE" });
 }
+
+/**
+ * Stores the API key a lead provider needs. Write-only: no route reads a key
+ * back, and the provider list reports configured or not rather than the value.
+ */
+export async function setLeadProviderKey(
+  providerId: string,
+  organizationId: string,
+  apiKey: string,
+): Promise<{ configured: boolean }> {
+  return api(`/api/lead-providers/${encodeURIComponent(providerId)}/key`, {
+    method: "PUT",
+    body: JSON.stringify({ organizationId, apiKey }),
+  });
+}

@@ -8,6 +8,7 @@ import {
   listLeadListLeads,
   listLeadLists,
   listLeadProviders,
+  setLeadProviderKey,
   runLeadList,
   updateLeadList,
   type ApiAgent,
@@ -98,6 +99,8 @@ export function LeadGen() {
 
   const [agents, setAgents] = useState<ApiAgent[]>([]);
   const [providers, setProviders] = useState<LeadProviderView[]>([]);
+  const [providerKey, setProviderKey] = useState("");
+  const [savingKey, setSavingKey] = useState(false);
   const [lists, setLists] = useState<LeadList[]>([]);
   const [listId, setListId] = useState<string>("");
   const [results, setResults] = useState<LeadView[]>([]);
@@ -247,10 +250,49 @@ export function LeadGen() {
 
       {error ? <p style={{ color: "var(--accent-ink)", fontSize: 13, marginTop: 0 }}>{error}</p> : null}
       {providers.length > 0 && !providers.some((p) => p.configured) ? (
-        <p style={{ color: MUTED, fontSize: 13 }}>
-          No lead provider is configured, so a run cannot fetch anything:{" "}
-          {providers.map((p) => p.label).join(", ")}.
-        </p>
+        <div className="card" style={{ marginBottom: "var(--space-4)" }}>
+          <div className="card-kicker">A run cannot fetch anything yet</div>
+          <div className="card-title">No lead provider is configured</div>
+          <p className="card-body">
+            Available: {providers.map((p) => p.label).join(", ")}. Google Maps searches by area and
+            trade through Apify — paste an Apify token to turn it on.
+          </p>
+          <div style={{ display: "flex", gap: "var(--space-2)", marginTop: "var(--space-3)", flexWrap: "wrap" }}>
+            <input
+              className="input"
+              type="password"
+              autoComplete="off"
+              placeholder="Apify token"
+              value={providerKey}
+              onChange={(e) => setProviderKey(e.target.value)}
+              style={{ flex: 1, minWidth: 220, height: 38 }}
+            />
+            <button
+              className="btn btn-primary"
+              disabled={providerKey.length === 0 || savingKey}
+              onClick={() =>
+                void (async () => {
+                  setSavingKey(true);
+                  try {
+                    await setLeadProviderKey("google-maps", organizationId, providerKey);
+                    setProviderKey("");
+                    setProviders(await listLeadProviders(spaceId, organizationId));
+                    setError(null);
+                  } catch (err) {
+                    setError(err instanceof Error ? err.message : "Could not store the token.");
+                  } finally {
+                    setSavingKey(false);
+                  }
+                })()
+              }
+            >
+              {savingKey ? "Saving…" : "Save token"}
+            </button>
+          </div>
+          <p className="card-body" style={{ marginTop: "var(--space-2)", fontSize: 12 }}>
+            Stored encrypted against this organization and never read back.
+          </p>
+        </div>
       ) : null}
 
       <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit,minmax(320px,1fr))", gap: "var(--space-3)" }}>
