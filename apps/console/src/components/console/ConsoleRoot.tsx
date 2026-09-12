@@ -4,6 +4,8 @@ import { useCallback, useEffect, useState } from "react";
 import { getMe, getOrganizations, resolveOrganizationBySubdomain, type MeResponse, type SubdomainResolution } from "@jamot/client";
 import type { OrgPublicBranding } from "@jamot/client/branding";
 
+import { CopilotKit } from "@copilotkit/react-core/v2";
+
 import "@/lib/api-config";
 import { ConsoleProvider } from "../console-context";
 import { LoginPanel } from "../LoginPanel";
@@ -91,9 +93,14 @@ export function ConsoleRoot({ branding }: { branding: OrgPublicBranding }) {
     return <Centered>Loading {branding.displayName}…</Centered>;
   }
 
+  // CopilotKit wraps only the signed-in console: the runtime resolves the
+  // model from the API using the session cookie, so mounting it around the
+  // sign-in panel would just produce unauthenticated calls.
   return (
     <ConsoleProvider value={{ me, resolution, branding }}>
-      <OrgConsole branding={branding} orgs={orgs} />
+      <CopilotKit runtimeUrl="/api/copilotkit">
+        <OrgConsole branding={branding} orgs={orgs} />
+      </CopilotKit>
     </ConsoleProvider>
   );
 }

@@ -10,6 +10,15 @@ importers:
 
   apps/console:
     dependencies:
+      '@ai-sdk/openai':
+        specifier: 3.0.96
+        version: 3.0.96(zod@3.25.76)
+      '@copilotkit/react-core':
+        specifier: ^1.67.1
+        version: 1.67.1(@types/mdast@4.0.4)(@types/react-dom@19.2.4(@types/react@19.2.18))(@types/react@19.2.18)(graphql@16.14.2)(micromark-util-types@2.0.2)(micromark@4.0.2(supports-color@7.2.0))(react-dom@19.2.8(react@19.2.8))(react@19.2.8)(supports-color@7.2.0)(zod@3.25.76)
+      '@copilotkit/runtime':
+        specifier: ^1.67.1
+        version: 1.67.1(@cfworker/json-schema@4.1.1)(@langchain/core@1.2.7(@opentelemetry/api@1.9.1)(openai@7.5.0(ws@8.21.3)(zod@3.25.76))(ws@8.21.3))(@langchain/langgraph-sdk@1.9.29(@langchain/core@1.2.7(@opentelemetry/api@1.9.1)(openai@7.5.0(ws@8.21.3)(zod@3.25.76))(ws@8.21.3))(react-dom@19.2.8(react@19.2.8))(react@19.2.8))(@opentelemetry/api@1.9.1)(@types/express@5.0.6)(debug@4.4.3(supports-color@7.2.0))(langchain@1.5.8(@langchain/core@1.2.7(@opentelemetry/api@1.9.1)(openai@7.5.0(ws@8.21.3)(zod@3.25.76))(ws@8.21.3))(@opentelemetry/api@1.9.1)(openai@7.5.0(ws@8.21.3)(zod@3.25.76))(react-dom@19.2.8(react@19.2.8))(react@19.2.8)(ws@8.21.3))(openai@7.5.0(ws@8.21.3)(zod@3.25.76))(react-dom@19.2.8(react@19.2.8))(react@19.2.8)(supports-color@7.2.0)
       '@jamot/client':
         specifier: workspace:*
         version: link:../../packages/client
