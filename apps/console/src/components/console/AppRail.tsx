@@ -155,8 +155,10 @@ export function AppRail({
           padding: "var(--space-2) 0",
         }}
       >
+        {/* Channels used the same speech bubble as the chat button below,
+            so the two read as one control repeated. Inbox tray instead. */}
         <button onClick={onOpenChannels} title="Channels" style={ICON_BTN}>
-          <Icon d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z" />
+          <Icon d="M4 13h4l2 3h4l2-3h4M4 13l2.6-7.2A2 2 0 0 1 8.5 5h7a2 2 0 0 1 1.9 1.3L20 13v4a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2z" />
         </button>
         {/* The chat control belongs to the rail, as it does in the mockup.
             A floating pill beside the rail crowded these buttons, so when the
