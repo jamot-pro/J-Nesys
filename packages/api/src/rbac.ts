@@ -48,8 +48,17 @@ export async function actorRoleInSpace(
   );
 }
 
-/** Map the literal "personal" space id to the actor's actual personal space id. */
-async function resolveSpaceIdForActor(
+/**
+ * Map the literal "personal" space id to the actor's actual personal space id.
+ *
+ * Exported because resolving it only inside actorRoleInSpace was not enough:
+ * the access check resolved the alias and then discarded it, so routes went on
+ * to use the raw "personal" string in their own queries and Postgres rejected
+ * it — `invalid input syntax for type uuid: "personal"`, a 500 on
+ * /api/wa/accounts and /api/notifications whenever the personal space was
+ * active. Routes should use request.resolvedSpaceId instead of the raw input.
+ */
+export async function resolveSpaceIdForActor(
   repo: JamotRepository,
   actorId: Id,
   spaceId: Id,
@@ -102,6 +111,9 @@ export function createRbac(repo: JamotRepository) {
       if (!spaceId) return deny(reply, "spaceId is required", 400);
       const role = await actorRoleInSpace(repo, actorId, spaceId as Id);
       if (!role) return deny(reply, "No access to this space", 403);
+      // Publish the canonical id so handlers never query with the alias.
+      request.resolvedSpaceId =
+        (await resolveSpaceIdForActor(repo, actorId as Id, spaceId as Id)) ?? undefined;
     };
 
   const requireOrgAccess = (orgSource = "organizationId") =>

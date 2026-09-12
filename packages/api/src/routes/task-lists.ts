@@ -30,7 +30,7 @@ export default async function taskListsRoutes(
       const body = parse(CreateListBody, request.body, reply);
       if (!body) return;
       const list = await repository.createTaskList({
-        spaceId: body.spaceId,
+        spaceId: request.resolvedSpaceId ?? body.spaceId,
         name: body.name,
         position: body.position,
       });
@@ -41,7 +41,7 @@ export default async function taskListsRoutes(
 
   app.get("/task-lists", { preHandler: requireAuth }, async (request, reply) => {
     const query = request.query as { spaceId?: string };
-    const spaceId = parse(Id, query.spaceId, reply);
+    const spaceId = parse(Id, request.resolvedSpaceId ?? query.spaceId, reply);
     if (!spaceId) return;
     return { items: await repository.listTaskLists(spaceId) };
   });

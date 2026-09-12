@@ -50,7 +50,7 @@ export default async function leadsRoutes(
       const list = await leads.createList(body, request.session.actorId ?? null);
       await repo.recordEvent({
         type: "leads.list.created",
-        spaceId: body.spaceId,
+        spaceId: request.resolvedSpaceId ?? body.spaceId,
         actorId: request.session.actorId ?? null,
         payload: { listId: list.id, name: list.name, providerId: list.providerId },
       });
@@ -61,7 +61,7 @@ export default async function leadsRoutes(
 
   app.get("/lead-lists", { preHandler: requireAuth }, async (request, reply) => {
     const query = request.query as { spaceId?: string; organizationId?: string };
-    const spaceId = query.spaceId ? parse(Id, query.spaceId, reply) : undefined;
+    const spaceId = query.spaceId ? parse(Id, request.resolvedSpaceId ?? query.spaceId, reply) : undefined;
     if (query.spaceId && !spaceId) return;
     const organizationId = query.organizationId
       ? parse(Id, query.organizationId, reply)
@@ -120,7 +120,7 @@ export default async function leadsRoutes(
 
   app.get("/lead-providers", { preHandler: requireAuth }, async (request, reply) => {
     const query = request.query as { spaceId?: string; organizationId?: string };
-    const spaceId = query.spaceId ? parse(Id, query.spaceId, reply) : undefined;
+    const spaceId = query.spaceId ? parse(Id, request.resolvedSpaceId ?? query.spaceId, reply) : undefined;
     if (query.spaceId && !spaceId) return;
     if (spaceId && !(await canAccessSpace(request, reply, spaceId))) return;
     const views = await leads.listProviders({

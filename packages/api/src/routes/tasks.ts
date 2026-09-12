@@ -54,7 +54,7 @@ export function tasksRoutes(repo: JamotRepository, reputation: ReputationService
       if (!body) return;
 
       const task = await repo.createTask({
-        spaceId: body.spaceId,
+        spaceId: request.resolvedSpaceId ?? body.spaceId,
         title: body.title,
         description: body.description,
         projectId: body.projectId ?? null,
@@ -82,7 +82,7 @@ export function tasksRoutes(repo: JamotRepository, reputation: ReputationService
           assigneeActorId?: string;
         } = {};
         if (query.spaceId) {
-          const spaceId = parse(Id, query.spaceId, reply);
+          const spaceId = parse(Id, request.resolvedSpaceId ?? query.spaceId, reply);
           if (!spaceId) return;
           filter.spaceId = spaceId;
         }
