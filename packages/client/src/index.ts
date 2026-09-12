@@ -2053,3 +2053,51 @@ export async function updateDreamConfig(
     { method: "PUT", body: JSON.stringify(config) },
   );
 }
+// --- Channel accounts (Telegram / Matrix) and WhatsApp accounts -------------
+
+export interface ApiChannelAccount {
+  id: string;
+  spaceId: string;
+  protocol: "telegram" | "matrix";
+  label: string;
+  identifier: string | null;
+  /** true when a token is stored; the token itself is never returned. */
+  token: boolean | null;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface ApiWaAccount {
+  id: string;
+  spaceId: string;
+  label: string;
+  status?: string;
+  state?: { status?: string; qr?: string | null } | null;
+}
+
+export async function listChannelAccounts(spaceId: string): Promise<ApiChannelAccount[]> {
+  const data = await api<{ items: ApiChannelAccount[] }>(
+    `/api/wa/channels?spaceId=${encodeURIComponent(spaceId)}`,
+  );
+  return data.items;
+}
+
+export async function createChannelAccount(input: {
+  spaceId: string;
+  protocol: "telegram" | "matrix";
+  label: string;
+  identifier?: string;
+  token?: string;
+}): Promise<ApiChannelAccount> {
+  return api<ApiChannelAccount>("/api/wa/channels", {
+    method: "POST",
+    body: JSON.stringify(input),
+  });
+}
+
+export async function listWaAccounts(spaceId: string): Promise<ApiWaAccount[]> {
+  const data = await api<{ items: ApiWaAccount[] }>(
+    `/api/wa/accounts?spaceId=${encodeURIComponent(spaceId)}`,
+  );
+  return data.items;
+}

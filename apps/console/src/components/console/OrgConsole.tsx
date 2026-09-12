@@ -7,6 +7,7 @@ import { AppRail } from "./AppRail";
 import { ChatPanel } from "./ChatPanel";
 import { DiscoverDreams } from "./DiscoverDreams";
 import { OrgRail, type RailOrg } from "./OrgRail";
+import { SystemConfig } from "./SystemConfig";
 import { APPS, initialsOf } from "./mockup-data";
 import { CommerceSection } from "../CommerceSection";
 import { LeadsSection } from "../LeadsSection";
@@ -43,6 +44,7 @@ export function OrgConsole({
   const [chatOpen, setChatOpen] = useState(true);
   const [chatWidth, setChatWidth] = useState(360);
   const [activeApp, setActiveApp] = useState<string | null>(null);
+  const [configOpen, setConfigOpen] = useState(false);
   const [dark, setDark] = useState(true);
 
   // The mockup switches theme with body[data-theme], and its own .mark-light /
@@ -77,8 +79,9 @@ export function OrgConsole({
         onOpenApp={(id) => setActiveApp(id)}
         onHome={() => setActiveApp(null)}
         onToggleChat={() => setChatOpen((v) => !v)}
+        chatOpen={chatOpen}
         onOpenWallet={() => setActiveApp("wallet")}
-        onOpenConfig={() => setActiveApp("config")}
+        onOpenConfig={() => setConfigOpen(true)}
         onCycleTheme={() => setDark((v) => !v)}
         themeIcon={dark ? SUN : MOON}
       />
@@ -141,6 +144,8 @@ export function OrgConsole({
       </main>
 
       <OrgRail orgs={orgs} onPick={() => {}} onOpenSwitcher={() => {}} />
+
+      {configOpen ? <SystemConfig onClose={() => setConfigOpen(false)} /> : null}
     </div>
   );
 }
