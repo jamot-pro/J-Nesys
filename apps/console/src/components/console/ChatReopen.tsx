@@ -10,7 +10,9 @@
  * visible affordance.
  *
  * It is built from the design system's own tokens so it still belongs to the
- * page, and it sits clear of the rail rather than over it.
+ * page, and it is anchored to the foot of the rail, aligned with the rail's
+ * own icons, so it reads as part of the rail rather than as something floating
+ * over it.
  */
 export function ChatReopen({ onOpen }: { onOpen: () => void }) {
   return (
@@ -20,8 +22,12 @@ export function ChatReopen({ onOpen }: { onOpen: () => void }) {
       title="Open assistant chat"
       aria-label="Open assistant chat"
       style={{
+        /* The shell pads 12 and the rail is 60 wide with 44px icons centred
+           in it, so its icons start at 20 — the pill starts there too, which
+           makes it the rail's last item rather than something beside it. The
+           rail leaves the slot free while this is mounted. */
         position: "fixed",
-        left: 84,
+        left: 20,
         bottom: 20,
         zIndex: 30,
         display: "flex",
