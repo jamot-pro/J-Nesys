@@ -5,7 +5,6 @@ import type { OrgPublicBranding } from "@jamot/client/branding";
 
 import { AppRail } from "./AppRail";
 import { ChatPanel } from "./ChatPanel";
-import { ChatReopen } from "./ChatReopen";
 import { Channels } from "./Channels";
 import { DiscoverDreams } from "./DiscoverDreams";
 import { SystemConfig } from "./SystemConfig";
@@ -114,9 +113,7 @@ export function OrgConsole({ branding }: { branding: OrgPublicBranding }) {
     >
       {chatOpen ? (
         <ChatPanel width={chatWidth} onWidthChange={setChatWidth} onCollapse={() => setChatOpen(false)} />
-      ) : (
-        <ChatReopen onOpen={() => setChatOpen(true)} />
-      )}
+      ) : null}
 
       <AppRail
         apps={apps}
