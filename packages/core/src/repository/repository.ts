@@ -490,6 +490,8 @@ export interface NewOutreachList {
   name: string;
   description?: string;
   memberPersonIds?: string[];
+  /** The People list this was built from, when it was. */
+  sourcePeopleListId?: string | null;
 }
 
 export interface NewOutreachCampaign {

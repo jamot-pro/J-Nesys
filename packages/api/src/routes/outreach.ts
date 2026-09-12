@@ -72,6 +72,72 @@ export default async function outreachRoutes(
     },
   );
 
+  /**
+   * Builds an outreach list from a People list.
+   *
+   * The two were unrelated concepts, so a list curated in People could not be
+   * worked by a campaign. This copies the members and remembers the source, so
+   * the copy can be refreshed rather than drifting.
+   */
+  app.post(
+    "/outreach/lists/from-people",
+    { preHandler: requireSpaceAccess("spaceId") },
+    async (request, reply) => {
+      const body = parse(
+        z.object({ spaceId: Id, peopleListId: Id, name: z.string().min(1).optional() }),
+        request.body,
+        reply,
+      );
+      if (!body) return;
+
+      const spaceId = request.resolvedSpaceId ?? body.spaceId;
+      const source = await repo.getPeopleList(body.peopleListId);
+      if (!source) return fail(reply, 404, "people list not found");
+      if (source.spaceId !== spaceId) {
+        return fail(reply, 403, "that list belongs to another space");
+      }
+
+      const members = await repo.listPeopleListMembers(source.id);
+      const list = await repo.createOutreachList({
+        spaceId,
+        name: body.name ?? source.name,
+        description: `Imported from the People list "${source.name}".`,
+        memberPersonIds: members.map((m) => m.personId),
+        sourcePeopleListId: source.id,
+      });
+
+      await repo.recordEvent({
+        type: "outreach.list.created",
+        spaceId,
+        actorId: request.session.actorId ?? null,
+        payload: { listId: list.id, name: list.name, fromPeopleList: source.id },
+      });
+
+      reply.code(201);
+      return list;
+    },
+  );
+
+  /** Refreshes an imported list's members from the People list behind it. */
+  app.post("/outreach/lists/:id/sync", { preHandler: requireAuth }, async (request, reply) => {
+    const id = parse(Id, (request.params as { id?: string }).id, reply);
+    if (!id) return;
+
+    const list = await repo.getOutreachList(id);
+    if (!list) return fail(reply, 404, "list not found");
+    if (!(await canAccessSpace(request, reply, list.spaceId))) return;
+    if (!list.sourcePeopleListId) {
+      return fail(reply, 400, "this list was not built from a People list");
+    }
+
+    const members = await repo.listPeopleListMembers(list.sourcePeopleListId);
+    const updated = await repo.updateOutreachList(id, {
+      memberPersonIds: members.map((m) => m.personId),
+    });
+    if (!updated) return fail(reply, 404, "list not found");
+    return updated;
+  });
+
   app.get("/outreach/lists", { preHandler: requireAuth }, async (request, reply) => {
     const query = request.query as { spaceId?: string };
     const spaceId = parse(Id, request.resolvedSpaceId ?? query.spaceId, reply);

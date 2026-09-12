@@ -1449,6 +1449,8 @@ export interface OutreachList {
   name: string;
   description: string;
   memberPersonIds: string[];
+  /** The People list this was built from, when it was. */
+  sourcePeopleListId: string | null;
   createdAt: string;
   updatedAt: string;
 }
@@ -2502,5 +2504,24 @@ export async function setLeadProviderKey(
   return api(`/api/lead-providers/${encodeURIComponent(providerId)}/key`, {
     method: "PUT",
     body: JSON.stringify({ organizationId, apiKey }),
+  });
+}
+
+/** Builds an outreach list from a People list, keeping the link to its source. */
+export async function createOutreachListFromPeople(
+  spaceId: string,
+  peopleListId: string,
+  name?: string,
+): Promise<OutreachList> {
+  return api<OutreachList>("/api/outreach/lists/from-people", {
+    method: "POST",
+    body: JSON.stringify({ spaceId, peopleListId, name }),
+  });
+}
+
+/** Refreshes an imported list's members from the People list behind it. */
+export async function syncOutreachList(listId: string): Promise<OutreachList> {
+  return api<OutreachList>(`/api/outreach/lists/${encodeURIComponent(listId)}/sync`, {
+    method: "POST",
   });
 }
