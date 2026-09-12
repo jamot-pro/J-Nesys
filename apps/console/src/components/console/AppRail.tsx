@@ -143,17 +143,7 @@ export function AppRail({
         <button
           onClick={onToggleChat}
           title={chatOpen ? "Hide assistant chat" : "Open assistant chat"}
-          style={{
-            ...ICON_BTN,
-            // When the panel is closed this is the only way back to the chat,
-            // so tint it with the accent to make it findable. The mockup leaves
-            // the chatClosed branch empty — there is no floating pill — and
-            // relies on this button alone.
-            background: chatOpen
-              ? "none"
-              : "color-mix(in srgb, var(--color-accent) 16%, transparent)",
-            color: chatOpen ? "var(--color-text)" : "var(--accent-ink)",
-          }}
+          style={ICON_BTN}
         >
           <Icon d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z" />
         </button>
