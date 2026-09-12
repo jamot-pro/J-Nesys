@@ -29,6 +29,9 @@ export const ICONS: Record<string, string> = {
   agents: "M12 2v3M8 5h8a2 2 0 0 1 2 2v4a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2V7a2 2 0 0 1 2-2zM9.5 9h.01M14.5 9h.01M7 17h10M5 21h14",
 };
 
+/** One entry in the app rail. Populated from the organization's enabled apps,
+ * not from a fixture — the mockup's own APPS list was removed once the rail
+ * began reading enabledAppIds. */
 export interface RailApp {
   id: string;
   title: string;
@@ -36,18 +39,25 @@ export interface RailApp {
   blurb: string;
 }
 
-export const APPS: RailApp[] = [
-  { id: "mydreams", title: "My Dreams", icon: "mydreams", blurb: "Every dream you have joined, the agents you maintain there, and what you have earned." },
-  { id: "crm", title: "People", icon: "crm", blurb: "Every human your agents can act for or reach out to." },
-  { id: "tasks", title: "Task Manager", icon: "tasks", blurb: "Work items assigned to humans and agents alike." },
-  { id: "channels", title: "Channels", icon: "channels", blurb: "Inbound and outbound conversations in one place." },
-  { id: "memory", title: "Knowledge", icon: "memory", blurb: "Browse and curate what the organization knows." },
-  { id: "analytics", title: "Analytics", icon: "analytics", blurb: "Usage, cost and agent performance over time." },
-  { id: "docs", title: "Documents", icon: "docs", blurb: "Files the platform reads, writes and versions." },
-  { id: "outreach", title: "Outreach", icon: "outreach", blurb: "Agents work a People list through a cascade of messages." },
-  { id: "leadgen", title: "Lead Generation", icon: "leadgen", blurb: "Agents find new leads against a target and write them into People." },
-  { id: "dream", title: "Dream Chart", icon: "dream", blurb: "The dream, the orchestrator, and every actor working toward it." },
-  { id: "commerce", title: "Commerce", icon: "commerce", blurb: "Agents buy from and sell to other companies over MCP, inside a budget you set." },
-  { id: "agents", title: "Agent Configurator", icon: "agents", blurb: "Give an agent a purpose, skills, tools, a model and an effort — then watch its score evolve." },
-  { id: "ronbot", title: "Ronbot", icon: "ronbot", blurb: "Order a Jamot-powered robot that runs on company memory." },
-];
+
+/**
+ * Catalog app id -> mockup icon key.
+ *
+ * The installable catalog and the mockup's rail were drawn from different
+ * vocabularies: the catalog has `lead-generation` where the mockup has
+ * `leadgen`, and carries apps the mockup never pictured. Anything unmapped
+ * falls back to the generic document mark rather than rendering no icon.
+ */
+export const CATALOG_ICON: Record<string, string> = {
+  crm: "crm",
+  outreach: "outreach",
+  "lead-generation": "leadgen",
+  "event-management": "tasks",
+  "supplier-catalog": "commerce",
+  "supplier-network": "org",
+  "restaurant-reservations": "tasks",
+};
+
+export function iconForCatalogApp(id: string): string {
+  return ICONS[CATALOG_ICON[id] ?? ""] ?? ICONS.docs!;
+}

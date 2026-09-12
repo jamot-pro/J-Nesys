@@ -1,6 +1,6 @@
 "use client";
 
-import { ICONS, type RailApp } from "./mockup-data";
+import { iconForCatalogApp, type RailApp } from "./mockup-data";
 
 const ICON_BTN: React.CSSProperties = {
   width: 44,
@@ -40,6 +40,7 @@ export function AppRail({
   activeId,
   onOpenApp,
   onHome,
+  onOpenChannels,
   onToggleChat,
   chatOpen,
   onOpenWallet,
@@ -51,6 +52,7 @@ export function AppRail({
   activeId: string | null;
   onOpenApp: (id: string) => void;
   onHome: () => void;
+  onOpenChannels: () => void;
   onToggleChat: () => void;
   /** Drives the chat button's label, as the mockup does:
    * railChatTitle = chatOpen ? 'Hide assistant chat' : 'Open assistant chat'. */
@@ -106,6 +108,19 @@ export function AppRail({
           overflowY: "auto",
         }}
       >
+        {apps.length === 0 ? (
+          <button
+            onClick={onOpenConfig}
+            title="No apps installed — open Apps settings"
+            style={{
+              ...ICON_BTN,
+              border: "1px dashed var(--color-divider)",
+              cursor: "pointer",
+            }}
+          >
+            <Icon d="M12 5v14M5 12h14" />
+          </button>
+        ) : null}
         {apps.map((app) => {
           const active = app.id === activeId;
           return (
@@ -121,7 +136,7 @@ export function AppRail({
                     : "none",
                 }}
               >
-                <Icon d={ICONS[app.icon] ?? ""} />
+                <Icon d={iconForCatalogApp(app.id)} />
               </button>
             </div>
           );
@@ -140,6 +155,9 @@ export function AppRail({
           padding: "var(--space-2) 0",
         }}
       >
+        <button onClick={onOpenChannels} title="Channels" style={ICON_BTN}>
+          <Icon d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z" />
+        </button>
         <button
           onClick={onToggleChat}
           title={chatOpen ? "Hide assistant chat" : "Open assistant chat"}
