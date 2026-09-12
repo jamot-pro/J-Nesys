@@ -11,13 +11,18 @@
     "lint": "echo \"no lint configured\""
   },
   "dependencies": {
+    "@ai-sdk/openai": "3.0.96",
+    "@copilotkit/react-core": "^1.67.1",
+    "@copilotkit/runtime": "^1.67.1",
     "@jamot/client": "workspace:*",
     "next": "16.3.1",
+    "qrcode": "^1.5.4",
     "react": "19.2.8",
     "react-dom": "19.2.8"
   },
   "devDependencies": {
     "@types/node": "^20",
+    "@types/qrcode": "^1.5.5",
     "@types/react": "^19",
     "@types/react-dom": "^19",
     "typescript": "^5"

@@ -1,6 +1,7 @@
 import type { FastifyInstance } from "fastify";
+import type { Id } from "@jamot/contracts";
 import type { JamotRepository } from "../repository.js";
-import { requireAuth } from "../rbac.js";
+import { requireAuth, resolveSpaceIdForActor } from "../rbac.js";
 import { fail } from "../util.js";
 
 export default async function notificationsRoutes(
@@ -13,9 +14,15 @@ export default async function notificationsRoutes(
   app.get("/notifications", { preHandler: requireAuth }, async (request) => {
     const query = request.query as { spaceId?: string };
     const actorId = request.session.actorId!;
+    // This route guards with requireAuth only, so nothing has resolved the
+    // "personal" alias for it — passing it straight through made Postgres
+    // reject the query with `invalid input syntax for type uuid: "personal"`.
+    const spaceId = query.spaceId
+      ? ((await resolveSpaceIdForActor(repository, actorId as Id, query.spaceId as Id)) ?? undefined)
+      : undefined;
     const items = await repository.listNotifications({
       actorId,
-      spaceId: query.spaceId,
+      spaceId,
     });
     return { items };
   });

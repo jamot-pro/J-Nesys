@@ -92,7 +92,7 @@ export default async function waRoutes(
       const body = parse(CreateAccountBody, request.body, reply);
       if (!body) return;
       const account = await repository.createWaAccount(
-        body.spaceId,
+        request.resolvedSpaceId ?? body.spaceId,
         body.label,
       );
       reply.code(201);
@@ -106,7 +106,7 @@ export default async function waRoutes(
     async (request, reply) => {
       const query = request.query as { spaceId?: string };
       if (!query.spaceId) return fail(reply, 400, "spaceId is required");
-      const accounts = await repository.listWaAccounts(query.spaceId);
+      const accounts = await repository.listWaAccounts(request.resolvedSpaceId ?? query.spaceId);
       const withState = await Promise.all(
         accounts.map(async (account) => {
           const state = await fetchStateBestEffort(account.id);
@@ -339,7 +339,7 @@ export default async function waRoutes(
       const body = parse(CreateChannelAccountBody, request.body, reply);
       if (!body) return;
       const account = await repository.createChannelAccount({
-        spaceId: body.spaceId,
+        spaceId: request.resolvedSpaceId ?? body.spaceId,
         protocol: body.protocol,
         label: body.label,
         identifier: body.identifier,
@@ -356,7 +356,7 @@ export default async function waRoutes(
     async (request, reply) => {
       const query = request.query as { spaceId?: string };
       if (!query.spaceId) return fail(reply, 400, "spaceId is required");
-      const accounts = await repository.listChannelAccounts(query.spaceId);
+      const accounts = await repository.listChannelAccounts(request.resolvedSpaceId ?? query.spaceId);
       const items = accounts.map((a) => ({
         ...a,
         token: a.token ? true : null,

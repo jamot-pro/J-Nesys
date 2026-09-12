@@ -6,10 +6,10 @@ import type { OrgPublicBranding } from "@jamot/client/branding";
 import { AppRail } from "./AppRail";
 import { ChatPanel } from "./ChatPanel";
 import { DiscoverDreams } from "./DiscoverDreams";
-import { OrgRail, type RailOrg } from "./OrgRail";
-import { APPS, initialsOf } from "./mockup-data";
+import { SystemConfig } from "./SystemConfig";
+import { APPS } from "./mockup-data";
 import { CommerceSection } from "../CommerceSection";
-import { LeadsSection } from "../LeadsSection";
+import { LeadGen } from "./LeadGen";
 import { OutreachSection } from "../OutreachSection";
 
 /** Rail apps that already have a backend behind them. Their screens are not
@@ -17,7 +17,7 @@ import { OutreachSection } from "../OutreachSection";
  * Commerce.dc.html) — they carry real data in design-system components, and the
  * mockup's own layout for each is still to be ported. */
 const WIRED: Record<string, React.ReactNode> = {
-  leadgen: <LeadsSection />,
+  leadgen: <LeadGen />,
   outreach: <OutreachSection />,
   commerce: <CommerceSection />,
 };
@@ -32,17 +32,16 @@ const MOON = "M21 12.8A9 9 0 1 1 11.2 3a7 7 0 0 0 9.8 9.8z";
  * only thing taken from the existing system is the API: the organization and
  * session come from the backend, everything else still renders the mockup's
  * own content until the matching endpoint is wired.
+ *
+ * One deliberate departure from the mockup: there is no org rail. This console
+ * is mono-org — it serves the single organization named by the subdomain — so
+ * a rail for switching between organizations has nothing to switch to.
  */
-export function OrgConsole({
-  branding,
-  orgs,
-}: {
-  branding: OrgPublicBranding;
-  orgs: RailOrg[];
-}) {
+export function OrgConsole({ branding }: { branding: OrgPublicBranding }) {
   const [chatOpen, setChatOpen] = useState(true);
   const [chatWidth, setChatWidth] = useState(360);
   const [activeApp, setActiveApp] = useState<string | null>(null);
+  const [configOpen, setConfigOpen] = useState(false);
   const [dark, setDark] = useState(true);
 
   // The mockup switches theme with body[data-theme], and its own .mark-light /
@@ -77,8 +76,9 @@ export function OrgConsole({
         onOpenApp={(id) => setActiveApp(id)}
         onHome={() => setActiveApp(null)}
         onToggleChat={() => setChatOpen((v) => !v)}
+        chatOpen={chatOpen}
         onOpenWallet={() => setActiveApp("wallet")}
-        onOpenConfig={() => setActiveApp("config")}
+        onOpenConfig={() => setConfigOpen(true)}
         onCycleTheme={() => setDark((v) => !v)}
         themeIcon={dark ? SUN : MOON}
       />
@@ -88,7 +88,6 @@ export function OrgConsole({
         style={{
           flex: 1,
           minWidth: 0,
-          order: 2,
           display: "flex",
           flexDirection: "column",
           background: "var(--color-bg)",
@@ -140,9 +139,7 @@ export function OrgConsole({
         </div>
       </main>
 
-      <OrgRail orgs={orgs} onPick={() => {}} onOpenSwitcher={() => {}} />
+      {configOpen ? <SystemConfig onClose={() => setConfigOpen(false)} /> : null}
     </div>
   );
 }
-
-export { initialsOf };

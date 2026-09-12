@@ -2053,3 +2053,92 @@ export async function updateDreamConfig(
     { method: "PUT", body: JSON.stringify(config) },
   );
 }
+// --- Channel accounts (Telegram / Matrix) and WhatsApp accounts -------------
+
+export interface ApiChannelAccount {
+  id: string;
+  spaceId: string;
+  protocol: "telegram" | "matrix";
+  label: string;
+  identifier: string | null;
+  /** true when a token is stored; the token itself is never returned. */
+  token: boolean | null;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface ApiWaAccount {
+  id: string;
+  spaceId: string;
+  label: string;
+  status?: string;
+  state?: { status?: string; qr?: string | null } | null;
+}
+
+export async function listChannelAccounts(spaceId: string): Promise<ApiChannelAccount[]> {
+  const data = await api<{ items: ApiChannelAccount[] }>(
+    `/api/wa/channels?spaceId=${encodeURIComponent(spaceId)}`,
+  );
+  return data.items;
+}
+
+export async function createChannelAccount(input: {
+  spaceId: string;
+  protocol: "telegram" | "matrix";
+  label: string;
+  identifier?: string;
+  token?: string;
+}): Promise<ApiChannelAccount> {
+  return api<ApiChannelAccount>("/api/wa/channels", {
+    method: "POST",
+    body: JSON.stringify(input),
+  });
+}
+
+export async function listWaAccounts(spaceId: string): Promise<ApiWaAccount[]> {
+  const data = await api<{ items: ApiWaAccount[] }>(
+    `/api/wa/accounts?spaceId=${encodeURIComponent(spaceId)}`,
+  );
+  return data.items;
+}
+
+export interface WaAccountState {
+  connection?: string;
+  /** Raw pairing payload; render it as a QR code for the phone to scan. */
+  qr?: string;
+  phone?: string;
+}
+
+export async function createWaAccount(input: {
+  spaceId: string;
+  label: string;
+}): Promise<ApiWaAccount> {
+  return api<ApiWaAccount>("/api/wa/accounts", {
+    method: "POST",
+    body: JSON.stringify(input),
+  });
+}
+
+export async function getWaAccountState(id: string): Promise<WaAccountState> {
+  return api<WaAccountState>(`/api/wa/accounts/${id}/state`);
+}
+
+/** Wipe the stored session and start a fresh pairing. */
+export async function resetWaAccount(id: string): Promise<void> {
+  await api<void>(`/api/wa/accounts/${id}/reset`, { method: "POST" });
+}
+
+export async function logoutWaAccount(id: string): Promise<void> {
+  await api<void>(`/api/wa/accounts/${id}/logout`, { method: "POST" });
+}
+
+/** Import a session paired elsewhere (see wa-pair.ts) as base64 file contents. */
+export async function importWaSession(
+  id: string,
+  files: Record<string, string>,
+): Promise<void> {
+  await api<void>(`/api/wa/accounts/${id}/session`, {
+    method: "POST",
+    body: JSON.stringify({ files }),
+  });
+}

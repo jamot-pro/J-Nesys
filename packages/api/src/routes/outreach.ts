@@ -54,7 +54,7 @@ export default async function outreachRoutes(
       const body = parse(CreateOutreachList, request.body, reply);
       if (!body) return;
       const list = await repo.createOutreachList({
-        spaceId: body.spaceId,
+        spaceId: request.resolvedSpaceId ?? body.spaceId,
         name: body.name,
         description: body.description,
         memberPersonIds: body.memberPersonIds,
@@ -62,7 +62,7 @@ export default async function outreachRoutes(
 
       await repo.recordEvent({
         type: "outreach.list.created",
-        spaceId: body.spaceId,
+        spaceId: request.resolvedSpaceId ?? body.spaceId,
         actorId: request.session.actorId ?? null,
         payload: { listId: list.id, name: list.name },
       });
@@ -74,7 +74,7 @@ export default async function outreachRoutes(
 
   app.get("/outreach/lists", { preHandler: requireAuth }, async (request, reply) => {
     const query = request.query as { spaceId?: string };
-    const spaceId = parse(Id, query.spaceId, reply);
+    const spaceId = parse(Id, request.resolvedSpaceId ?? query.spaceId, reply);
     if (!spaceId) return;
     if (!(await canAccessSpace(request, reply, spaceId))) return;
     return { items: await repo.listOutreachLists(spaceId) };
@@ -210,7 +210,7 @@ export default async function outreachRoutes(
       if (!body) return;
 
       const list = await repo.getOutreachList(body.listId);
-      if (!list || list.spaceId !== body.spaceId) {
+      if (!list || list.spaceId !== (request.resolvedSpaceId ?? body.spaceId)) {
         return fail(reply, 400, "source list does not exist in this space");
       }
       const agent = await repo.getAgent(body.agentId);
@@ -219,7 +219,7 @@ export default async function outreachRoutes(
       }
 
       const campaign = await repo.createOutreachCampaign({
-        spaceId: body.spaceId,
+        spaceId: request.resolvedSpaceId ?? body.spaceId,
         name: body.name,
         description: body.description,
         listId: body.listId,
@@ -241,7 +241,7 @@ export default async function outreachRoutes(
 
       await repo.recordEvent({
         type: "outreach.campaign.created",
-        spaceId: body.spaceId,
+        spaceId: request.resolvedSpaceId ?? body.spaceId,
         actorId: request.session.actorId ?? null,
         payload: { campaignId: campaign.id, name: campaign.name },
       });
@@ -256,7 +256,7 @@ export default async function outreachRoutes(
     { preHandler: requireAuth },
     async (request, reply) => {
       const query = request.query as { spaceId?: string };
-      const spaceId = parse(Id, query.spaceId, reply);
+      const spaceId = parse(Id, request.resolvedSpaceId ?? query.spaceId, reply);
       if (!spaceId) return;
       if (!(await canAccessSpace(request, reply, spaceId))) return;
       return { items: await repo.listOutreachCampaigns({ spaceId }) };

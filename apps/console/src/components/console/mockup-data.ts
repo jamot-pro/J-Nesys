@@ -51,30 +51,3 @@ export const APPS: RailApp[] = [
   { id: "agents", title: "Agent Configurator", icon: "agents", blurb: "Give an agent a purpose, skills, tools, a model and an effort — then watch its score evolve." },
   { id: "ronbot", title: "Ronbot", icon: "ronbot", blurb: "Order a Jamot-powered robot that runs on company memory." },
 ];
-
-export interface MockOrg {
-  id: string;
-  name: string;
-  role: string;
-  people: string;
-  agents: string;
-  unread: number;
-}
-
-export const ORGS: MockOrg[] = [
-  { id: "northbound", name: "Northbound Collective", role: "Super admin", people: "34", agents: "61", unread: 0 },
-  { id: "tidal", name: "Tidal Grid", role: "Super admin", people: "12", agents: "14", unread: 3 },
-  { id: "harbor", name: "Harbor & Fen", role: "Admin", people: "8", agents: "5", unread: 0 },
-  { id: "lumen", name: "Lumen Schools", role: "Member", people: "46", agents: "22", unread: 7 },
-  { id: "fairledger", name: "Fair Ledger", role: "Admin", people: "19", agents: "12", unread: 0 },
-];
-
-/** The mockup derives rail initials from the org name. */
-export function initialsOf(name: string): string {
-  return name
-    .split(/\s+/)
-    .filter(Boolean)
-    .slice(0, 2)
-    .map((w) => w[0]?.toUpperCase() ?? "")
-    .join("");
-}

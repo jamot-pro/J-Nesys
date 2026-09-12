@@ -14,6 +14,10 @@ declare module "fastify" {
   interface FastifyRequest {
     actor: Actor | null;
     person: Person | null;
+    /** Canonical space id set by requireSpaceAccess: the literal "personal"
+     * alias resolved to the actor's real personal space. Handlers must use
+     * this for queries rather than the raw request value. */
+    resolvedSpaceId?: Id;
   }
 }
 

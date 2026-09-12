@@ -1,6 +1,21 @@
 "use client";
 
 import { useState } from "react";
+import { UseAgentUpdate, useAgent } from "@copilotkit/react-core/v2";
+
+/**
+ * crypto.randomUUID() exists only in a secure context, so it is undefined on
+ * any plain-HTTP origin (local dev, a LAN address, a preview over http). It
+ * threw "crypto.randomUUID is not a function" and killed the send handler, so
+ * fall back to a random id when it is unavailable — message ids only need to
+ * be unique within the thread, not cryptographically strong.
+ */
+function newMessageId(): string {
+  if (typeof crypto !== "undefined" && typeof crypto.randomUUID === "function") {
+    return crypto.randomUUID();
+  }
+  return `m-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 10)}`;
+}
 
 export interface ChatMessage {
   who: string;
@@ -8,12 +23,11 @@ export interface ChatMessage {
 }
 
 /** Chat panel — a direct port of OrgConsole.dc.html's `chat` region
- * (lines 21–88), styles verbatim.
+ * (lines 21–88), styles verbatim, driven by CopilotKit.
  *
- * No agent runtime is wired yet: messages are echoed into local state so the
- * surface behaves, and the transcript starts empty rather than replaying the
- * mockup's scripted MARA/CONSOLE exchange, which was illustrative fixture
- * text. Wiring this to the real agent comes later.
+ * CopilotKit is used HEADLESS (useAgent) rather than through <CopilotChat>,
+ * so none of its own UI is rendered: the transcript and composer below are the
+ * mockup's markup, and the agent only supplies the messages and the run.
  */
 export function ChatPanel({
   width,
@@ -24,8 +38,27 @@ export function ChatPanel({
   onWidthChange: (w: number) => void;
   onCollapse: () => void;
 }) {
-  const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [draft, setDraft] = useState("");
+  const { agent } = useAgent({
+    updates: [UseAgentUpdate.OnMessagesChanged, UseAgentUpdate.OnRunStatusChanged],
+  });
+
+  // The mockup labels each turn with a speaker ("MARA", "CONSOLE"). Map the
+  // agent's roles onto that, and drop everything that is not a plain
+  // user/assistant turn — tool traffic has no place in this panel's design.
+  //
+  // Derived during render on purpose, NOT memoised on `agent.messages`:
+  // CopilotKit mutates that array in place, so its reference never changes and
+  // a useMemo keyed on it returns stale output forever — the re-render fires
+  // (via UseAgentUpdate.OnMessagesChanged) but shows nothing new. The mapping
+  // is trivial, so recomputing each render costs nothing.
+  const messages: ChatMessage[] = (agent.messages ?? [])
+    .filter((m) => m.role === "user" || m.role === "assistant")
+    .map((m) => ({
+      who: m.role === "user" ? "You" : "Console",
+      text: typeof m.content === "string" ? m.content : "",
+    }))
+    .filter((m) => m.text.trim().length > 0);
 
   function startResize(e: React.PointerEvent<HTMLDivElement>) {
     e.preventDefault();
@@ -43,9 +76,12 @@ export function ChatPanel({
 
   function send() {
     const text = draft.trim();
-    if (!text) return;
-    setMessages((m) => [...m, { who: "You", text }]);
+    // agent.isRunning guards against a second submit while a run is streaming,
+    // which would interleave two turns in the same thread.
+    if (!text || agent.isRunning) return;
+    agent.addMessage({ id: newMessageId(), role: "user", content: text });
     setDraft("");
+    void agent.runAgent();
   }
 
   return (
@@ -84,7 +120,7 @@ export function ChatPanel({
             <img className="mark-dark" src="/brand/jamot-wordmark-white.png" alt="Jamot" style={{ height: 19, width: "auto" }} />
             {/* eslint-enable @next/next/no-img-element */}
           </div>
-          <button className="btn btn-ghost btn-icon" title="New chat" style={{ flex: "none" }} onClick={() => setMessages([])}>
+          <button className="btn btn-ghost btn-icon" title="New chat" style={{ flex: "none" }} onClick={() => agent.setMessages([])}>
             <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
               <path d="M12 20h9M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4z" />
             </svg>
@@ -163,8 +199,8 @@ export function ChatPanel({
             onChange={(e) => setDraft(e.target.value)}
           />
           <div style={{ display: "flex", gap: "var(--space-2)", marginTop: "var(--space-2)" }}>
-            <button className="btn btn-primary" style={{ flex: 1 }} onClick={send}>
-              Send
+            <button className="btn btn-primary" style={{ flex: 1 }} onClick={send} disabled={agent.isRunning}>
+              {agent.isRunning ? "Working…" : "Send"}
               <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ marginLeft: "auto" }}>
                 <path d="M22 2 11 13M22 2l-7 20-4-9-9-4z" />
               </svg>
