@@ -127,6 +127,7 @@ export function OrgConsole({ branding }: { branding: OrgPublicBranding }) {
         onHome={() => setActiveApp(null)}
         onOpenWallet={() => setActiveApp("wallet")}
         onOpenChannels={() => setActiveApp("channels")}
+        chatDocked={!chatOpen}
         onOpenConfig={() => setConfigOpen(true)}
         onCycleTheme={() => setDark((v) => !v)}
         themeIcon={dark ? SUN : MOON}

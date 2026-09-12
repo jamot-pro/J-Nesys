@@ -41,6 +41,7 @@ export function AppRail({
   onOpenApp,
   onHome,
   onOpenChannels,
+  chatDocked,
   onOpenWallet,
   onOpenConfig,
   onCycleTheme,
@@ -51,6 +52,9 @@ export function AppRail({
   onOpenApp: (id: string) => void;
   onHome: () => void;
   onOpenChannels: () => void;
+  /** True while the chat pill is docked at the rail's foot: the lower group
+   *  then leaves that slot empty instead of putting an icon under it. */
+  chatDocked: boolean;
   onOpenWallet: () => void;
   onOpenConfig: () => void;
   onCycleTheme: () => void;
@@ -147,6 +151,7 @@ export function AppRail({
           alignItems: "center",
           gap: 2,
           padding: "var(--space-2) 0",
+          paddingBottom: chatDocked ? 60 : "var(--space-2)",
         }}
       >
         {/* Channels used the same speech bubble as the chat button below,
