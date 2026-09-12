@@ -10,7 +10,9 @@ import {
   listLeadProviders,
   runLeadList,
   updateLeadList,
+  listActors,
   type ApiAgent,
+  type ApiActor,
   type LeadList,
   type LeadProviderView,
   type LeadView,
@@ -97,6 +99,9 @@ export function LeadGen() {
   const { organizationId, spaceId } = useOrgScope();
 
   const [agents, setAgents] = useState<ApiAgent[]>([]);
+  const [actors, setActors] = useState<ApiActor[]>([]);
+  const mapRef = useRef<HTMLDivElement | null>(null);
+
   const [providers, setProviders] = useState<LeadProviderView[]>([]);
   const [lists, setLists] = useState<LeadList[]>([]);
   const [listId, setListId] = useState<string>("");
@@ -118,7 +123,31 @@ export function LeadGen() {
   const [running, setRunning] = useState(false);
   const [note, setNote] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
-  const mapRef = useRef<HTMLDivElement | null>(null);
+
+  /** An agent's name lives on its actor; role is what it does, not what it is. */
+  const agentName = useCallback(
+    (agent: ApiAgent) =>
+      actors.find((a) => a.id === agent.actorId)?.displayName ?? agent.role ?? agent.id.slice(0, 8),
+    [actors],
+  );
+
+  /** Assigns an agent to the selected list and keeps the local copy in step. */
+  const assignAgent = useCallback(
+    async (field: "agentId" | "enrichmentAgentId", value: string) => {
+      if (!listId) return;
+      try {
+        const updated = await updateLeadList(listId, { [field]: value || null });
+        setLists((current) => current.map((l) => (l.id === updated.id ? updated : l)));
+        setError(null);
+      } catch (err) {
+        setError(err instanceof Error ? err.message : "Could not assign that agent.");
+      }
+    },
+    [listId],
+  );
+
+  /** The list the agent selects apply to. */
+  const current = lists.find((l) => l.id === listId) ?? null;
 
   const load = useCallback(async () => {
     const [a, p, l] = await Promise.all([
@@ -258,16 +287,20 @@ export function LeadGen() {
         <section style={CARD}>
           <div style={{ display: "flex", alignItems: "baseline", gap: 8, flexWrap: "wrap" }}>
             <span style={UPPER}>Tell the agent the target</span>
-            <select className="input" style={{ marginLeft: "auto", height: 32, width: "auto", fontSize: 12 }}>
-              {agents.length === 0 ? (
-                <option>no agents</option>
-              ) : (
-                agents.map((a) => (
-                  <option key={a.id} value={a.id}>
-                    {a.role || a.purpose || a.id.slice(0, 8)}
-                  </option>
-                ))
-              )}
+            <select
+              className="input"
+              aria-label="Search agent"
+              style={{ marginLeft: "auto", height: 32, width: "auto", fontSize: 12 }}
+              value={current?.agentId ?? ""}
+              disabled={!listId}
+              onChange={(e) => void assignAgent("agentId", e.target.value)}
+            >
+              <option value="">{agents.length === 0 ? "no agents" : "unassigned"}</option>
+              {agents.map((a) => (
+                <option key={a.id} value={a.id}>
+                  {agentName(a)}
+                </option>
+              ))}
             </select>
           </div>
           <textarea
@@ -523,14 +556,17 @@ export function LeadGen() {
       <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit,minmax(260px,1fr))", gap: "var(--space-3)", marginTop: "var(--space-4)" }}>
         <div className="field">
           <label htmlFor="lg-eagent">Enrichment agent</label>
-          <select className="input" id="lg-eagent">
-            {agents.length === 0 ? (
-              <option>no agents</option>
-            ) : (
-              agents.map((a) => (
-                <option key={a.id} value={a.id}>{a.role || a.purpose || a.id.slice(0, 8)}</option>
-              ))
-            )}
+          <select
+            className="input"
+            id="lg-eagent"
+            value={current?.enrichmentAgentId ?? ""}
+            disabled={!listId}
+            onChange={(e) => void assignAgent("enrichmentAgentId", e.target.value)}
+          >
+            <option value="">{agents.length === 0 ? "no agents" : "unassigned"}</option>
+            {agents.map((a) => (
+              <option key={a.id} value={a.id}>{agentName(a)}</option>
+            ))}
           </select>
         </div>
         <div className="field">

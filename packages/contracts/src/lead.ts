@@ -111,6 +111,10 @@ export const LeadList = EntityBase.extend({
   description: z.string().default(""),
   persona: LeadPersona.default({}),
   area: LeadArea.nullable().default(null),
+  /** The agent that runs a search on this list, when one is assigned. */
+  agentId: Id.nullable().default(null),
+  /** The agent that enriches what the search found. */
+  enrichmentAgentId: Id.nullable().default(null),
   providerId: z.string().min(1),
   providerConfig: z.record(z.string(), z.unknown()).default({}),
   status: LeadListStatus.default("draft"),
@@ -153,6 +157,8 @@ export const LeadRunResult = z.object({
 export type LeadRunResult = z.infer<typeof LeadRunResult>;
 
 export const CreateLeadList = z.object({
+  agentId: Id.nullable().optional(),
+  enrichmentAgentId: Id.nullable().optional(),
   spaceId: Id,
   organizationId: Id.nullable().optional(),
   name: z.string().min(1),
@@ -165,6 +171,8 @@ export const CreateLeadList = z.object({
 export type CreateLeadList = z.infer<typeof CreateLeadList>;
 
 export const UpdateLeadList = z.object({
+  agentId: Id.nullable().optional(),
+  enrichmentAgentId: Id.nullable().optional(),
   name: z.string().min(1).optional(),
   description: z.string().optional(),
   persona: LeadPersona.optional(),

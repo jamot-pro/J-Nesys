@@ -175,7 +175,15 @@ export default async function agentsRoutes(
       return deny(reply, "You cannot modify this agent");
     }
 
-    const updated = await repository.updateAgent(id, body);
+    /* The name lives on the agent's actor, so it is not part of the agent
+       patch. An actor can otherwise only be renamed by itself; whoever may
+       manage the agent may rename it, which is the check already made above. */
+    const { name, ...agentPatch } = body;
+    if (name !== undefined) {
+      await repository.updateActor(agent.actorId, { displayName: name });
+    }
+
+    const updated = await repository.updateAgent(id, agentPatch);
     if (!updated) return fail(reply, 404, "agent not found");
 
     await repository.recordEvent({

@@ -86,6 +86,8 @@ export function createLeadGenerationService(
         description: input.description ?? "",
         persona: input.persona ?? { titles: [], seniority: [], functions: [], industries: [], companySizes: [], keywords: [], excludeEmails: [], summary: "" },
         area: input.area ?? null,
+        agentId: input.agentId ?? null,
+        enrichmentAgentId: input.enrichmentAgentId ?? null,
         providerId: input.providerId,
         providerConfig: input.providerConfig ?? {},
       });

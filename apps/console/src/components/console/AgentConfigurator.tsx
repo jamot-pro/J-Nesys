@@ -100,6 +100,7 @@ export function AgentConfigurator() {
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   const [purpose, setPurpose] = useState("");
+  const [name, setName] = useState("");
 
   const loadAgents = useCallback(async () => {
     const all = await getAgents();
@@ -137,8 +138,16 @@ export function AgentConfigurator() {
     [agents, selectedId],
   );
 
+  /** An agent's name lives on its actor, so it is read from the roster. */
+  const nameOf = useCallback(
+    (agent: ApiAgent) =>
+      actors.find((a) => a.id === agent.actorId)?.displayName ?? agent.role ?? "Untitled agent",
+    [actors],
+  );
+
   useEffect(() => {
     setPurpose(selected?.purpose ?? "");
+    setName(selected ? nameOf(selected) : "");
     if (!selected) {
       setRelationships([]);
       setActivity([]);
@@ -261,7 +270,7 @@ export function AgentConfigurator() {
                         whiteSpace: "nowrap",
                       }}
                     >
-                      {a.role ?? "Untitled agent"}
+                      {nameOf(a)}
                     </span>
                     <span style={{ flex: "none", fontFamily: MONO, fontSize: 12, fontWeight: 700, color: "var(--accent-ink)" }}>
                       {score ?? "—"}
@@ -289,9 +298,38 @@ export function AgentConfigurator() {
               <section style={CARD}>
                 <div style={{ display: "flex", alignItems: "flex-start", gap: "var(--space-4)", flexWrap: "wrap" }}>
                   <div style={{ flex: 1, minWidth: 220 }}>
-                    <h2 style={{ margin: 0, fontSize: 24, letterSpacing: "-0.01em" }}>
-                      {selected.role ?? "Untitled agent"}
-                    </h2>
+                    <input
+                      aria-label="Agent name"
+                      value={name}
+                      disabled={busy}
+                      onChange={(e) => setName(e.target.value)}
+                      onBlur={() => {
+                        const next = name.trim();
+                        if (next && next !== nameOf(selected)) {
+                          void run(async () => {
+                            await updateAgent(selected.id, { name: next });
+                            setActors(await listActors());
+                          });
+                        } else {
+                          setName(nameOf(selected));
+                        }
+                      }}
+                      style={{
+                        width: "100%",
+                        margin: 0,
+                        padding: 0,
+                        background: "none",
+                        border: "none",
+                        borderBottom: "1px solid transparent",
+                        color: "var(--color-text)",
+                        font: "inherit",
+                        fontFamily: "var(--font-heading)",
+                        fontWeight: 800,
+                        fontSize: 24,
+                        letterSpacing: "-0.01em",
+                      }}
+                      onFocus={(e) => (e.currentTarget.style.borderBottomColor = "var(--color-divider)")}
+                    />
                     <p style={{ margin: "4px 0 0", fontSize: 12, letterSpacing: "0.06em", textTransform: "uppercase", color: DIM }}>
                       {selected.harness.kind} · {selected.skillIds.length} skills ·{" "}
                       {selected.connectorIds.length} tools
