@@ -5,11 +5,13 @@ import QRCode from "qrcode";
 import {
   createWaAccount,
   getWaAccountState,
+  getWaDiagnostics,
   importWaSession,
   listWaAccounts,
   resetWaAccount,
   type ApiWaAccount,
   type WaAccountState,
+  type WaDiagnostics,
 } from "@jamot/client";
 
 import { useOrgScope } from "../console-context";
@@ -39,6 +41,7 @@ export function WhatsAppPairing() {
   const [busy, setBusy] = useState(false);
   const [waited, setWaited] = useState(0);
   const timer = useRef<ReturnType<typeof setInterval> | null>(null);
+  const [diagnostics, setDiagnostics] = useState<WaDiagnostics | null>(null);
   const [importing, setImporting] = useState(false);
   const [imported, setImported] = useState<string | null>(null);
 
@@ -167,6 +170,15 @@ export function WhatsAppPairing() {
     }
   }
 
+  /* Once the wait stops looking like latency, ask the server what it sees.
+     Fetched once, not polled: none of it changes second to second. */
+  useEffect(() => {
+    if (!selected || diagnostics || waited < 10) return;
+    void getWaDiagnostics()
+      .then(setDiagnostics)
+      .catch(() => setDiagnostics(null));
+  }, [selected, waited, diagnostics]);
+
   const connected = state?.connection === "open";
   // ~30s of polling with no QR and no connection is the datacenter-IP symptom.
   const stalled = Boolean(selected) && !connected && !state?.qr && waited >= 10;
@@ -230,11 +242,54 @@ export function WhatsAppPairing() {
           ) : stalled ? (
             <>
               <p className="card-body">
-                No QR after {waited * 3}s. WhatsApp refuses the new-pairing handshake from datacenter
-                IPs, which is what this server is on — the connection loops without ever producing a
-                code. Resuming a session it already knows is a different handshake, and that one it
-                accepts, so pair once from your own network and hand the result over.
+                No QR after {waited * 3}s.{" "}
+                {diagnostics && !diagnostics.managerConfigured
+                  ? "This server has no WhatsApp manager running — WHATSAPP_SESSION_DIR is unset, so no pairing can start at all. That is a server setting, not something you can fix here."
+                  : diagnostics && diagnostics.sessionDirWritable === false
+                    ? `The session directory (${diagnostics.sessionDir}) is not writable, so the handshake cannot keep its keys. That is a server setting.`
+                    : "WhatsApp refuses the new-pairing handshake from datacenter IPs, which is what this server is on — the connection loops without ever producing a code. Resuming a session it already knows is a different handshake, and that one it accepts, so pair once from your own network and hand the result over."}
               </p>
+
+              {diagnostics ? (
+                <dl
+                  style={{
+                    margin: "var(--space-3) 0 0",
+                    display: "grid",
+                    gridTemplateColumns: "auto 1fr",
+                    gap: "4px var(--space-3)",
+                    fontSize: 12,
+                    color: MUTED,
+                  }}
+                >
+                  <dt>Manager</dt>
+                  <dd style={{ margin: 0 }}>{diagnostics.managerConfigured ? "running" : "not configured"}</dd>
+                  <dt>Session disk</dt>
+                  <dd style={{ margin: 0 }}>
+                    {diagnostics.sessionDirWritable === null
+                      ? "—"
+                      : diagnostics.sessionDirWritable
+                        ? "writable"
+                        : "not writable"}
+                  </dd>
+                  <dt>Proxy</dt>
+                  <dd style={{ margin: 0 }}>{diagnostics.proxyConfigured ? "configured" : "none"}</dd>
+                  <dt>Server egress IP</dt>
+                  <dd style={{ margin: 0 }}>{diagnostics.egressIp ?? "unknown"}</dd>
+                  <dt>Handshake attempts</dt>
+                  <dd style={{ margin: 0 }}>
+                    {diagnostics.accounts.reduce((n, a) => n + a.attempts, 0)}
+                    {diagnostics.accounts.some((a) => a.sawQr) ? " · a QR did arrive at least once" : ""}
+                  </dd>
+                  {diagnostics.accounts.find((a) => a.lastError) ? (
+                    <>
+                      <dt>Last error</dt>
+                      <dd style={{ margin: 0 }}>
+                        {diagnostics.accounts.find((a) => a.lastError)?.lastError}
+                      </dd>
+                    </>
+                  ) : null}
+                </dl>
+              ) : null}
               <p className="card-body" style={{ marginTop: "var(--space-2)" }}>
                 Run this on your own machine. It prints the QR in the terminal, then signs in and
                 uploads the paired session here on its own:

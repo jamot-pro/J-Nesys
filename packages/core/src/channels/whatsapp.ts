@@ -16,6 +16,12 @@ export type WaConnection = "connecting" | "open" | "close";
 export interface WaState {
   connection: WaConnection;
   qr?: string;
+  /** Diagnostics: enough to tell "never got a QR" from "QR expired". */
+  attempts?: number;
+  sawQr?: boolean;
+  lastCloseCode?: number;
+  lastError?: string;
+  lastEventAt?: string;
 }
 
 export interface WaChat {
@@ -225,13 +231,16 @@ export function createWhatsAppAdapter(
         fetchAgent: proxyAgent,
       });
       sock = socket;
+      state.attempts = (state.attempts ?? 0) + 1;
 
       socket.ev.on("creds.update", saveCreds);
 
       socket.ev.on("connection.update", (update) => {
+        state.lastEventAt = new Date().toISOString();
         if (update.qr) {
           state.connection = "connecting";
           state.qr = update.qr;
+          state.sawQr = true;
           console.log(
             "[whatsapp] pairing QR generated",
             update.qr.slice(0, 16),
@@ -260,6 +269,8 @@ export function createWhatsAppAdapter(
               statusCode !== undefined ? `, status=${statusCode}` : ""
             }${errorMessage ? ` — ${errorMessage}` : ""}`,
           );
+          state.lastCloseCode = statusCode;
+          state.lastError = errorMessage;
           if (statusCode === DisconnectReason.restartRequired) {
             // WhatsApp asked us to restart the socket — no backoff, no wipe.
             console.log("[whatsapp] restart required — reconnecting immediately");

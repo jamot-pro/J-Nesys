@@ -2415,3 +2415,25 @@ export async function updateConnector(
 export async function deleteConnector(id: string): Promise<void> {
   await api<void>(`/api/connectors/${encodeURIComponent(id)}`, { method: "DELETE" });
 }
+
+export interface WaDiagnostics {
+  managerConfigured: boolean;
+  sessionDir: string | null;
+  sessionDirWritable: boolean | null;
+  proxyConfigured: boolean;
+  egressIp: string | null;
+  accounts: {
+    connection: string;
+    hasQr: boolean;
+    sawQr: boolean;
+    attempts: number;
+    lastCloseCode: number | null;
+    lastError: string | null;
+    lastEventAt: string | null;
+  }[];
+}
+
+/** What the server can see about WhatsApp pairing, for when no QR arrives. */
+export async function getWaDiagnostics(): Promise<WaDiagnostics> {
+  return api<WaDiagnostics>("/api/wa/diagnostics");
+}
