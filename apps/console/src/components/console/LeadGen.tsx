@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import {
   createLeadList,
+  enrichLead,
   getAgents,
   listLeadListLeads,
   listLeadLists,
@@ -32,6 +33,28 @@ const UPPER = {
 const TILES: string[] = [];
 for (let y = 9; y <= 11; y++) {
   for (let x = 15; x <= 17; x++) TILES.push(`https://tile.openstreetmap.org/5/${x}/${y}.png`);
+}
+
+/** Verbatim from the mockup's AREA_MODES and ENRICH_TASKS. */
+const AREA_MODES = [
+  { id: "places", label: "Region or city" },
+  { id: "box", label: "Box on map" },
+  { id: "radius", label: "Radius" },
+] as const;
+type AreaMode = (typeof AREA_MODES)[number]["id"];
+
+const ENRICH_TASKS = [
+  "Find and verify email",
+  "Verify phone and channel",
+  "Write a context summary",
+  "Score fit against the ICP",
+  "Find the public profile",
+];
+
+interface LogLine {
+  when: string;
+  who: string;
+  text: string;
 }
 
 const CARD: React.CSSProperties = {
@@ -85,6 +108,12 @@ export function LeadGen() {
   const [volume, setVolume] = useState(50);
   const [radius, setRadius] = useState(120);
   const [pin, setPin] = useState({ x: 50, y: 50 });
+  const [areaMode, setAreaMode] = useState<AreaMode>("radius");
+  const [box, setBox] = useState({ x: 30, y: 30, w: 0, h: 0 });
+  const [enrichTask, setEnrichTask] = useState(ENRICH_TASKS[0]!);
+  const [enrichScope, setEnrichScope] = useState<"new" | "list" | "missing">("new");
+  const [enriching, setEnriching] = useState(false);
+  const [log, setLog] = useState<LogLine[]>([]);
 
   const [running, setRunning] = useState(false);
   const [note, setNote] = useState<string | null>(null);
@@ -153,6 +182,44 @@ export function LeadGen() {
     } finally {
       setRunning(false);
     }
+  }
+
+
+  async function runEnrichment() {
+    if (!listId || enriching) return;
+    setEnriching(true);
+    setError(null);
+    const stamp = () => new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
+    const add = (who: string, text: string) => setLog((l) => [{ when: stamp(), who, text }, ...l].slice(0, 40));
+
+    // "Applies to" narrows which records the agent touches. `missing` uses the
+    // fields the API actually returns, so it never claims to filter on
+    // something the payload does not carry.
+    const targets = results.filter((r) => {
+      if (!r.person) return false;
+      if (enrichScope === "new") return r.status === "new";
+      if (enrichScope === "missing") return !r.person.email || !r.person.title;
+      return true;
+    });
+
+    add("Enrichment", `${enrichTask} · ${targets.length} record${targets.length === 1 ? "" : "s"}`);
+    let done = 0;
+    for (const target of targets) {
+      if (!target.person) continue;
+      try {
+        await enrichLead(listId, target.person.id);
+        done += 1;
+      } catch (err) {
+        add("Error", `${target.person.displayName}: ${err instanceof Error ? err.message : "failed"}`);
+      }
+    }
+    add("Enrichment", `${done} of ${targets.length} enriched`);
+    try {
+      setResults(await listLeadListLeads(listId));
+    } catch {
+      // The log already records what happened; a refresh failure is not fatal.
+    }
+    setEnriching(false);
   }
 
   return (
@@ -250,8 +317,21 @@ export function LeadGen() {
         <div style={{ display: "flex", alignItems: "baseline", gap: "var(--space-3)", flexWrap: "wrap" }}>
           <span style={UPPER}>Geographic area</span>
           <span style={{ fontSize: 12, color: MUTED }}>
-            {places.length ? `${places.join(", ")} · ${radius} km` : "No area set"}
+            {places.length ? `${places.join(", ")}${areaMode === "radius" ? ` · ${radius} km` : ""}` : "No area set"}
           </span>
+          <div className="seg" style={{ marginLeft: "auto" }}>
+            {AREA_MODES.map((m) => (
+              <label key={m.id} className="seg-opt">
+                <input
+                  type="radio"
+                  name="areamode"
+                  checked={areaMode === m.id}
+                  onChange={() => setAreaMode(m.id)}
+                />
+                {m.label}
+              </label>
+            ))}
+          </div>
         </div>
 
         <div style={{ display: "flex", gap: "var(--space-3)", flexWrap: "wrap", marginTop: "var(--space-3)", alignItems: "flex-start" }}>
@@ -260,7 +340,32 @@ export function LeadGen() {
             onMouseDown={(e) => {
               const r = mapRef.current?.getBoundingClientRect();
               if (!r) return;
-              setPin({ x: ((e.clientX - r.left) / r.width) * 100, y: ((e.clientY - r.top) / r.height) * 100 });
+              const pct = (ev: { clientX: number; clientY: number }) => ({
+                x: ((ev.clientX - r.left) / r.width) * 100,
+                y: ((ev.clientY - r.top) / r.height) * 100,
+              });
+              if (areaMode !== "box") {
+                setPin(pct(e));
+                return;
+              }
+              // Box mode: drag a rectangle. Normalised so dragging up or left
+              // still produces a positive width and height.
+              const start = pct(e);
+              const move = (ev: MouseEvent) => {
+                const now = pct(ev);
+                setBox({
+                  x: Math.min(start.x, now.x),
+                  y: Math.min(start.y, now.y),
+                  w: Math.abs(now.x - start.x),
+                  h: Math.abs(now.y - start.y),
+                });
+              };
+              const up = () => {
+                window.removeEventListener("mousemove", move);
+                window.removeEventListener("mouseup", up);
+              };
+              window.addEventListener("mousemove", move);
+              window.addEventListener("mouseup", up);
             }}
             style={{ flex: 1, minWidth: 280, position: "relative", height: 360, border: "1px solid var(--color-divider)", borderRadius: "var(--radius-sm)", overflow: "hidden", cursor: "crosshair" }}
           >
@@ -270,6 +375,22 @@ export function LeadGen() {
                 <img key={src} src={src} alt="" width={256} height={256} style={{ display: "block", width: 256, height: 256 }} />
               ))}
             </div>
+            {areaMode === "box" ? (
+              <div
+                style={{
+                  position: "absolute",
+                  left: `${box.x}%`,
+                  top: `${box.y}%`,
+                  width: `${box.w}%`,
+                  height: `${box.h}%`,
+                  border: "2px solid var(--color-accent)",
+                  background: "color-mix(in srgb, var(--color-accent) 14%, transparent)",
+                  pointerEvents: "none",
+                }}
+              />
+            ) : null}
+            {areaMode === "radius" ? (
+            <>
             <div
               style={{
                 position: "absolute",
@@ -285,6 +406,8 @@ export function LeadGen() {
               }}
             />
             <div style={{ position: "absolute", left: `${pin.x}%`, top: `${pin.y}%`, width: 12, height: 12, transform: "translate(-50%,-50%)", borderRadius: 999, background: "var(--color-accent)", boxShadow: "0 0 0 3px var(--color-bg)", pointerEvents: "none" }} />
+            </>
+            ) : null}
             <span style={{ position: "absolute", left: 8, bottom: 6, fontFamily: "ui-monospace,'SF Mono',Menlo,monospace", fontSize: 10, color: "color-mix(in srgb, var(--color-text) 70%, transparent)" }}>
               © OpenStreetMap
             </span>
@@ -306,6 +429,8 @@ export function LeadGen() {
                 }}
               />
             </div>
+            {areaMode === "radius" ? (
+            <>
             <div className="field">
               <label htmlFor="lg-radius">Radius — {radius} km</label>
               <input className="input" id="lg-radius" type="range" min={5} max={400} step={5} value={radius} onChange={(e) => setRadius(Number(e.target.value))} />
@@ -313,6 +438,13 @@ export function LeadGen() {
             <p style={{ margin: 0, fontSize: 12, lineHeight: 1.55, color: MUTED }}>
               Click the map to move the centre, then set how far out the agent may look.
             </p>
+            </>
+            ) : areaMode === "box" ? (
+              <p style={{ margin: 0, fontSize: 12, lineHeight: 1.55, color: MUTED }}>
+                Drag across the map to box a region. The agent treats the union of the box and every
+                named place as the search area.
+              </p>
+            ) : null}
             <div style={{ display: "flex", flexWrap: "wrap", gap: 8 }}>
               {places.map((p, i) => (
                 <Chip key={`${p}-${i}`} text={p} onRemove={() => setPlaces((v) => v.filter((_, j) => j !== i))} />
@@ -366,6 +498,68 @@ export function LeadGen() {
             )}
           </tbody>
         </table>
+      </div>
+
+      <div className="hr" style={{ margin: "var(--space-6) 0 var(--space-4)" }} />
+
+      <div style={{ display: "flex", alignItems: "flex-end", gap: "var(--space-4)", flexWrap: "wrap" }}>
+        <div style={{ flex: 1, minWidth: 240 }}>
+          <h2 style={{ margin: 0, fontSize: 20 }}>Enrichment</h2>
+          <p style={{ margin: "6px 0 0", fontSize: 13, lineHeight: 1.6, color: MUTED, maxWidth: "62ch" }}>
+            A separate agent, a separate task. Enrichment fills in what the search could not.
+          </p>
+        </div>
+        <button
+          className="btn btn-primary"
+          style={{ justifyContent: "flex-start" }}
+          onClick={() => void runEnrichment()}
+          disabled={enriching || !listId || results.length === 0}
+        >
+          {enriching ? "Enriching…" : "Enrich"}
+        </button>
+      </div>
+
+      <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit,minmax(260px,1fr))", gap: "var(--space-3)", marginTop: "var(--space-4)" }}>
+        <div className="field">
+          <label htmlFor="lg-eagent">Enrichment agent</label>
+          <select className="input" id="lg-eagent">
+            {agents.length === 0 ? (
+              <option>no agents</option>
+            ) : (
+              agents.map((a) => (
+                <option key={a.id} value={a.id}>{a.role || a.purpose || a.id.slice(0, 8)}</option>
+              ))
+            )}
+          </select>
+        </div>
+        <div className="field">
+          <label htmlFor="lg-etask">Task</label>
+          <select className="input" id="lg-etask" value={enrichTask} onChange={(e) => setEnrichTask(e.target.value)}>
+            {ENRICH_TASKS.map((t) => <option key={t} value={t}>{t}</option>)}
+          </select>
+        </div>
+        <div className="field">
+          <label htmlFor="lg-escope">Applies to</label>
+          <select className="input" id="lg-escope" value={enrichScope} onChange={(e) => setEnrichScope(e.target.value as typeof enrichScope)}>
+            <option value="new">Leads from the last run</option>
+            <option value="list">The whole destination list</option>
+            <option value="missing">Only records missing that field</option>
+          </select>
+        </div>
+      </div>
+
+      <div style={{ marginTop: "var(--space-4)", display: "flex", flexDirection: "column", gap: 10 }}>
+        {log.length === 0 ? (
+          <p style={{ margin: 0, fontSize: 13, color: MUTED }}>No enrichment runs yet.</p>
+        ) : (
+          log.map((l, i) => (
+            <div key={i} style={{ display: "flex", gap: 10, alignItems: "baseline", fontSize: 13, lineHeight: 1.5, borderBottom: "1px solid var(--color-divider)", paddingBottom: 9 }}>
+              <span style={{ flex: "none", fontFamily: "ui-monospace,'SF Mono',Menlo,monospace", fontSize: 11, color: "color-mix(in srgb, var(--color-text) 70%, transparent)" }}>{l.when}</span>
+              <span style={{ flex: "none", fontFamily: "var(--font-heading)", fontWeight: 800, fontSize: 11, letterSpacing: "0.06em", textTransform: "uppercase", color: "var(--accent-ink)" }}>{l.who}</span>
+              <span style={{ flex: 1, minWidth: 0 }}>{l.text}</span>
+            </div>
+          ))
+        )}
       </div>
     </div>
   );
