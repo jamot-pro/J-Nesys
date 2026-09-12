@@ -2437,3 +2437,44 @@ export interface WaDiagnostics {
 export async function getWaDiagnostics(): Promise<WaDiagnostics> {
   return api<WaDiagnostics>("/api/wa/diagnostics");
 }
+
+/* ---- Google connector -------------------------------------------------- */
+
+export interface GoogleConnectorStatus {
+  connected: boolean;
+  connectorId?: string;
+  status?: string;
+  email?: string | null;
+  lastSyncAt?: string | null;
+  contactsSynced?: number;
+  sendersSynced?: number;
+}
+
+export async function getGoogleStatus(spaceId: string): Promise<GoogleConnectorStatus> {
+  return api<GoogleConnectorStatus>(
+    `/api/google/status?spaceId=${encodeURIComponent(spaceId)}`,
+  );
+}
+
+/**
+ * Where to send the browser to start the Google grant. This is a redirect, not
+ * a fetch: the flow leaves the app for Google's consent screen and comes back
+ * through the API's callback, so it cannot be done with XHR.
+ */
+export function googleConnectUrl(spaceId: string): string {
+  return `${apiBaseUrl()}/api/google/start?spaceId=${encodeURIComponent(spaceId)}`;
+}
+
+export async function syncGoogle(spaceId: string): Promise<{
+  contactsSynced?: number;
+  sendersSynced?: number;
+}> {
+  return api("/api/google/sync", {
+    method: "POST",
+    body: JSON.stringify({ spaceId }),
+  });
+}
+
+export async function disconnectGoogle(connectorId: string): Promise<void> {
+  await api<void>(`/api/google/${encodeURIComponent(connectorId)}`, { method: "DELETE" });
+}

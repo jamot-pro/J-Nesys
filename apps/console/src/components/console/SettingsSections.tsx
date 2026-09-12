@@ -3,21 +3,34 @@
 import { useCallback, useEffect, useState } from "react";
 import {
   changePassword,
+  createComposioConnection,
   createConnector,
   createSkill,
   deleteConnector,
+  deleteComposioConnection,
+  disconnectGoogle,
   deleteSkill,
   forgetMemory,
+  getComposioKeyConfigured,
+  getGoogleStatus,
   getMe,
+  googleConnectUrl,
+  listComposioConnections,
+  listComposioToolkits,
   listConnectors,
   listMemory,
   listSkills,
+  setComposioKey,
   storeMemory,
+  syncGoogle,
   updateConnector,
   updateOwnActor,
   updateOwnProfile,
   updateSkill,
   type ApiConnector,
+  type ComposioConnection,
+  type ComposioToolkit,
+  type GoogleConnectorStatus,
   type ApiMemoryEntry,
   type ApiSkill,
   type MeResponse,
@@ -419,6 +432,281 @@ export function MemorySection() {
   );
 }
 
+
+/* ---- Google ----------------------------------------------------------- */
+
+/**
+ * Google — one grant, covering Gmail and Contacts read access.
+ *
+ * The consent screen is a redirect, not a fetch: the browser leaves for Google
+ * and comes back through the API's callback, so "Connect" is a link.
+ *
+ * Maps is deliberately absent. Google Maps Platform authenticates with an API
+ * key, not a user OAuth grant — there is nothing for a person to consent to —
+ * so it belongs with the key-based connectors below, not here.
+ */
+function GoogleBlock() {
+  const { spaceId } = useOrgScope();
+  const { data: status, error, note, busy, run } = useSection<GoogleConnectorStatus>(() =>
+    getGoogleStatus(spaceId),
+  );
+
+  return (
+    <>
+      <h3 style={{ fontSize: 15, margin: "0 0 var(--space-3)" }}>Google</h3>
+      <Feedback error={error} note={note} />
+
+      {status === null ? (
+        <p style={{ fontSize: 14, color: MUTED }}>Loading…</p>
+      ) : status.connected ? (
+        <div className="card">
+          <div className="card-kicker">Connected</div>
+          <div className="card-title">{status.email ?? "Google account"}</div>
+          <p className="card-body">
+            {status.contactsSynced ?? 0} contacts and {status.sendersSynced ?? 0} Gmail senders
+            imported into People
+            {status.lastSyncAt ? ` · last sync ${new Date(status.lastSyncAt).toLocaleString()}` : ""}.
+          </p>
+          <div style={{ display: "flex", gap: "var(--space-2)", marginTop: "var(--space-3)", flexWrap: "wrap" }}>
+            <button
+              className="btn btn-secondary"
+              disabled={busy}
+              onClick={() =>
+                void run(async () => {
+                  const result = await syncGoogle(spaceId);
+                  return result;
+                }, "Sync finished.")
+              }
+            >
+              {busy ? "Syncing…" : "Sync now"}
+            </button>
+            {status.connectorId ? (
+              <button
+                className="btn btn-ghost"
+                disabled={busy}
+                onClick={() => void run(() => disconnectGoogle(status.connectorId!), "Disconnected.")}
+              >
+                Disconnect
+              </button>
+            ) : null}
+          </div>
+        </div>
+      ) : (
+        <div className="card">
+          <div className="card-title">Connect a Google account</div>
+          <p className="card-body">
+            Grants read access to <strong>Gmail</strong> and <strong>Contacts</strong>. Everyone you
+            correspond with becomes a person your agents can act for or reach out to.
+          </p>
+          <a
+            className="btn btn-primary"
+            href={googleConnectUrl(spaceId)}
+            style={{ marginTop: "var(--space-3)", justifyContent: "flex-start", textDecoration: "none" }}
+          >
+            Connect Google
+          </a>
+        </div>
+      )}
+
+      <p style={{ margin: "var(--space-3) 0 0", fontSize: 12, color: DIM }}>
+        Maps is not here: Google Maps Platform authenticates with an API key rather than a personal
+        grant, so add it below as a key-based connector.
+      </p>
+    </>
+  );
+}
+
+/* ---- Composio --------------------------------------------------------- */
+
+/**
+ * Composio — the hosted catalog of third-party connectors.
+ *
+ * The catalog is only reachable once a platform API key is stored, so the key
+ * is asked for first rather than showing an empty, unexplained list. Connecting
+ * a toolkit is an OAuth redirect owned by Composio; the app leaves and returns
+ * through the API's callback.
+ */
+function ComposioBlock() {
+  const { organizationId } = useOrgScope();
+  const { data, error, note, busy, run } = useSection<{
+    configured: boolean;
+    toolkits: ComposioToolkit[];
+    connections: ComposioConnection[];
+  }>(async () => {
+    const { configured } = await getComposioKeyConfigured();
+    if (!configured) return { configured: false, toolkits: [], connections: [] };
+    const [toolkits, connections] = await Promise.all([
+      listComposioToolkits().catch(() => []),
+      listComposioConnections(organizationId).catch(() => []),
+    ]);
+    return { configured: true, toolkits, connections };
+  });
+
+  const [key, setKey] = useState("");
+  const [query, setQuery] = useState("");
+
+  if (!data) return <Feedback error={error} note={error ? null : "Loading Composio…"} />;
+
+  const connectedKeys = new Set(data.connections.map((c) => c.toolkit));
+  const matches = data.toolkits
+    .filter((t) => {
+      const q = query.trim().toLowerCase();
+      if (!q) return true;
+      return `${t.name} ${t.key} ${t.description ?? ""}`.toLowerCase().includes(q);
+    })
+    .slice(0, query.trim() ? 60 : 24);
+
+  return (
+    <>
+      <h3 style={{ fontSize: 15, margin: "var(--space-6) 0 var(--space-3)" }}>Composio</h3>
+      <Feedback error={error} note={note} />
+
+      {!data.configured ? (
+        <div className="card">
+          <div className="card-kicker">Catalog unavailable</div>
+          <div className="card-title">No Composio API key</div>
+          <p className="card-body">
+            The connector catalog lives behind a Composio key. Add one and the full toolkit list
+            appears here.
+          </p>
+          <div className="field" style={{ marginTop: "var(--space-3)" }}>
+            <label htmlFor="cmp-key">Composio API key</label>
+            <input
+              className="input"
+              id="cmp-key"
+              type="password"
+              autoComplete="off"
+              value={key}
+              onChange={(e) => setKey(e.target.value)}
+            />
+          </div>
+          <button
+            className="btn btn-primary"
+            style={{ marginTop: "var(--space-3)" }}
+            disabled={busy || key.length === 0}
+            onClick={() =>
+              void run(async () => {
+                await setComposioKey(key);
+                setKey("");
+              }, "Key stored.")
+            }
+          >
+            Save key
+          </button>
+        </div>
+      ) : (
+        <>
+          {data.connections.length > 0 ? (
+            <table className="table" style={{ marginBottom: "var(--space-4)" }}>
+              <thead>
+                <tr><th>Toolkit</th><th>Sharing</th><th>Status</th><th /></tr>
+              </thead>
+              <tbody>
+                {data.connections.map((c) => (
+                  <tr key={c.id}>
+                    <td>{c.toolkit}</td>
+                    <td style={{ color: MUTED }}>{c.sharing}</td>
+                    <td>
+                      <span className={c.status === "connected" || c.accountStatus === "ACTIVE" ? "tag tag-accent" : "tag tag-neutral"}>
+                        {c.accountStatus ?? c.status}
+                      </span>
+                    </td>
+                    <td style={{ whiteSpace: "nowrap" }}>
+                      <button
+                        className="btn btn-ghost"
+                        disabled={busy}
+                        onClick={() => void run(() => deleteComposioConnection(c.id), "Disconnected.")}
+                      >
+                        Disconnect
+                      </button>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          ) : null}
+
+          <div className="field">
+            <label htmlFor="cmp-search">Search the catalog</label>
+            <input
+              className="input"
+              id="cmp-search"
+              placeholder="gmail, maps, slack, notion…"
+              value={query}
+              onChange={(e) => setQuery(e.target.value)}
+            />
+          </div>
+
+          {data.toolkits.length === 0 ? (
+            <p style={{ marginTop: "var(--space-3)", fontSize: 14, color: MUTED }}>
+              The key is stored but the catalog came back empty — Composio may have rejected it.
+            </p>
+          ) : (
+            <>
+              <div
+                style={{
+                  marginTop: "var(--space-3)",
+                  display: "grid",
+                  gridTemplateColumns: "repeat(auto-fill,minmax(220px,1fr))",
+                  gap: "var(--space-2)",
+                }}
+              >
+                {matches.map((t) => {
+                  const already = connectedKeys.has(t.key);
+                  return (
+                    <div
+                      key={t.key}
+                      style={{
+                        display: "flex",
+                        flexDirection: "column",
+                        gap: 6,
+                        border: "1px solid var(--color-divider)",
+                        borderRadius: "var(--radius-sm)",
+                        padding: "var(--space-3)",
+                      }}
+                    >
+                      <span style={{ fontFamily: "var(--font-heading)", fontWeight: 800, fontSize: 14 }}>
+                        {t.name}
+                      </span>
+                      {t.description ? (
+                        <span style={{ fontSize: 12, lineHeight: 1.45, color: MUTED }}>
+                          {t.description.slice(0, 120)}
+                        </span>
+                      ) : null}
+                      <button
+                        className={already ? "btn btn-secondary" : "btn btn-primary"}
+                        style={{ marginTop: "auto", height: 30, fontSize: 12 }}
+                        disabled={busy}
+                        onClick={() =>
+                          void run(async () => {
+                            const { redirectUrl } = await createComposioConnection({
+                              toolkit: t.key,
+                              sharing: "organization",
+                              organizationId,
+                            });
+                            /* Composio owns the consent screen; the app leaves
+                               and returns through the API's callback. */
+                            window.location.href = redirectUrl;
+                          })
+                        }
+                      >
+                        {already ? "Connect another" : "Connect"}
+                      </button>
+                    </div>
+                  );
+                })}
+              </div>
+              <p style={{ margin: "var(--space-3) 0 0", fontSize: 12, color: DIM }}>
+                Showing {matches.length} of {data.toolkits.length} toolkits. Search to narrow it.
+              </p>
+            </>
+          )}
+        </>
+      )}
+    </>
+  );
+}
+
 /* ---- Connectors ------------------------------------------------------- */
 
 /**
@@ -438,6 +726,10 @@ export function ConnectorsSection() {
 
   return (
     <>
+      <GoogleBlock />
+      <ComposioBlock />
+
+      <h3 style={{ fontSize: 15, margin: "var(--space-6) 0 var(--space-3)" }}>Key-based connectors</h3>
       <Feedback error={error} note={note} />
 
       {connectors === null ? (
@@ -482,10 +774,20 @@ export function ConnectorsSection() {
       )}
 
       <h3 style={{ fontSize: 15, margin: "var(--space-6) 0 var(--space-3)" }}>Add a connector</h3>
+      <p style={{ margin: "0 0 var(--space-3)", fontSize: 12, color: DIM }}>
+        For anything that authenticates with a key rather than a personal grant — Google Maps
+        Platform among them.
+      </p>
       <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "var(--space-3)" }}>
         <div className="field">
           <label htmlFor="cn-provider">Provider</label>
-          <input className="input" id="cn-provider" placeholder="e.g. github" value={provider} onChange={(e) => setProvider(e.target.value)} />
+          <input
+            className="input"
+            id="cn-provider"
+            placeholder="e.g. google-maps, github"
+            value={provider}
+            onChange={(e) => setProvider(e.target.value)}
+          />
         </div>
         <div className="field">
           <label htmlFor="cn-type">Type</label>
