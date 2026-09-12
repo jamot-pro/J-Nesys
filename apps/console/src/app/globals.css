@@ -1,39 +1,49 @@
-@import "tailwindcss";
 @import "./design-system.css";
 
-/* The Modernist sheet above owns every colour, radius, shadow and space token
- * and the component layer (.card, .btn, .nav, .table, .tag). Tailwind is kept
- * for layout utilities only — flex, grid, gap, sizing. Nothing here may
- * re-declare a value the design system already carries; see its readme.md
- * ("Never hard-code a hex, a font name or a px value the tokens already
- * carry"). */
+/* The console is a port of templates/org-console/OrgConsole.dc.html. Its own
+ * <style> block is reproduced verbatim below — the mockup carries almost all
+ * of its styling inline, so the port keeps those inline styles and only needs
+ * these globals. Tailwind is deliberately NOT loaded: nothing in the mockup
+ * uses it, and having it available invites drift away from the design. */
+body {
+  margin: 0;
+  background: var(--color-surface);
+  color: var(--color-text);
+  font-family: var(--font-body);
+  --aura-h: 111;
+  --aura-a1: 0.52;
+  --aura-a2: 0.24;
+  --aura-a3: 0.62;
+  --aura-blur: 5.6px;
+  --aura-size: 67px;
+  --aura-glow: 29px;
+}
 
+* {
+  box-sizing: border-box;
+}
+
+.mark-dark {
+  display: none;
+}
+body[data-theme="dark"] .mark-dark {
+  display: block;
+}
+body[data-theme="dark"] .mark-light {
+  display: none;
+}
+
+/* Archivo arrives through next/font; point the system's tokens at it rather
+ * than letting styles.css fetch the family itself. */
 :root {
-  /* Archivo arrives via next/font, so point the system's font tokens at that
-   * variable rather than at a font-family string it would have loaded itself. */
   --font-heading: var(--font-archivo), system-ui, sans-serif;
   --font-body: var(--font-archivo), system-ui, sans-serif;
 }
 
-/* Per-organization accent.
- *
- * The root layout sets --org-accent / --org-accent-ink per request. Defaulting
- * them to the system's own accent means an org that has set no brand renders
- * exactly as the design system intends, and a branded org overrides only the
- * accent role — never the ground, type or elevation, which are what make the
- * system coherent across tenants. */
+/* Per-organization accent (see lib/brand.ts). Defaults to the design
+ * system's own accent so an org with no brand renders exactly as designed. */
 :root {
   --color-accent: var(--org-accent, #ff2657);
-}
-
-@theme inline {
-  --color-ds-bg: var(--color-bg);
-  --color-ds-surface: var(--color-surface);
-  --color-ds-text: var(--color-text);
-  --color-ds-divider: var(--color-divider);
-  --color-ds-accent: var(--color-accent);
-  --font-sans: var(--font-body);
-  --font-display: var(--font-heading);
 }
 
 html,
