@@ -49,6 +49,7 @@ import oauthRoutes from "./routes/oauth.js";
 import { googleConnectorRoutes } from "./routes/google-connect.js";
 import { eventsRoutes } from "./routes/events.js";
 import waRoutes from "./routes/wa.js";
+import { telegramRoutes } from "./routes/telegram.js";
 import notificationsRoutes from "./routes/notifications.js";
 import { clientLogRoutes } from "./routes/client-log.js";
 import type { MemoryProvider } from "@jamot/core/memory";
@@ -269,6 +270,7 @@ export async function buildApp(opts: BuildAppOptions) {
   await app.register(eventsRoutes(opts.repository), { prefix: "/api" });
   await app.register(clientLogRoutes, { prefix: "/api" });
   await app.register(waRoutes, { prefix: "/api", repository: opts.repository, whatsAppManager: opts.whatsAppManager });
+  await app.register(telegramRoutes(opts.repository, reputation, treasury), { prefix: "/api" });
   await app.register(suppliersRoutes, { prefix: "/api", commerce });
   await app.register(catalogRoutes, { prefix: "/api", commerce });
   await app.register(procurementRoutes, { prefix: "/api", commerce });
