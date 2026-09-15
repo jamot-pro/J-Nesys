@@ -7,6 +7,7 @@ import {
   Catalog,
   CatalogOffer,
   Connector,
+  Deal,
   Event,
   Identity,
   LeadList,
@@ -51,6 +52,7 @@ import type {
   NewCatalog,
   NewCatalogOffer,
   NewConnector,
+  NewDeal,
   NewIdentity,
   NewLeadList,
   NewLeadListMember,
@@ -129,6 +131,7 @@ export function createMemoryRepository(): JamotRepository {
   const peopleListMemberStore = new Map<string, PeopleListMember>();
   const leadListStore = new Map<string, LeadList>();
   const leadListMemberStore = new Map<string, LeadListMember>();
+  const dealStore = new Map<string, Deal>();
   const outreachLists = new Map<string, OutreachList>();
   const outreachCampaigns = new Map<string, OutreachCampaign>();
   const outreachSteps = new Map<string, OutreachStep>();
@@ -684,6 +687,53 @@ export function createMemoryRepository(): JamotRepository {
 
     async deleteLeadList(id) {
       leadListStore.delete(id);
+    },
+
+    async createDeal(input: NewDeal) {
+      const deal = Deal.parse({
+        id: uuid(),
+        createdAt: now(),
+        updatedAt: now(),
+        spaceId: input.spaceId,
+        organizationId: input.organizationId ?? null,
+        personId: input.personId ?? null,
+        agentId: input.agentId ?? null,
+        createdBy: input.createdBy ?? null,
+        leadListId: input.leadListId ?? null,
+        title: input.title,
+        valueAmount: input.valueAmount ?? 0,
+        currency: input.currency ?? "USD",
+        stage: input.stage ?? "open",
+        source: input.source ?? null,
+        notes: input.notes ?? "",
+        closedAt: null,
+      });
+      dealStore.set(deal.id, deal);
+      return deal;
+    },
+
+    async getDeal(id) {
+      return dealStore.get(id) ?? null;
+    },
+
+    async listDeals(filter) {
+      let all = [...dealStore.values()];
+      if (filter?.spaceId) all = all.filter((d) => d.spaceId === filter.spaceId);
+      if (filter?.organizationId) all = all.filter((d) => d.organizationId === filter.organizationId);
+      if (filter?.stage) all = all.filter((d) => d.stage === filter.stage);
+      return all.sort((a, b) => b.createdAt.localeCompare(a.createdAt));
+    },
+
+    async updateDeal(id, patch) {
+      const existing = dealStore.get(id);
+      if (!existing) return null;
+      const updated = Deal.parse({ ...existing, ...patch, updatedAt: now() });
+      dealStore.set(id, updated);
+      return updated;
+    },
+
+    async deleteDeal(id) {
+      dealStore.delete(id);
     },
 
     async addLeadListMember(input: NewLeadListMember) {

@@ -8,7 +8,7 @@ import { AppRail } from "./AppRail";
 import { ChatReopen } from "./ChatReopen";
 import { ChatPanel } from "./ChatPanel";
 import { Channels } from "./Channels";
-import { DiscoverDreams } from "./DiscoverDreams";
+import { Dashboard } from "./Dashboard";
 import { SystemConfig } from "./SystemConfig";
 import { getOrganizationApps, listNotifications, type AppManifest } from "@jamot/client";
 import type { RailApp } from "./mockup-data";
@@ -176,7 +176,7 @@ export function OrgConsole({ branding }: { branding: OrgPublicBranding }) {
       >
         <div style={{ flex: 1, minHeight: 0, overflowY: "auto", padding: "var(--space-6)" }}>
           {activeApp === null ? (
-            <DiscoverDreams />
+            <Dashboard />
           ) : activeApp === "notifications" ? (
             <Notifications
               /* Triggers name sections this console may not have ported yet

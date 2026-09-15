@@ -91,7 +91,7 @@ export function AppRail({
           borderBottom: "1px solid var(--color-divider)",
         }}
       >
-        <button onClick={onHome} title="Discover dreams" style={{ ...ICON_BTN }}>
+        <button onClick={onHome} title="Dashboard" style={{ ...ICON_BTN }}>
           {/* eslint-disable @next/next/no-img-element */}
           <img className="mark-light" src="/brand/jamot-logo.webp" alt="Jamot" width={26} height={26} />
           <img className="mark-dark" src="/brand/jamot-logo-white.webp" alt="Jamot" width={26} height={26} />

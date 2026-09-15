@@ -1884,6 +1884,99 @@ export async function enrichLead(
   );
 }
 
+// --- Deals: the pipeline behind the sales dashboard -------------------------
+
+export type DealStage = "open" | "won" | "lost";
+
+export interface Deal {
+  id: string;
+  spaceId: string;
+  organizationId: string | null;
+  personId: string | null;
+  agentId: string | null;
+  createdBy: string | null;
+  leadListId: string | null;
+  title: string;
+  valueAmount: number;
+  currency: string;
+  stage: DealStage;
+  source: string | null;
+  notes: string;
+  closedAt: string | null;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export async function createDeal(input: {
+  spaceId: string;
+  organizationId?: string | null;
+  personId?: string | null;
+  agentId?: string | null;
+  leadListId?: string | null;
+  title: string;
+  valueAmount?: number;
+  currency?: string;
+  stage?: DealStage;
+  source?: string | null;
+  notes?: string;
+}): Promise<Deal> {
+  return api<Deal>("/api/deals", { method: "POST", body: JSON.stringify(input) });
+}
+
+export async function listDeals(spaceId: string, stage?: DealStage): Promise<Deal[]> {
+  const params = new URLSearchParams({ spaceId });
+  if (stage) params.set("stage", stage);
+  const data = await api<{ items: Deal[] }>(`/api/deals?${params.toString()}`);
+  return data.items;
+}
+
+export async function updateDeal(
+  id: string,
+  patch: Partial<{
+    title: string;
+    valueAmount: number;
+    currency: string;
+    stage: DealStage;
+    personId: string | null;
+    agentId: string | null;
+    source: string | null;
+    notes: string;
+  }>,
+): Promise<Deal> {
+  return api<Deal>(`/api/deals/${id}`, { method: "PATCH", body: JSON.stringify(patch) });
+}
+
+export async function deleteDeal(id: string): Promise<void> {
+  await api<void>(`/api/deals/${id}`, { method: "DELETE" });
+}
+
+// --- Dashboard: the console homepage's one realtime read --------------------
+
+export interface DashboardSummary {
+  spaceId: string;
+  leadsGenerated: number;
+  leadsEnriched: number;
+  hotLeads: number;
+  salesPeople: number;
+  dealsOpen: number;
+  dealsWon: number;
+  dealsLost: number;
+  revenueByCurrency: Array<{ currency: string; amount: number }>;
+  outreachCampaignsActive: number;
+  outreachSent: number;
+  recentDeals: Deal[];
+  generatedAt: string;
+}
+
+export async function getDashboardSummary(
+  spaceId: string,
+  organizationId?: string | null,
+): Promise<DashboardSummary> {
+  const params = new URLSearchParams({ spaceId });
+  if (organizationId) params.set("organizationId", organizationId);
+  return api<DashboardSummary>(`/api/dashboard/summary?${params.toString()}`);
+}
+
 // --- Vibe DREAM Configurator: organizational graph ---------------------------
 
 export type OrgNodeKind =

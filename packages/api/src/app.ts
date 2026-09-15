@@ -73,6 +73,8 @@ import procurementRoutes from "./routes/procurement.js";
 import paymentsRoutes from "./routes/payments.js";
 import outreachRoutes from "./routes/outreach.js";
 import leadsRoutes from "./routes/leads.js";
+import dealsRoutes from "./routes/deals.js";
+import dashboardRoutes from "./routes/dashboard.js";
 import { createLeadGenerationService, createLeadProviderRegistry } from "@jamot/core/leads";
 import type { LeadGenerationService } from "@jamot/core/leads";
 
@@ -277,6 +279,8 @@ export async function buildApp(opts: BuildAppOptions) {
   await app.register(paymentsRoutes, { prefix: "/api", payments });
   await app.register(outreachRoutes, { prefix: "/api", repository: opts.repository });
   await app.register(leadsRoutes, { prefix: "/api", repository: opts.repository, leads, secretStore });
+  await app.register(dealsRoutes, { prefix: "/api", repository: opts.repository });
+  await app.register(dashboardRoutes, { prefix: "/api", repository: opts.repository });
 
   return app;
 }

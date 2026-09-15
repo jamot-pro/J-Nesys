@@ -1403,6 +1403,39 @@ export const peopleListMembers = pgTable(
   ],
 );
 
+/**
+ * A deal: the pipeline object the dashboard's open/won/lost counts and
+ * revenue total read from. Nothing else in the schema carries a "this lead
+ * became money" concept, so this is that concept, not a repurposing of one.
+ */
+export const deals = pgTable(
+  "deals",
+  {
+    id: uuid("id").defaultRandom().primaryKey(),
+    spaceId: uuid("space_id")
+      .notNull()
+      .references(() => spaces.id),
+    organizationId: uuid("organization_id").references(() => organizations.id),
+    personId: uuid("person_id").references(() => people.id, { onDelete: "set null" }),
+    agentId: uuid("agent_id").references(() => agents.id, { onDelete: "set null" }),
+    createdBy: uuid("created_by").references(() => actors.id),
+    leadListId: uuid("lead_list_id").references(() => leadLists.id, { onDelete: "set null" }),
+    title: text("title").notNull(),
+    valueAmount: numeric("value_amount").notNull().default("0"),
+    currency: text("currency").notNull().default("USD"),
+    stage: text("stage").notNull().default("open"),
+    source: text("source"),
+    notes: text("notes").notNull().default(""),
+    closedAt: timestamp("closed_at", { mode: "string", withTimezone: true }),
+    ...timestamps(),
+  },
+  (table) => [
+    index("deals_space_id_idx").on(table.spaceId),
+    index("deals_organization_id_idx").on(table.organizationId),
+    index("deals_stage_idx").on(table.stage),
+  ],
+);
+
 export const sessions = pgTable("sessions", {
   id: uuid("id").defaultRandom().primaryKey(),
   actorId: uuid("actor_id"),
