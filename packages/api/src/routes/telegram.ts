@@ -122,12 +122,26 @@ export function telegramRoutes(
           ],
         });
 
+        // Mirrors provisionUser() in ../auth.ts (minus the credentialed-login
+        // parts, which don't apply here): a personal space the actor owns, so
+        // requireSpaceAccess("spaceId") and the ownsSpace check in
+        // tasks.ts's status route both pass for "personal"-space tasks
+        // without needing a separate role grant.
+        const personalSpace = await repo.createSpace({
+          kind: "personal",
+          ownerActorId: actor.id,
+          name: displayName,
+        });
+        actor = (await repo.updateActor(actor.id, { personalSpaceId: personalSpace.id })) ?? actor;
+
         person = await repo.createPerson({
           actorId: actor.id,
           firstName: tgUser.first_name,
           lastName: tgUser.last_name ?? null,
-          membershipSpaceIds: [],
+          membershipSpaceIds: [personalSpace.id],
         });
+
+        await repo.createRole({ actorId: actor.id, spaceId: personalSpace.id, kind: "owner" });
 
         await repo.addIdentity({
           actorId: actor.id,
