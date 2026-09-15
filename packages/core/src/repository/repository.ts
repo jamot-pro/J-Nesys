@@ -6,6 +6,7 @@ import type {
   Catalog,
   CatalogOffer,
   Connector,
+  Deal,
   Event,
   Identity,
   LeadList,
@@ -209,6 +210,21 @@ export interface NewLeadListMember {
   status?: LeadListMember["status"];
   raw?: Record<string, unknown>;
   provenance?: Record<string, unknown>;
+}
+
+export interface NewDeal {
+  spaceId: string;
+  organizationId?: string | null;
+  personId?: string | null;
+  agentId?: string | null;
+  createdBy?: string | null;
+  leadListId?: string | null;
+  title: string;
+  valueAmount?: number;
+  currency?: string;
+  stage?: Deal["stage"];
+  source?: string | null;
+  notes?: string;
 }
 
 export interface NewAgent {
@@ -693,6 +709,21 @@ export interface JamotRepository {
   ): Promise<LeadListMember | null>;
   listLeadListMembers(leadListId: string): Promise<LeadListMember[]>;
   deleteLeadListMembers(leadListId: string): Promise<void>;
+
+  // deals
+  createDeal(input: NewDeal): Promise<Deal>;
+  getDeal(id: string): Promise<Deal | null>;
+  listDeals(filter?: { spaceId?: string; organizationId?: string; stage?: Deal["stage"] }): Promise<Deal[]>;
+  updateDeal(
+    id: string,
+    patch: Partial<
+      Pick<
+        Deal,
+        "title" | "valueAmount" | "currency" | "stage" | "personId" | "agentId" | "source" | "notes" | "closedAt"
+      >
+    >,
+  ): Promise<Deal | null>;
+  deleteDeal(id: string): Promise<void>;
 
   createPeopleList(input: NewPeopleList): Promise<PeopleList>;
   getPeopleList(id: string): Promise<PeopleList | null>;

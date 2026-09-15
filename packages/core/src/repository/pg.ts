@@ -21,6 +21,7 @@ import type {
   Catalog,
   CatalogOffer,
   Connector,
+  Deal,
   Event,
   Identity,
   LeadList,
@@ -105,6 +106,7 @@ import {
   peopleListMembers,
   dreamListings,
   dreamBelievers,
+  deals,
 } from "../schema/index.js";
 import type {
   JamotRepository,
@@ -115,6 +117,7 @@ import type {
   NewCatalog,
   NewCatalogOffer,
   NewConnector,
+  NewDeal,
   NewIdentity,
   NewLeadList,
   NewLeadListMember,
@@ -171,6 +174,7 @@ type SecretRow = typeof secrets.$inferSelect;
 type ComposioOAuthStateRow = typeof composioOauthStates.$inferSelect;
 type LeadListRow = typeof leadLists.$inferSelect;
 type LeadListMemberRow = typeof leadListMembers.$inferSelect;
+type DealRow = typeof deals.$inferSelect;
 type OutreachListRow = typeof outreachLists.$inferSelect;
 type OutreachCampaignRow = typeof outreachCampaigns.$inferSelect;
 type OutreachStepRow = typeof outreachSteps.$inferSelect;
@@ -878,6 +882,27 @@ function toLeadList(row: LeadListRow): LeadList {
   };
 }
 
+function toDeal(row: DealRow): Deal {
+  return {
+    id: row.id as Id,
+    createdAt: normalizePgTimestamp(row.createdAt),
+    updatedAt: normalizePgTimestamp(row.updatedAt),
+    spaceId: row.spaceId as Id,
+    organizationId: (row.organizationId as Id | null) ?? null,
+    personId: (row.personId as Id | null) ?? null,
+    agentId: (row.agentId as Id | null) ?? null,
+    createdBy: (row.createdBy as Id | null) ?? null,
+    leadListId: (row.leadListId as Id | null) ?? null,
+    title: row.title,
+    valueAmount: Number(row.valueAmount),
+    currency: row.currency,
+    stage: row.stage as Deal["stage"],
+    source: row.source,
+    notes: row.notes,
+    closedAt: row.closedAt ? normalizePgTimestamp(row.closedAt) : null,
+  };
+}
+
 function toLeadListMember(row: LeadListMemberRow): LeadListMember {
   return {
     id: row.id as Id,
@@ -1511,6 +1536,67 @@ export function createPgRepository(db: Db): JamotRepository {
 
     async deleteLeadList(id) {
       await q.delete(leadLists).where(eq(leadLists.id, id));
+    },
+
+    async createDeal(input: NewDeal) {
+      const [row] = await q
+        .insert(deals)
+        .values({
+          spaceId: input.spaceId,
+          organizationId: input.organizationId ?? null,
+          personId: input.personId ?? null,
+          agentId: input.agentId ?? null,
+          createdBy: input.createdBy ?? null,
+          leadListId: input.leadListId ?? null,
+          title: input.title,
+          valueAmount: String(input.valueAmount ?? 0),
+          currency: input.currency ?? "USD",
+          stage: input.stage ?? "open",
+          source: input.source ?? null,
+          notes: input.notes ?? "",
+        })
+        .returning();
+      if (!row) throw new Error("failed to create deal");
+      return toDeal(row);
+    },
+
+    async getDeal(id) {
+      const [row] = await q.select().from(deals).where(eq(deals.id, id)).limit(1);
+      return row ? toDeal(row) : null;
+    },
+
+    async listDeals(filter) {
+      const rows = await q
+        .select()
+        .from(deals)
+        .where(
+          and(
+            filter?.spaceId ? eq(deals.spaceId, filter.spaceId) : undefined,
+            filter?.organizationId ? eq(deals.organizationId, filter.organizationId) : undefined,
+            filter?.stage ? eq(deals.stage, filter.stage) : undefined,
+          ),
+        )
+        .orderBy(desc(deals.createdAt));
+      return rows.map(toDeal);
+    },
+
+    async updateDeal(id, patch) {
+      const { valueAmount, closedAt, ...rest } = patch;
+      const [row] = await q
+        .update(deals)
+        .set({
+          ...rest,
+          ...(valueAmount !== undefined ? { valueAmount: String(valueAmount) } : {}),
+          ...(closedAt !== undefined ? { closedAt } : {}),
+          updatedAt: nowIso(),
+        })
+        .where(eq(deals.id, id))
+        .returning();
+      return row ? toDeal(row) : null;
+    },
+
+    async deleteDeal(id) {
+      await q.delete(deals).where(eq(deals.id, id));
     },
 
     async addLeadListMember(input: NewLeadListMember) {
