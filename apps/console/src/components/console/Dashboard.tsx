@@ -1,14 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
-import {
-  createDeal,
-  getDashboardSummary,
-  updateDeal,
-  type Deal,
-  type DealStage,
-  type DashboardSummary,
-} from "@jamot/client";
+import { getDashboardSummary, type DashboardSummary } from "@jamot/client";
 
 import { useOrgScope } from "../console-context";
 
@@ -33,11 +26,12 @@ const CARD: React.CSSProperties = {
   gap: "var(--space-2)",
 };
 
-const STAGES: { id: DealStage; label: string }[] = [
-  { id: "open", label: "Open" },
-  { id: "won", label: "Won" },
-  { id: "lost", label: "Lost" },
-];
+const STAGE_LABEL: Record<string, string> = { open: "Open", won: "Won", lost: "Lost" };
+const STAGE_TONE: Record<string, string> = {
+  open: MUTED,
+  won: "oklch(0.45 0.13 150)",
+  lost: "oklch(0.5 0.16 30)",
+};
 
 /** How often the dashboard re-reads the summary. There is no push channel
  * for these numbers yet, and a 20s-stale count is a better tradeoff than
@@ -85,20 +79,17 @@ function Tile({
 /**
  * The console homepage: a realtime sales dashboard replacing Discover.
  *
- * Every number here comes from one API round trip (GET /dashboard/summary)
- * computed server-side from real rows — leads, deals, agents, outreach sends.
- * There is nothing sampled or fabricated: a quiet space legitimately shows
- * zeros, and a busy one moves as the underlying data changes, picked up by
- * the poll below.
+ * Read-only by design. Every number comes from one API round trip
+ * (GET /dashboard/summary) computed server-side from real rows — leads,
+ * deals, agents, outreach sends — nothing sampled or fabricated. A deal is
+ * created and worked from wherever it actually lives in the platform (People,
+ * Outreach, LeadGen); this screen only ever reflects that state back, never
+ * changes it.
  */
 export function Dashboard() {
   const { organizationId, spaceId } = useOrgScope();
   const [summary, setSummary] = useState<DashboardSummary | null>(null);
   const [error, setError] = useState<string | null>(null);
-  const [newDealOpen, setNewDealOpen] = useState(false);
-  const [newDealTitle, setNewDealTitle] = useState("");
-  const [newDealValue, setNewDealValue] = useState("");
-  const [busy, setBusy] = useState(false);
 
   const load = useCallback(async () => {
     try {
@@ -115,47 +106,6 @@ export function Dashboard() {
     return () => clearInterval(timer);
   }, [load]);
 
-  async function changeStage(deal: Deal, stage: DealStage) {
-    setSummary((current) =>
-      current
-        ? {
-            ...current,
-            recentDeals: current.recentDeals.map((d) => (d.id === deal.id ? { ...d, stage } : d)),
-          }
-        : current,
-    );
-    try {
-      await updateDeal(deal.id, { stage });
-      await load();
-    } catch (err) {
-      setError(err instanceof Error ? err.message : "Could not update that deal.");
-      await load();
-    }
-  }
-
-  async function submitNewDeal(e: React.FormEvent) {
-    e.preventDefault();
-    if (!newDealTitle.trim()) return;
-    setBusy(true);
-    try {
-      await createDeal({
-        spaceId,
-        organizationId,
-        title: newDealTitle.trim(),
-        valueAmount: newDealValue ? Number(newDealValue) : 0,
-      });
-      setNewDealTitle("");
-      setNewDealValue("");
-      setNewDealOpen(false);
-      await load();
-      setError(null);
-    } catch (err) {
-      setError(err instanceof Error ? err.message : "Could not create that deal.");
-    } finally {
-      setBusy(false);
-    }
-  }
-
   if (!summary && !error) {
     return <p style={{ margin: 0, fontSize: 13, color: MUTED }}>Loading your dashboard…</p>;
   }
@@ -164,55 +114,14 @@ export function Dashboard() {
 
   return (
     <div data-copilot-region="dashboard">
-      <div style={{ display: "flex", alignItems: "flex-end", gap: "var(--space-4)", flexWrap: "wrap" }}>
-        <div style={{ flex: 1, minWidth: 240 }}>
-          <h1 style={{ margin: 0, fontSize: 36, lineHeight: 1.1, letterSpacing: "-0.02em" }}>Dashboard</h1>
-          <p style={{ margin: "8px 0 0", fontSize: 14, lineHeight: 1.6, color: MUTED, maxWidth: "62ch" }}>
-            Every number below is live — leads found, agents on your team, and the deal pipeline they feed.
-          </p>
-        </div>
-        <button className="btn btn-primary" onClick={() => setNewDealOpen((v) => !v)}>
-          {newDealOpen ? "Cancel" : "+ New deal"}
-        </button>
-      </div>
+      <h1 style={{ margin: 0, fontSize: 36, lineHeight: 1.1, letterSpacing: "-0.02em" }}>Dashboard</h1>
+      <p style={{ margin: "8px 0 0", fontSize: 14, lineHeight: 1.6, color: MUTED, maxWidth: "62ch" }}>
+        Every number below is live — leads found, agents on your team, and the deal pipeline they feed.
+      </p>
 
       <div className="hr" style={{ margin: "var(--space-4) 0" }} />
 
       {error ? <p style={{ margin: "0 0 var(--space-4)", fontSize: 13, color: "var(--color-accent)" }}>{error}</p> : null}
-
-      {newDealOpen ? (
-        <form
-          onSubmit={submitNewDeal}
-          style={{ ...CARD, flexDirection: "row", flexWrap: "wrap", alignItems: "flex-end", marginBottom: "var(--space-4)" }}
-        >
-          <div className="field" style={{ flex: 2, minWidth: 200 }}>
-            <label htmlFor="deal-title">Deal</label>
-            <input
-              className="input"
-              id="deal-title"
-              placeholder="e.g. Acme Corp — annual plan"
-              value={newDealTitle}
-              onChange={(e) => setNewDealTitle(e.target.value)}
-              required
-            />
-          </div>
-          <div className="field" style={{ flex: 1, minWidth: 120 }}>
-            <label htmlFor="deal-value">Value (USD)</label>
-            <input
-              className="input"
-              id="deal-value"
-              type="number"
-              min={0}
-              placeholder="0"
-              value={newDealValue}
-              onChange={(e) => setNewDealValue(e.target.value)}
-            />
-          </div>
-          <button className="btn btn-primary" type="submit" disabled={busy}>
-            {busy ? "Adding…" : "Add"}
-          </button>
-        </form>
-      ) : null}
 
       {summary ? (
         <>
@@ -268,7 +177,8 @@ export function Dashboard() {
           <span style={UPPER}>Recent deals</span>
           {summary.recentDeals.length === 0 ? (
             <p style={{ margin: "var(--space-3) 0 0", fontSize: 13, color: MUTED }}>
-              No deals yet. Add one above, or bring a lead over from People once it is worth pursuing.
+              No deals yet. A deal is created from where it starts — People, Outreach, or Lead generation
+              — and shows up here once it exists.
             </p>
           ) : (
             <section
@@ -309,19 +219,18 @@ export function Dashboard() {
                   <span style={{ fontSize: 13, color: MUTED, flex: "none" }}>
                     {formatMoney(deal.valueAmount, deal.currency)}
                   </span>
-                  <select
-                    className="input"
-                    aria-label={`Stage for ${deal.title}`}
-                    style={{ height: 32, width: "auto", fontSize: 12, flex: "none" }}
-                    value={deal.stage}
-                    onChange={(e) => void changeStage(deal, e.target.value as DealStage)}
+                  <span
+                    style={{
+                      flex: "none",
+                      fontSize: 11,
+                      fontWeight: 700,
+                      letterSpacing: "0.06em",
+                      textTransform: "uppercase",
+                      color: STAGE_TONE[deal.stage] ?? MUTED,
+                    }}
                   >
-                    {STAGES.map((s) => (
-                      <option key={s.id} value={s.id}>
-                        {s.label}
-                      </option>
-                    ))}
-                  </select>
+                    {STAGE_LABEL[deal.stage] ?? deal.stage}
+                  </span>
                 </div>
               ))}
             </section>
