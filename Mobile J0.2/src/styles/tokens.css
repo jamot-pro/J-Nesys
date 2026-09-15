@@ -1,0 +1,72 @@
+/* Org Console design tokens — vendored from
+ * apps/console/src/app/design-system.css (that file is the source of truth;
+ * retune values there, not here, or the two drift). This app self-hosts the
+ * Archivo import that Next's app skips via next/font — the actual @import
+ * lives at the top of index.css since @import must precede all other rules
+ * in the final stylesheet and this file is itself @import'd partway through.
+ */
+
+:root {
+  --color-bg: #f3f2f2;
+  --color-surface: #eae9e9;
+  --color-text: #201e1d;
+  --color-accent: #ff2657;
+  --color-accent-2: #e15b47;
+  --color-divider: color-mix(in srgb, #201e1d 11%, transparent);
+  --accent-ink: var(--color-accent-700);
+
+  --color-neutral-100: #f8f4f4;
+  --color-neutral-200: #eae7e7;
+  --color-neutral-300: #d7d3d3;
+  --color-neutral-400: #bab6b6;
+  --color-neutral-500: #9b9797;
+  --color-neutral-600: #7d7979;
+  --color-neutral-700: #605d5d;
+  --color-neutral-800: #444141;
+  --color-neutral-900: #2d2b2b;
+
+  --color-accent-100: #fff0f3;
+  --color-accent-200: #ffdbe2;
+  --color-accent-300: #ffb8c6;
+  --color-accent-400: #ff7d95;
+  --color-accent-500: #ff2657;
+  --color-accent-600: #db0c3c;
+  --color-accent-700: #a80a2f;
+  --color-accent-800: #760a23;
+  --color-accent-900: #4a0d1a;
+
+  --font-heading: "Archivo", system-ui, sans-serif;
+  --font-heading-weight: 800;
+  --font-body: "Archivo", system-ui, sans-serif;
+
+  --space-1: 4px;
+  --space-2: 8px;
+  --space-3: 12px;
+  --space-4: 16px;
+  --space-6: 24px;
+  --space-8: 32px;
+
+  --radius-sm: 8px;
+  --radius-md: 12px;
+  --radius-lg: 18px;
+
+  --shadow-sm: 0 1px 2px color-mix(in srgb, #2d2b2b 5%, transparent), 0 2px 8px color-mix(in srgb, #2d2b2b 5%, transparent);
+  --shadow-md: 0 2px 6px color-mix(in srgb, #2d2b2b 5%, transparent), 0 12px 28px color-mix(in srgb, #2d2b2b 7%, transparent);
+  --shadow-lg: 0 6px 16px color-mix(in srgb, #2d2b2b 7%, transparent), 0 32px 72px color-mix(in srgb, #2d2b2b 12%, transparent);
+}
+
+.input {
+  width: 100%;
+  min-height: 36px;
+  padding: 6px 10px;
+  font: inherit;
+  font-size: 14px;
+  color: var(--color-text);
+  caret-color: var(--color-accent);
+  background: var(--color-surface);
+  border: 1px solid var(--color-divider);
+  border-radius: var(--radius-md);
+}
+.input:hover { border-color: color-mix(in srgb, var(--color-text) 45%, transparent); }
+.input:focus-visible { border-color: var(--color-accent); outline-offset: 0; outline: 2px solid var(--color-accent); }
+

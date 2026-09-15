@@ -1,59 +1,70 @@
-import React from 'react';
-import { useApp } from './context/AppContext';
-import { Header } from './components/Header';
-import { BottomNav } from './components/BottomNav';
-import { DiscoverView } from './components/DiscoverView';
-import { ProfileView } from './components/ProfileView';
+import { useEffect } from "react";
+import { useApp } from "./context/AppContext";
+import { setBackButton } from "./lib/telegram";
+import { Header } from "./components/Header";
+import { HomeScreen } from "./screens/HomeScreen";
+import { TalkScreen } from "./screens/TalkScreen";
+import { TasksScreen } from "./screens/TasksScreen";
+import { ProfileScreen } from "./screens/ProfileScreen";
 
-export const App: React.FC = () => {
-  const { activeTab, isDarkMode } = useApp();
+export function App() {
+  const { booting, authError, actionError, dismissActionError, screen, goHome } = useApp();
+
+  useEffect(() => {
+    return setBackButton(screen !== "home", goHome);
+  }, [screen, goHome]);
+
+  if (booting) {
+    return (
+      <div style={{ minHeight: "100dvh", display: "flex", alignItems: "center", justifyContent: "center", background: "var(--color-surface)", color: "var(--color-neutral-600)", fontSize: 13 }}>
+        Signing in…
+      </div>
+    );
+  }
+
+  if (authError) {
+    return (
+      <div style={{ minHeight: "100dvh", display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", gap: 8, background: "var(--color-surface)", padding: 24, textAlign: "center" }}>
+        <span style={{ fontFamily: "var(--font-heading)", fontWeight: 800, fontSize: 16 }}>Couldn't sign you in</span>
+        <span style={{ fontSize: 13, color: "var(--color-neutral-600)" }}>{authError}</span>
+      </div>
+    );
+  }
 
   return (
-    <div className={`min-h-screen transition-colors duration-200 ${
-      isDarkMode ? 'dark bg-gray-950 text-white' : 'bg-[#eceef1] text-gray-900'
-    }`}>
-      {/* Top Application Bar */}
+    <div
+      style={{
+        minHeight: "100dvh",
+        background: "var(--color-surface)",
+        color: "var(--color-text)",
+        fontFamily: "var(--font-body)",
+        display: "flex",
+        flexDirection: "column",
+        overflow: "hidden",
+      }}
+    >
       <Header />
-
-      {/* Main View Router */}
-      <main className="w-full">
-        {activeTab === 'discover' && <DiscoverView />}
-        {activeTab === 'profile' && <ProfileView />}
-
-        {/* Fallbacks for notes, missions, agent, wallet */}
-        {activeTab === 'notes' && (
-          <div className="max-w-md mx-auto p-6 text-center text-gray-500 text-sm">
-            <h2 className="text-base font-bold text-gray-800 mb-1">Field Notes</h2>
-            <p>Save notes, voice memos, and coordinates during field operations.</p>
-          </div>
-        )}
-
-        {activeTab === 'missions' && (
-          <div className="max-w-md mx-auto p-6 text-center text-gray-500 text-sm">
-            <h2 className="text-base font-bold text-gray-800 mb-1">Active Missions</h2>
-            <p>2 missions currently in progress with Tidal Grid.</p>
-          </div>
-        )}
-
-        {activeTab === 'agent' && (
-          <div className="max-w-md mx-auto p-6 text-center text-gray-500 text-sm">
-            <h2 className="text-base font-bold text-gray-800 mb-1">AI Agent Co-Pilot</h2>
-            <p>Chat with dispatch agent and coordinate field verification.</p>
-          </div>
-        )}
-
-        {activeTab === 'wallet' && (
-          <div className="max-w-md mx-auto p-6 text-center text-gray-500 text-sm">
-            <h2 className="text-base font-bold text-gray-800 mb-1">Operator Wallet</h2>
-            <p>Available balance: €1,842.00 across connected on-chain addresses.</p>
-          </div>
-        )}
-      </main>
-
-      {/* Persistent Bottom Nav Bar */}
-      <BottomNav />
+      {actionError && (
+        <div
+          onClick={dismissActionError}
+          style={{
+            flex: "none",
+            padding: "10px 14px",
+            fontSize: 12,
+            background: "var(--color-accent-100)",
+            color: "var(--color-accent-700)",
+            cursor: "pointer",
+          }}
+        >
+          {actionError} · tap to dismiss
+        </div>
+      )}
+      {screen === "home" && <HomeScreen />}
+      {screen === "talk" && <TalkScreen />}
+      {screen === "tasks" && <TasksScreen />}
+      {screen === "profile" && <ProfileScreen />}
     </div>
   );
-};
+}
 
 export default App;
