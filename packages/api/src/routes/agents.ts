@@ -10,6 +10,7 @@ import {
   type Agent,
 } from "@jamot/contracts";
 import type { JamotRepository } from "../repository.js";
+import { DeleteActorBlockedError } from "@jamot/core/repository";
 import {
   assertSafeMcpUrl,
   createMcpClient,
@@ -210,13 +211,26 @@ export default async function agentsRoutes(
       return deny(reply, "You cannot delete this agent");
     }
 
-    await repository.deleteAgent(id);
-    await repository.updateActor(agent.actorId, { status: "inactive" });
+    /* deleteActor removes the agent's own row along with the actor itself —
+       an agent has no identity apart from its actor, so "delete the agent"
+       means the actor is gone too, not merely deactivated. Anything the
+       agent created (lead lists, deals, skills, …) is orphaned to null
+       rather than deleted with it; anything meaningless without the actor
+       (roles, notifications) goes with it. */
+    const spaceId = await agentSpaceId(repository, agent);
+    try {
+      await repository.deleteActor(agent.actorId);
+    } catch (err) {
+      if (err instanceof DeleteActorBlockedError) {
+        return fail(reply, 409, err.message);
+      }
+      throw err;
+    }
 
     await repository.recordEvent({
       type: "agent.deleted",
       actorId: agent.actorId,
-      spaceId: await agentSpaceId(repository, agent),
+      spaceId,
       payload: { agentId: id },
     });
 
