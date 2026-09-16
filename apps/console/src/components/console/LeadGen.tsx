@@ -2,21 +2,12 @@
 
 import { useCallback, useEffect, useRef, useState } from "react";
 import {
-  createLeadList,
-  enrichLead,
   getAgents,
-  listLeadListLeads,
-  listLeadLists,
-  listLeadProviders,
-  runLeadList,
-  updateLeadList,
   listActors,
   type ApiAgent,
   type ApiActor,
-  type LeadList,
-  type LeadProviderView,
-  type LeadView,
 } from "@jamot/client";
+import { useLeadListRun, useLeadListsController } from "@jamot/canvas-lead-generation";
 
 import { useOrgScope } from "../console-context";
 
@@ -105,10 +96,13 @@ export function LeadGen() {
   const [actors, setActors] = useState<ApiActor[]>([]);
   const mapRef = useRef<HTMLDivElement | null>(null);
 
-  const [providers, setProviders] = useState<LeadProviderView[]>([]);
-  const [lists, setLists] = useState<LeadList[]>([]);
+  const { lists, providers, update, create } = useLeadListsController(spaceId, organizationId);
   const [listId, setListId] = useState<string>("");
-  const [results, setResults] = useState<LeadView[]>([]);
+  const [pendingRunVolume, setPendingRunVolume] = useState<number | null>(null);
+  const { leads: results, running, error, setError, run, enrichOne } = useLeadListRun(
+    listId || null,
+  );
+  const [starting, setStarting] = useState(false);
 
   const [icp, setIcp] = useState("");
   const [keywords, setKeywords] = useState<string[]>([]);
@@ -123,9 +117,7 @@ export function LeadGen() {
   const [enriching, setEnriching] = useState(false);
   const [log, setLog] = useState<LogLine[]>([]);
 
-  const [running, setRunning] = useState(false);
   const [note, setNote] = useState<string | null>(null);
-  const [error, setError] = useState<string | null>(null);
 
   /** An agent's name lives on its actor; role is what it does, not what it is. */
   const agentName = useCallback(
@@ -141,80 +133,97 @@ export function LeadGen() {
     async (field: "agentId" | "enrichmentAgentId", value: string) => {
       if (!listId) return;
       try {
-        const updated = await updateLeadList(listId, { [field]: value || null });
-        setLists((current) => current.map((l) => (l.id === updated.id ? updated : l)));
+        await update(listId, { [field]: value || null });
         setError(null);
       } catch (err) {
         setError(err instanceof Error ? err.message : "Could not assign that agent.");
       }
     },
-    [listId],
+    [listId, update, setError],
   );
 
   /** The list the agent selects apply to. */
   const current = lists.find((l) => l.id === listId) ?? null;
 
-  const load = useCallback(async () => {
-    const [a, p, l] = await Promise.all([
+  const loadAgents = useCallback(async () => {
+    const [a, actorList] = await Promise.all([
       getAgents().catch(() => [] as ApiAgent[]),
-      listLeadProviders(spaceId, organizationId).catch(() => [] as LeadProviderView[]),
-      listLeadLists(spaceId, organizationId).catch(() => [] as LeadList[]),
+      listActors().catch(() => [] as ApiActor[]),
     ]);
     setAgents(a);
-    setProviders(p);
-    setLists(l);
-    if (l[0] && !listId) {
-      setListId(l[0].id);
-      setIcp(l[0].persona.summary ?? "");
-      setKeywords(l[0].persona.keywords ?? []);
-      if (l[0].area?.place) setPlaces([l[0].area.place]);
-      setResults(await listLeadListLeads(l[0].id).catch(() => []));
-    }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [spaceId, organizationId]);
+    setActors(actorList);
+  }, []);
 
   useEffect(() => {
-    void load().catch((e) => setError(e instanceof Error ? e.message : "Could not load lead generation."));
-  }, [load]);
+    void loadAgents();
+  }, [loadAgents]);
+
+  // Once the lists load, default to the first one and seed the form from it —
+  // console shows a single "current target", unlike web's multi-list sidebar.
+  useEffect(() => {
+    const first = lists[0];
+    if (!first || listId) return;
+    setListId(first.id);
+    setIcp(first.persona.summary ?? "");
+    setKeywords(first.persona.keywords ?? []);
+    if (first.area?.place) setPlaces([first.area.place]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [lists]);
+
+  // A newly created list only gets its id after `create()` resolves, so the
+  // run that was requested against it is queued here and fired once the
+  // `useLeadListRun(listId)` hook above has rebound to the new id.
+  useEffect(() => {
+    if (pendingRunVolume === null || !listId) return;
+    const volume = pendingRunVolume;
+    setPendingRunVolume(null);
+    void run(volume)
+      .then((result) => {
+        if (!result) return;
+        setNote(`${result.added} added · ${result.skipped} skipped · ${result.totalFound} found`);
+      })
+      .finally(() => setStarting(false));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [listId, pendingRunVolume]);
 
   const provider = providers.find((p) => p.configured) ?? providers[0];
 
   async function start() {
     setError(null);
-    setRunning(true);
+    setStarting(true);
     setNote("Saving the target…");
     try {
       const persona = { summary: icp.trim(), keywords, titles: [] as string[] };
       const area = places[0] ? { place: places[0], radiusKm: radius } : null;
 
-      let id = listId;
-      if (id) {
-        await updateLeadList(id, { persona: persona as never, area });
+      if (listId) {
+        await update(listId, { persona: persona as never, area });
+        setNote("Searching…");
+        const result = await run(volume);
+        if (result) {
+          if (result.error) setError(result.error);
+          setNote(`${result.added} added · ${result.skipped} skipped · ${result.totalFound} found`);
+        }
       } else {
         if (!provider) throw new Error("no lead provider is available");
-        const created = await createLeadList({
-          spaceId,
-          organizationId,
+        const created = await create({
           name: places[0] ? `${places[0]} — ${new Date().toLocaleDateString()}` : "New target",
           providerId: provider.id,
           persona: persona as never,
           area,
         });
-        id = created.id;
-        setListId(id);
+        setNote("Searching…");
+        // The run itself is deferred to the effect above, which fires once
+        // useLeadListRun(listId) has rebound to this new id.
+        setPendingRunVolume(volume);
+        setListId(created.id);
+        return;
       }
-
-      setNote("Searching…");
-      const result = await runLeadList(id, volume);
-      if (result.error) setError(result.error);
-      setNote(`${result.added} added · ${result.skipped} skipped · ${result.totalFound} found`);
-      setResults(await listLeadListLeads(id));
-      setLists(await listLeadLists(spaceId, organizationId));
     } catch (err) {
       setError(err instanceof Error ? err.message : "The run failed.");
       setNote(null);
     } finally {
-      setRunning(false);
+      if (listId) setStarting(false);
     }
   }
 
@@ -241,18 +250,14 @@ export function LeadGen() {
     for (const target of targets) {
       if (!target.person) continue;
       try {
-        await enrichLead(listId, target.person.id);
+        // enrichOne already reloads `results` (useLeadListRun's leads) on success.
+        await enrichOne(target.person.id);
         done += 1;
       } catch (err) {
         add("Error", `${target.person.displayName}: ${err instanceof Error ? err.message : "failed"}`);
       }
     }
     add("Enrichment", `${done} of ${targets.length} enriched`);
-    try {
-      setResults(await listLeadListLeads(listId));
-    } catch {
-      // The log already records what happened; a refresh failure is not fatal.
-    }
     setEnriching(false);
   }
 
@@ -268,11 +273,11 @@ export function LeadGen() {
           </p>
         </div>
         <div style={{ display: "flex", gap: "var(--space-2)", flexWrap: "wrap" }}>
-          <button className="btn btn-secondary" style={{ justifyContent: "flex-start" }} onClick={() => { setResults([]); setNote(null); }}>
+          <button className="btn btn-secondary" style={{ justifyContent: "flex-start" }} onClick={() => setNote(null)}>
             Clear results
           </button>
-          <button className="btn btn-primary" style={{ justifyContent: "flex-start" }} onClick={() => void start()} disabled={running}>
-            {running ? "Searching…" : "Start"}
+          <button className="btn btn-primary" style={{ justifyContent: "flex-start" }} onClick={() => void start()} disabled={starting || running}>
+            {starting || running ? "Searching…" : "Start"}
           </button>
         </div>
       </div>
@@ -507,7 +512,7 @@ export function LeadGen() {
         </div>
       </section>
 
-      {running ? (
+      {starting || running ? (
         <div style={{ marginTop: "var(--space-3)", background: "var(--color-surface)", borderRadius: "var(--radius-md)", padding: "var(--space-4)", display: "flex", alignItems: "center", gap: "var(--space-4)", flexWrap: "wrap" }}>
           <span style={{ ...UPPER, fontSize: 13, letterSpacing: "0.08em" }}>Searching</span>
           <span style={{ fontSize: 12, color: MUTED }}>{note}</span>
