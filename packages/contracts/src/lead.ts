@@ -111,6 +111,9 @@ export const LeadList = EntityBase.extend({
   description: z.string().default(""),
   persona: LeadPersona.default({}),
   area: LeadArea.nullable().default(null),
+  /** The People List every match lands in, so Outreach and the rest of the
+   * platform see it the same way they see any other list of people. */
+  peopleListId: Id.nullable().default(null),
   /** The agent that runs a search on this list, when one is assigned. */
   agentId: Id.nullable().default(null),
   /** The agent that enriches what the search found. */
@@ -165,6 +168,7 @@ export const CreateLeadList = z.object({
   description: z.string().optional(),
   persona: LeadPersona.optional(),
   area: LeadArea.nullable().optional(),
+  peopleListId: Id.nullable().optional(),
   providerId: z.string().min(1),
   providerConfig: z.record(z.string(), z.unknown()).optional(),
 });
@@ -173,6 +177,7 @@ export type CreateLeadList = z.infer<typeof CreateLeadList>;
 export const UpdateLeadList = z.object({
   agentId: Id.nullable().optional(),
   enrichmentAgentId: Id.nullable().optional(),
+  peopleListId: Id.nullable().optional(),
   name: z.string().min(1).optional(),
   description: z.string().optional(),
   persona: LeadPersona.optional(),

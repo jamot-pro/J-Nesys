@@ -11,6 +11,7 @@ import {
   MultiCityPicker,
   useLeadListRun,
   useLeadListsController,
+  usePeopleListsController,
   type CityArea,
 } from "@jamot/canvas-lead-generation";
 
@@ -87,7 +88,10 @@ export function LeadGen() {
   const [actors, setActors] = useState<ApiActor[]>([]);
 
   const { lists, providers, update, create } = useLeadListsController(spaceId, organizationId);
+  const { lists: peopleLists, create: createPeopleList } = usePeopleListsController(spaceId);
   const [listId, setListId] = useState<string>("");
+  const [peopleListId, setPeopleListId] = useState<string>("");
+  const [newListName, setNewListName] = useState("");
   const [searchQueue, setSearchQueue] = useState<CityArea[] | null>(null);
   const [queueTotal, setQueueTotal] = useState(0);
   const [totals, setTotals] = useState({ added: 0, skipped: 0, found: 0 });
@@ -146,20 +150,6 @@ export function LeadGen() {
     void loadAgents();
   }, [loadAgents]);
 
-  // Once the lists load, default to the first one and seed the form from it —
-  // console shows a single "current target", unlike web's multi-list sidebar.
-  useEffect(() => {
-    const first = lists[0];
-    if (!first || listId) return;
-    setListId(first.id);
-    setIcp(first.persona.summary ?? "");
-    setKeywords(first.persona.keywords ?? []);
-    if (first.area?.center && first.area.radiusKm) {
-      setCities([{ place: first.area.place, center: first.area.center, radiusKm: first.area.radiusKm }]);
-    }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [lists]);
-
   // Runs one city at a time against `listId`. Queued rather than looped
   // inline because a freshly created list's id only takes effect on
   // `useLeadListRun(listId)` after a render — the same reason a single run
@@ -216,25 +206,34 @@ export function LeadGen() {
     setQueueTotal(cities.length);
     setNote("Saving the target…");
     try {
-      const persona = { summary: icp.trim(), keywords, titles: [] as string[] };
+      if (!provider) throw new Error("no lead provider is available");
 
-      if (listId) {
-        await update(listId, { persona: persona as never });
-        setSearchQueue(cities);
-      } else {
-        if (!provider) throw new Error("no lead provider is available");
-        const created = await create({
-          name: `${cities[0]!.place.split(",")[0]}${cities.length > 1 ? ` +${cities.length - 1}` : ""} — ${new Date().toLocaleDateString()}`,
-          providerId: provider.id,
-          persona: persona as never,
-          area: cities[0]!,
-        });
-        setListId(created.id);
-        // create() only persists cities[0] as the list's initial area — it
-        // does not run a search. The queue below still processes all of
-        // `cities` in order once useLeadListRun(listId) rebinds to this id.
-        setSearchQueue(cities);
+      // "Create a new list" is the default; picking an existing People List
+      // just reuses its id. Either way this is the durable target — every
+      // match across every search lands here, which is what makes it show
+      // up in People and be usable from Outreach.
+      let targetPeopleListId = peopleListId;
+      if (!targetPeopleListId) {
+        if (!newListName.trim()) throw new Error("Name the new list, or pick an existing one.");
+        const createdList = await createPeopleList(newListName.trim());
+        targetPeopleListId = createdList.id;
+        setPeopleListId(createdList.id);
+        setNewListName("");
       }
+
+      const persona = { summary: icp.trim(), keywords, titles: [] as string[] };
+      const created = await create({
+        name: `${cities[0]!.place.split(",")[0]}${cities.length > 1 ? ` +${cities.length - 1}` : ""} — ${new Date().toLocaleDateString()}`,
+        providerId: provider.id,
+        persona: persona as never,
+        area: cities[0]!,
+        peopleListId: targetPeopleListId,
+      });
+      setListId(created.id);
+      // create() only persists cities[0] as the list's initial area — it
+      // does not run a search. The queue below processes all of `cities` in
+      // order once useLeadListRun(listId) rebinds to this new id.
+      setSearchQueue(cities);
     } catch (err) {
       setError(err instanceof Error ? err.message : "The search failed.");
       setNote(null);
@@ -282,8 +281,8 @@ export function LeadGen() {
         <div style={{ flex: 1, minWidth: 240 }}>
           <h1 style={{ margin: 0, fontSize: 36, lineHeight: 1.1, letterSpacing: "-0.02em" }}>Lead Generation</h1>
           <p style={{ margin: "8px 0 0", fontSize: 14, lineHeight: 1.6, color: MUTED, maxWidth: "62ch" }}>
-            Describe who you're looking for, add cities to search, and press Search. Everything found
-            lands in a People list, so Outreach can work it immediately.
+            Pick a People list, describe who you're looking for, add cities, and press Search.
+            Everything found lands in that list, so Outreach can work it immediately.
           </p>
         </div>
         <div style={{ display: "flex", gap: "var(--space-2)", flexWrap: "wrap" }}>
@@ -294,7 +293,7 @@ export function LeadGen() {
             className="btn btn-primary"
             style={{ justifyContent: "flex-start" }}
             onClick={() => void search()}
-            disabled={starting || running || cities.length === 0}
+            disabled={starting || running || cities.length === 0 || (!peopleListId && !newListName.trim())}
           >
             {starting || running ? "Searching…" : "Search"}
           </button>
@@ -348,13 +347,27 @@ export function LeadGen() {
             <input className="input" id="lg-vol" type="number" min={5} max={500} step={5} value={volume} onChange={(e) => setVolume(Number(e.target.value) || 5)} />
           </div>
           <div className="field">
-            <label htmlFor="lg-list">Destination list</label>
-            <select className="input" id="lg-list" value={listId} onChange={(e) => setListId(e.target.value)}>
+            <label htmlFor="lg-people-list">People list</label>
+            <select
+              className="input"
+              id="lg-people-list"
+              value={peopleListId}
+              onChange={(e) => setPeopleListId(e.target.value)}
+            >
               <option value="">Create a new list</option>
-              {lists.map((l) => (
+              {peopleLists.map((l) => (
                 <option key={l.id} value={l.id}>{l.name}</option>
               ))}
             </select>
+            {peopleListId === "" ? (
+              <input
+                className="input"
+                style={{ marginTop: "var(--space-2)" }}
+                placeholder="New list name"
+                value={newListName}
+                onChange={(e) => setNewListName(e.target.value)}
+              />
+            ) : null}
           </div>
         </section>
       </div>
@@ -389,7 +402,7 @@ export function LeadGen() {
           </thead>
           <tbody>
             {results.length === 0 ? (
-              <tr><td colSpan={6} style={{ padding: "10px var(--space-3)", color: MUTED }}>Nothing found yet. Set a target and start.</td></tr>
+              <tr><td colSpan={6} style={{ padding: "10px var(--space-3)", color: MUTED }}>Nothing found yet. Pick cities and press Search.</td></tr>
             ) : (
               results.map((r) => (
                 <tr key={r.id} style={{ borderBottom: "1px solid var(--color-divider)" }}>
