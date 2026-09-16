@@ -1750,20 +1750,26 @@ Personal and organization vaults remain technically separated.
 
 # 37. Agent Configuration UX
 
-Agent configuration must be minimal.
+Agent configuration must be minimal, and it must exist in exactly one place.
 
-Primary screen:
+There is one canonical editing surface: the console (`apps/console`), subdomain-routed per organization. Every other surface that once had its own copy of this screen now navigates there instead of re-implementing it — the cockpit's `/agents/[id]` route and its agent directory both resolve an agent's organization and hand off to `https://<org-slug>.<root-domain>/?app=agent-configurator&agent=<id>`, which the console reads to open straight to that agent. An Agent's configuration is not duplicated per surface any more than its identity is (§15).
+
+Primary flow:
 
 ```text
-Name
-What should it help with?
-Skills
-Channels
-Autonomy
-Save
+Create Agent
+  → Profile         (name, avatar, title, description)
+  → Instructions     (what it does, personality/behavior)
+  → Model            (provider + model)
+  → Capabilities     (skills, MCP tools/internal apps, Company Brain)
+  → Memory           (Agent Memory — always on; Organization Memory)
+  → Autonomy         (suggest/approve/autonomous, reports-to, budget)
+  → Save
 ```
 
-Advanced technical settings are hidden under Advanced.
+Every field above is a column that already existed on the Agent/Actor record (§3.4) before this flow — the screen exposes and organizes what was already modeled, it is not a second configuration system. "Company Brain," shown on both Capabilities and Memory, is one underlying flag (organization-scoped memory, §6.3) surfaced in the two places a user would reasonably look for it, not two settings.
+
+Advanced technical settings — heartbeat/schedule (§15's harness concept, the runtime detail) and per-action permissions — are hidden under an Advanced disclosure inside Autonomy rather than given their own step.
 
 Users should not need to understand model parameters or infrastructure details to create an Agent.
 

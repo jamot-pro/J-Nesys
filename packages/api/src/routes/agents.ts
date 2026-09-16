@@ -1,5 +1,7 @@
 import { z } from "zod";
 import type { FastifyInstance } from "fastify";
+import { mkdir, writeFile } from "node:fs/promises";
+import { join } from "node:path";
 import {
   AutonomyLevel,
   CreateRelationshipBody,
@@ -64,6 +66,14 @@ const ImportMcpBody = z.object({
   name: z.string().min(1),
   mcpUrl: z.string().url(),
 });
+
+const AvatarUploadBody = z.object({
+  dataUri: z.string().min(1),
+});
+
+function joinUploadsDir(): string {
+  return join(process.cwd(), "uploads");
+}
 
 /** Whether an authenticated actor may manage (edit/delete) an agent. */
 async function canManageAgent(
@@ -195,6 +205,52 @@ export default async function agentsRoutes(
     });
 
     return updated;
+  });
+
+  /* Mirrors PUT /organizations/:id/logo: same data-URI contract, same 2MB
+     cap, same uploads layout — the pattern already exists, this just gives
+     an agent's actor the same picture a Person or Organization can have. */
+  app.put("/agents/:id/avatar", { preHandler: requireAuth }, async (request, reply) => {
+    const params = request.params as { id?: string };
+    const id = parse(Id, params.id, reply);
+    if (!id) return;
+
+    const actorId = request.session.actorId;
+    if (!actorId) return fail(reply, 401, "Unauthenticated");
+
+    const agent = await repository.getAgent(id);
+    if (!agent) return fail(reply, 404, "agent not found");
+    if (!(await canManageAgent(repository, actorId, agent))) {
+      return deny(reply, "You cannot modify this agent");
+    }
+
+    const body = parse(AvatarUploadBody, request.body, reply);
+    if (!body) return;
+
+    const match = /^data:(image\/(?:png|jpeg|jpg|gif|webp|svg\+xml));base64,(.+)$/i.exec(
+      body.dataUri,
+    );
+    if (!match) return fail(reply, 400, "expected a base64 image data URI");
+    const mime = match[1]!.toLowerCase();
+    const raw = match[2]!.replace(/\s+/g, "");
+    const buffer = Buffer.from(raw, "base64");
+    if (buffer.byteLength === 0) return fail(reply, 400, "empty image");
+    if (buffer.byteLength > 2 * 1024 * 1024) {
+      return fail(reply, 413, "image exceeds 2 MB limit");
+    }
+
+    const ext = mime === "image/svg+xml" ? "svg" : mime.replace("image/", "");
+    const uploadsDir = process.env.UPLOADS_DIR ?? joinUploadsDir();
+    const actorDir = join(uploadsDir, "actors", agent.actorId);
+    await mkdir(actorDir, { recursive: true });
+    const filename = `avatar.${ext}`;
+    await writeFile(join(actorDir, filename), buffer);
+
+    const avatarUrl = `/uploads/actors/${agent.actorId}/${filename}`;
+    const updated = await repository.updateActor(agent.actorId, { avatarUrl });
+    if (!updated) return fail(reply, 404, "actor not found");
+
+    return { avatarUrl };
   });
 
   app.delete("/agents/:id", { preHandler: requireAuth }, async (request, reply) => {

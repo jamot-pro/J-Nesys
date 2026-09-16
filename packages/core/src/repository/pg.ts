@@ -251,6 +251,7 @@ function toActor(row: ActorRow): Actor {
     type: row.type,
     source: row.source,
     displayName: row.displayName,
+    avatarUrl: row.avatarUrl ?? null,
     status: row.status,
     externalIdentities: row.externalIdentities,
     personalSpaceId: (row.personalSpaceId as Id | null) ?? null,

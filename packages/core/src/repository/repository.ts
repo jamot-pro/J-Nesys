@@ -625,7 +625,7 @@ export interface JamotRepository {
   createActor(input: NewActor): Promise<Actor>;
   getActor(id: string): Promise<Actor | null>;
   listActors(filter?: { spaceId?: string }): Promise<Actor[]>;
-  updateActor(id: string, patch: Partial<Pick<Actor, "displayName" | "status" | "personalSpaceId">>): Promise<Actor | null>;
+  updateActor(id: string, patch: Partial<Pick<Actor, "displayName" | "avatarUrl" | "status" | "personalSpaceId">>): Promise<Actor | null>;
   /**
    * Permanently removes an actor row, not just its agent. Anything created
    * under it (lead lists, people lists, deals, skills, connectors, an org

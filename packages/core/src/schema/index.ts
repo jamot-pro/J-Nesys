@@ -139,6 +139,7 @@ export const actors = pgTable("actors", {
   type: actorTypeEnum("type").notNull(),
   source: actorSourceEnum("source").notNull().default("internal"),
   displayName: text("display_name").notNull(),
+  avatarUrl: text("avatar_url"),
   status: actorStatusEnum("status").notNull().default("active"),
   externalIdentities: jsonb("external_identities")
     .$type<ExternalIdentity[]>()
