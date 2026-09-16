@@ -1,14 +1,14 @@
 "use client";
 
 import { useMemo, useState, type MouseEvent } from "react";
-import { geocodePlace } from "./geocode.js";
+import { geocodePlace } from "./geocode";
 import {
   centeredTileGrid,
   metersPerPixel,
   pixelOffsetToLatLng,
   zoomForRadius,
   type LatLng,
-} from "./tileMath.js";
+} from "./tileMath";
 
 export interface MapArea {
   place: string;
