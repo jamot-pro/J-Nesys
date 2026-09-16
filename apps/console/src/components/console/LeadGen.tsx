@@ -1,13 +1,18 @@
 "use client";
 
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import {
   getAgents,
   listActors,
   type ApiAgent,
   type ApiActor,
 } from "@jamot/client";
-import { useLeadListRun, useLeadListsController } from "@jamot/canvas-lead-generation";
+import {
+  MapAreaPicker,
+  useLeadListRun,
+  useLeadListsController,
+  type MapArea,
+} from "@jamot/canvas-lead-generation";
 
 import { useOrgScope } from "../console-context";
 
@@ -19,22 +24,6 @@ const UPPER = {
   letterSpacing: "0.1em",
   textTransform: "uppercase",
 } as const;
-
-/** The mockup's map is a fixed 3x3 OpenStreetMap grid at zoom 5 — a static
- * picture of Europe with the search circle drawn over it, not a slippy map.
- * Reproduced exactly, including the tile range. */
-const TILES: string[] = [];
-for (let y = 9; y <= 11; y++) {
-  for (let x = 15; x <= 17; x++) TILES.push(`https://tile.openstreetmap.org/5/${x}/${y}.png`);
-}
-
-/** Verbatim from the mockup's AREA_MODES and ENRICH_TASKS. */
-const AREA_MODES = [
-  { id: "places", label: "Region or city" },
-  { id: "box", label: "Box on map" },
-  { id: "radius", label: "Radius" },
-] as const;
-type AreaMode = (typeof AREA_MODES)[number]["id"];
 
 const ENRICH_TASKS = [
   "Find and verify email",
@@ -82,19 +71,18 @@ function Chip({ text, onRemove }: { text: string; onRemove: () => void }) {
 }
 
 /**
- * Lead Generation — a port of sales-game/LeadGen.dc.html, styles verbatim,
- * wired to the real lead-list API.
- *
- * The mockup's target/keywords/area controls map onto LeadPersona and LeadArea:
- * the brief becomes persona.summary, the chips become persona.keywords, the
- * places and radius become the area. "Start" persists the list and runs it.
+ * Lead Generation, wired to the real lead-list API. The target/keywords/area
+ * controls map onto LeadPersona and LeadArea: the brief becomes
+ * persona.summary, the chips become persona.keywords, and the shared
+ * MapAreaPicker (packages/canvas-lead-generation) owns the area — a real
+ * geocoded center + radius, not an approximation. "Start" persists the list
+ * and runs it.
  */
 export function LeadGen() {
   const { organizationId, spaceId } = useOrgScope();
 
   const [agents, setAgents] = useState<ApiAgent[]>([]);
   const [actors, setActors] = useState<ApiActor[]>([]);
-  const mapRef = useRef<HTMLDivElement | null>(null);
 
   const { lists, providers, update, create } = useLeadListsController(spaceId, organizationId);
   const [listId, setListId] = useState<string>("");
@@ -106,12 +94,8 @@ export function LeadGen() {
 
   const [icp, setIcp] = useState("");
   const [keywords, setKeywords] = useState<string[]>([]);
-  const [places, setPlaces] = useState<string[]>([]);
+  const [area, setArea] = useState<MapArea | null>(null);
   const [volume, setVolume] = useState(50);
-  const [radius, setRadius] = useState(120);
-  const [pin, setPin] = useState({ x: 50, y: 50 });
-  const [areaMode, setAreaMode] = useState<AreaMode>("radius");
-  const [box, setBox] = useState({ x: 30, y: 30, w: 0, h: 0 });
   const [enrichTask, setEnrichTask] = useState(ENRICH_TASKS[0]!);
   const [enrichScope, setEnrichScope] = useState<"new" | "list" | "missing">("new");
   const [enriching, setEnriching] = useState(false);
@@ -166,7 +150,7 @@ export function LeadGen() {
     setListId(first.id);
     setIcp(first.persona.summary ?? "");
     setKeywords(first.persona.keywords ?? []);
-    if (first.area?.place) setPlaces([first.area.place]);
+    if (first.area) setArea(first.area);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [lists]);
 
@@ -194,7 +178,6 @@ export function LeadGen() {
     setNote("Saving the target…");
     try {
       const persona = { summary: icp.trim(), keywords, titles: [] as string[] };
-      const area = places[0] ? { place: places[0], radiusKm: radius } : null;
 
       if (listId) {
         await update(listId, { persona: persona as never, area });
@@ -207,7 +190,7 @@ export function LeadGen() {
       } else {
         if (!provider) throw new Error("no lead provider is available");
         const created = await create({
-          name: places[0] ? `${places[0]} — ${new Date().toLocaleDateString()}` : "New target",
+          name: area?.place ? `${area.place} — ${new Date().toLocaleDateString()}` : "New target",
           providerId: provider.id,
           persona: persona as never,
           area,
@@ -371,145 +354,9 @@ export function LeadGen() {
         </section>
       </div>
 
-      <section style={{ ...CARD, marginTop: "var(--space-3)", gap: 0 }}>
-        <div style={{ display: "flex", alignItems: "baseline", gap: "var(--space-3)", flexWrap: "wrap" }}>
-          <span style={UPPER}>Geographic area</span>
-          <span style={{ fontSize: 12, color: MUTED }}>
-            {places.length ? `${places.join(", ")}${areaMode === "radius" ? ` · ${radius} km` : ""}` : "No area set"}
-          </span>
-          <div className="seg" style={{ marginLeft: "auto" }}>
-            {AREA_MODES.map((m) => (
-              <label key={m.id} className="seg-opt">
-                <input
-                  type="radio"
-                  name="areamode"
-                  checked={areaMode === m.id}
-                  onChange={() => setAreaMode(m.id)}
-                />
-                {m.label}
-              </label>
-            ))}
-          </div>
-        </div>
-
-        <div style={{ display: "flex", gap: "var(--space-3)", flexWrap: "wrap", marginTop: "var(--space-3)", alignItems: "flex-start" }}>
-          <div
-            ref={mapRef}
-            onMouseDown={(e) => {
-              const r = mapRef.current?.getBoundingClientRect();
-              if (!r) return;
-              const pct = (ev: { clientX: number; clientY: number }) => ({
-                x: ((ev.clientX - r.left) / r.width) * 100,
-                y: ((ev.clientY - r.top) / r.height) * 100,
-              });
-              if (areaMode !== "box") {
-                setPin(pct(e));
-                return;
-              }
-              // Box mode: drag a rectangle. Normalised so dragging up or left
-              // still produces a positive width and height.
-              const start = pct(e);
-              const move = (ev: MouseEvent) => {
-                const now = pct(ev);
-                setBox({
-                  x: Math.min(start.x, now.x),
-                  y: Math.min(start.y, now.y),
-                  w: Math.abs(now.x - start.x),
-                  h: Math.abs(now.y - start.y),
-                });
-              };
-              const up = () => {
-                window.removeEventListener("mousemove", move);
-                window.removeEventListener("mouseup", up);
-              };
-              window.addEventListener("mousemove", move);
-              window.addEventListener("mouseup", up);
-            }}
-            style={{ flex: 1, minWidth: 280, position: "relative", height: 360, border: "1px solid var(--color-divider)", borderRadius: "var(--radius-sm)", overflow: "hidden", cursor: "crosshair" }}
-          >
-            <div style={{ position: "absolute", top: -160, left: "50%", marginLeft: -384, width: 768, height: 768, display: "grid", gridTemplateColumns: "repeat(3,256px)", gridTemplateRows: "repeat(3,256px)", filter: "grayscale(1) contrast(1.1)" }}>
-              {TILES.map((src) => (
-                // eslint-disable-next-line @next/next/no-img-element -- OSM tiles, fixed set
-                <img key={src} src={src} alt="" width={256} height={256} style={{ display: "block", width: 256, height: 256 }} />
-              ))}
-            </div>
-            {areaMode === "box" ? (
-              <div
-                style={{
-                  position: "absolute",
-                  left: `${box.x}%`,
-                  top: `${box.y}%`,
-                  width: `${box.w}%`,
-                  height: `${box.h}%`,
-                  border: "2px solid var(--color-accent)",
-                  background: "color-mix(in srgb, var(--color-accent) 14%, transparent)",
-                  pointerEvents: "none",
-                }}
-              />
-            ) : null}
-            {areaMode === "radius" ? (
-            <>
-            <div
-              style={{
-                position: "absolute",
-                left: `${pin.x}%`,
-                top: `${pin.y}%`,
-                width: (radius / 400) * 300,
-                height: (radius / 400) * 300,
-                transform: "translate(-50%,-50%)",
-                borderRadius: 999,
-                border: "2px solid var(--color-accent)",
-                background: "color-mix(in srgb, var(--color-accent) 14%, transparent)",
-                pointerEvents: "none",
-              }}
-            />
-            <div style={{ position: "absolute", left: `${pin.x}%`, top: `${pin.y}%`, width: 12, height: 12, transform: "translate(-50%,-50%)", borderRadius: 999, background: "var(--color-accent)", boxShadow: "0 0 0 3px var(--color-bg)", pointerEvents: "none" }} />
-            </>
-            ) : null}
-            <span style={{ position: "absolute", left: 8, bottom: 6, fontFamily: "ui-monospace,'SF Mono',Menlo,monospace", fontSize: 10, color: "color-mix(in srgb, var(--color-text) 70%, transparent)" }}>
-              © OpenStreetMap
-            </span>
-          </div>
-
-          <div style={{ flex: "none", width: 250, display: "flex", flexDirection: "column", gap: "var(--space-3)" }}>
-            <div className="field">
-              <label htmlFor="lg-place">Add a region or city</label>
-              <input
-                className="input"
-                id="lg-place"
-                placeholder="Type a place, press Enter"
-                onKeyDown={(e) => {
-                  if (e.key !== "Enter") return;
-                  e.preventDefault();
-                  const v = e.currentTarget.value.trim();
-                  if (v) setPlaces((p) => [...p, v]);
-                  e.currentTarget.value = "";
-                }}
-              />
-            </div>
-            {areaMode === "radius" ? (
-            <>
-            <div className="field">
-              <label htmlFor="lg-radius">Radius — {radius} km</label>
-              <input className="input" id="lg-radius" type="range" min={5} max={400} step={5} value={radius} onChange={(e) => setRadius(Number(e.target.value))} />
-            </div>
-            <p style={{ margin: 0, fontSize: 12, lineHeight: 1.55, color: MUTED }}>
-              Click the map to move the centre, then set how far out the agent may look.
-            </p>
-            </>
-            ) : areaMode === "box" ? (
-              <p style={{ margin: 0, fontSize: 12, lineHeight: 1.55, color: MUTED }}>
-                Drag across the map to box a region. The agent treats the union of the box and every
-                named place as the search area.
-              </p>
-            ) : null}
-            <div style={{ display: "flex", flexWrap: "wrap", gap: 8 }}>
-              {places.map((p, i) => (
-                <Chip key={`${p}-${i}`} text={p} onRemove={() => setPlaces((v) => v.filter((_, j) => j !== i))} />
-              ))}
-            </div>
-          </div>
-        </div>
+      <section style={{ ...CARD, marginTop: "var(--space-3)" }}>
+        <span style={UPPER}>Geographic area</span>
+        <MapAreaPicker value={area} onChange={setArea} height={300} />
       </section>
 
       {starting || running ? (
