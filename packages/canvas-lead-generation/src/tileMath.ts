@@ -72,6 +72,27 @@ export function latLngToPixelOffset(
   return { dx: (tileX - centerTileX) * 256, dy: (tileY - centerTileY) * 256 };
 }
 
+/** Center + zoom that fits every point in `points` on a `viewportPx`-wide/tall map. */
+export function fitBounds(points: LatLng[], viewportPx: number): { center: LatLng; zoom: number } {
+  if (points.length === 0) return { center: { lat: 41.9028, lng: 12.4964 }, zoom: 5 };
+  if (points.length === 1) return { center: points[0]!, zoom: 11 };
+
+  const lats = points.map((p) => p.lat);
+  const lngs = points.map((p) => p.lng);
+  const center = {
+    lat: (Math.min(...lats) + Math.max(...lats)) / 2,
+    lng: (Math.min(...lngs) + Math.max(...lngs)) / 2,
+  };
+
+  const target = viewportPx * 0.7;
+  for (let zoom = 14; zoom >= 2; zoom--) {
+    const dx = Math.abs(lngToTileX(Math.max(...lngs), zoom) - lngToTileX(Math.min(...lngs), zoom)) * 256;
+    const dy = Math.abs(latToTileY(Math.min(...lats), zoom) - latToTileY(Math.max(...lats), zoom)) * 256;
+    if (dx <= target && dy <= target) return { center, zoom };
+  }
+  return { center, zoom: 2 };
+}
+
 /** Top-left tile coordinates (integer) for a grid of `count x count` tiles centered on `center`. */
 export function centeredTileGrid(center: LatLng, zoom: number, count: number) {
   const centerTileX = lngToTileX(center.lng, zoom);

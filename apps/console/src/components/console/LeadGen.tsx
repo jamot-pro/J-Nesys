@@ -8,10 +8,10 @@ import {
   type ApiActor,
 } from "@jamot/client";
 import {
-  MapAreaPicker,
+  MultiCityPicker,
   useLeadListRun,
   useLeadListsController,
-  type MapArea,
+  type CityArea,
 } from "@jamot/canvas-lead-generation";
 
 import { useOrgScope } from "../console-context";
@@ -71,12 +71,14 @@ function Chip({ text, onRemove }: { text: string; onRemove: () => void }) {
 }
 
 /**
- * Lead Generation, wired to the real lead-list API. The target/keywords/area
- * controls map onto LeadPersona and LeadArea: the brief becomes
- * persona.summary, the chips become persona.keywords, and the shared
- * MapAreaPicker (packages/canvas-lead-generation) owns the area — a real
- * geocoded center + radius, not an approximation. "Start" persists the list
- * and runs it.
+ * Lead Generation, wired to the real lead-list API. The prompt/keywords map
+ * onto LeadPersona; each selected city (packages/canvas-lead-generation's
+ * MultiCityPicker — real geocoded center + radius per city, highlighted on
+ * one map) becomes one LeadArea. "Search" runs the same list once per
+ * selected city, sequentially, aggregating everything into one People list.
+ * There is no agent to pick for the search itself — one fixed provider
+ * (Apify's Google Maps actor) always reads the prompt and keywords; agent
+ * selection only applies to enrichment, a separate step below.
  */
 export function LeadGen() {
   const { organizationId, spaceId } = useOrgScope();
@@ -86,7 +88,9 @@ export function LeadGen() {
 
   const { lists, providers, update, create } = useLeadListsController(spaceId, organizationId);
   const [listId, setListId] = useState<string>("");
-  const [pendingRunVolume, setPendingRunVolume] = useState<number | null>(null);
+  const [searchQueue, setSearchQueue] = useState<CityArea[] | null>(null);
+  const [queueTotal, setQueueTotal] = useState(0);
+  const [totals, setTotals] = useState({ added: 0, skipped: 0, found: 0 });
   const { leads: results, running, error, setError, run, enrichOne } = useLeadListRun(
     listId || null,
   );
@@ -94,7 +98,7 @@ export function LeadGen() {
 
   const [icp, setIcp] = useState("");
   const [keywords, setKeywords] = useState<string[]>([]);
-  const [area, setArea] = useState<MapArea | null>(null);
+  const [cities, setCities] = useState<CityArea[]>([]);
   const [volume, setVolume] = useState(50);
   const [enrichTask, setEnrichTask] = useState(ENRICH_TASKS[0]!);
   const [enrichScope, setEnrichScope] = useState<"new" | "list" | "missing">("new");
@@ -150,63 +154,91 @@ export function LeadGen() {
     setListId(first.id);
     setIcp(first.persona.summary ?? "");
     setKeywords(first.persona.keywords ?? []);
-    if (first.area) setArea(first.area);
+    if (first.area?.center && first.area.radiusKm) {
+      setCities([{ place: first.area.place, center: first.area.center, radiusKm: first.area.radiusKm }]);
+    }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [lists]);
 
-  // A newly created list only gets its id after `create()` resolves, so the
-  // run that was requested against it is queued here and fired once the
-  // `useLeadListRun(listId)` hook above has rebound to the new id.
+  // Runs one city at a time against `listId`. Queued rather than looped
+  // inline because a freshly created list's id only takes effect on
+  // `useLeadListRun(listId)` after a render — the same reason a single run
+  // used to be deferred — and queuing generalizes that to N cities.
   useEffect(() => {
-    if (pendingRunVolume === null || !listId) return;
-    const volume = pendingRunVolume;
-    setPendingRunVolume(null);
-    void run(volume)
-      .then((result) => {
-        if (!result) return;
-        setNote(`${result.added} added · ${result.skipped} skipped · ${result.totalFound} found`);
-      })
-      .finally(() => setStarting(false));
+    if (!searchQueue || searchQueue.length === 0 || !listId) return;
+    const [city, ...rest] = searchQueue as [CityArea, ...CityArea[]];
+    const step = queueTotal - rest.length;
+    setNote(`Searching ${city.place.split(",")[0]} (${step}/${queueTotal})…`);
+
+    void (async () => {
+      try {
+        await update(listId, { area: city });
+        const result = await run(volume);
+        if (result) {
+          if (result.error) setError(result.error);
+          setTotals((t) => ({
+            added: t.added + result.added,
+            skipped: t.skipped + result.skipped,
+            found: t.found + result.totalFound,
+          }));
+        }
+      } catch (err) {
+        setError(err instanceof Error ? err.message : "The run failed.");
+      } finally {
+        if (rest.length === 0) {
+          setStarting(false);
+          setSearchQueue(null);
+        } else {
+          setSearchQueue(rest);
+        }
+      }
+    })();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [listId, pendingRunVolume]);
+  }, [listId, searchQueue]);
+
+  // Once every queued city has run, summarize — the queue effect above only
+  // has per-step totals, not the final tally, since it fires per city.
+  useEffect(() => {
+    if (starting || searchQueue !== null) return;
+    if (totals.added || totals.skipped || totals.found) {
+      setNote(`${totals.added} added · ${totals.skipped} skipped · ${totals.found} found`);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [starting, searchQueue]);
 
   const provider = providers.find((p) => p.configured) ?? providers[0];
 
-  async function start() {
+  async function search() {
+    if (cities.length === 0) return;
     setError(null);
     setStarting(true);
+    setTotals({ added: 0, skipped: 0, found: 0 });
+    setQueueTotal(cities.length);
     setNote("Saving the target…");
     try {
       const persona = { summary: icp.trim(), keywords, titles: [] as string[] };
 
       if (listId) {
-        await update(listId, { persona: persona as never, area });
-        setNote("Searching…");
-        const result = await run(volume);
-        if (result) {
-          if (result.error) setError(result.error);
-          setNote(`${result.added} added · ${result.skipped} skipped · ${result.totalFound} found`);
-        }
+        await update(listId, { persona: persona as never });
+        setSearchQueue(cities);
       } else {
         if (!provider) throw new Error("no lead provider is available");
         const created = await create({
-          name: area?.place ? `${area.place} — ${new Date().toLocaleDateString()}` : "New target",
+          name: `${cities[0]!.place.split(",")[0]}${cities.length > 1 ? ` +${cities.length - 1}` : ""} — ${new Date().toLocaleDateString()}`,
           providerId: provider.id,
           persona: persona as never,
-          area,
+          area: cities[0]!,
         });
-        setNote("Searching…");
-        // The run itself is deferred to the effect above, which fires once
-        // useLeadListRun(listId) has rebound to this new id.
-        setPendingRunVolume(volume);
         setListId(created.id);
-        return;
+        // create() only persists cities[0] as the list's initial area — it
+        // does not run a search. The queue below still processes all of
+        // `cities` in order once useLeadListRun(listId) rebinds to this id.
+        setSearchQueue(cities);
       }
     } catch (err) {
-      setError(err instanceof Error ? err.message : "The run failed.");
+      setError(err instanceof Error ? err.message : "The search failed.");
       setNote(null);
-    } finally {
-      if (listId) setStarting(false);
+      setStarting(false);
     }
   }
 
@@ -250,17 +282,21 @@ export function LeadGen() {
         <div style={{ flex: 1, minWidth: 240 }}>
           <h1 style={{ margin: 0, fontSize: 36, lineHeight: 1.1, letterSpacing: "-0.02em" }}>Lead Generation</h1>
           <p style={{ margin: "8px 0 0", fontSize: 14, lineHeight: 1.6, color: MUTED, maxWidth: "62ch" }}>
-            Tell an agent who you are looking for, mark the area on the map, and start. Its skills and
-            tools come from its own configuration. Everything it finds lands in a People list, so
-            Outreach can work it immediately.
+            Describe who you're looking for, add cities to search, and press Search. Everything found
+            lands in a People list, so Outreach can work it immediately.
           </p>
         </div>
         <div style={{ display: "flex", gap: "var(--space-2)", flexWrap: "wrap" }}>
           <button className="btn btn-secondary" style={{ justifyContent: "flex-start" }} onClick={() => setNote(null)}>
             Clear results
           </button>
-          <button className="btn btn-primary" style={{ justifyContent: "flex-start" }} onClick={() => void start()} disabled={starting || running}>
-            {starting || running ? "Searching…" : "Start"}
+          <button
+            className="btn btn-primary"
+            style={{ justifyContent: "flex-start" }}
+            onClick={() => void search()}
+            disabled={starting || running || cities.length === 0}
+          >
+            {starting || running ? "Searching…" : "Search"}
           </button>
         </div>
       </div>
@@ -278,38 +314,7 @@ export function LeadGen() {
 
       <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit,minmax(320px,1fr))", gap: "var(--space-3)" }}>
         <section style={CARD}>
-          <div style={{ display: "flex", alignItems: "baseline", gap: 8, flexWrap: "wrap", minWidth: 0 }}>
-            <span style={UPPER}>Tell the agent the target</span>
-            {/* The mockup's compact control, beside the heading. A select is as
-                wide as its widest option, so it needs a ceiling and a shrink
-                floor — without them one long agent name stretched it past the
-                card's edge. */}
-            <select
-              className="input"
-              aria-label="Search agent"
-              title="The agent that runs the search"
-              style={{
-                marginLeft: "auto",
-                height: 32,
-                width: "auto",
-                minWidth: 0,
-                maxWidth: "100%",
-                boxSizing: "border-box",
-                fontSize: 12,
-                textOverflow: "ellipsis",
-              }}
-              value={current?.agentId ?? ""}
-              disabled={!listId}
-              onChange={(e) => void assignAgent("agentId", e.target.value)}
-            >
-              <option value="">{agents.length === 0 ? "no agents" : "unassigned"}</option>
-              {agents.map((a) => (
-                <option key={a.id} value={a.id}>
-                  {agentName(a)}
-                </option>
-              ))}
-            </select>
-          </div>
+          <span style={UPPER}>Target prompt</span>
           <textarea
             className="input"
             rows={7}
@@ -355,8 +360,8 @@ export function LeadGen() {
       </div>
 
       <section style={{ ...CARD, marginTop: "var(--space-3)" }}>
-        <span style={UPPER}>Geographic area</span>
-        <MapAreaPicker value={area} onChange={setArea} height={300} />
+        <span style={UPPER}>Cities</span>
+        <MultiCityPicker value={cities} onChange={setCities} height={300} />
       </section>
 
       {starting || running ? (
