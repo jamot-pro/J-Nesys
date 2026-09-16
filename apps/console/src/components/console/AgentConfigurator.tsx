@@ -350,15 +350,18 @@ export function AgentConfigurator({ initialAgentId }: { initialAgentId?: string 
           No agent yet. <strong>New agent</strong> creates one you can then set up.
         </p>
       ) : (
-        <div
-          style={{
-            display: "grid",
-            gridTemplateColumns: "minmax(0,260px) minmax(0,1fr)",
-            gap: "var(--space-4)",
-            alignItems: "start",
-          }}
-        >
-          <aside style={{ display: "flex", flexDirection: "column", gap: 6, position: "sticky", top: 0 }}>
+        <div style={{ display: "flex", flexDirection: "column", gap: "var(--space-4)" }}>
+          {/* Roster: at most 3 rows visible, like the People list — pick an
+              agent by scrolling this strip, not a sidebar beside the editor. */}
+          <aside
+            style={{
+              display: "flex",
+              flexDirection: "column",
+              gap: 6,
+              maxHeight: 216,
+              overflowY: "auto",
+            }}
+          >
             {agents.map((a) => {
               const on = a.id === selectedId;
               const score = scoreOf(a);
