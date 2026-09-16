@@ -106,16 +106,6 @@ projects:
               # want to grant full platform super-admin access to specific accounts.
               - key: SUPER_ADMIN_EMAILS
                 value: ""
-              # google-maps-worker isn't functional yet (see its service block
-              # below) — left blank so the provider reports "not configured"
-              # instead of pointing at a worker that cannot search anything.
-              # Once the scraper is vendored, set this to the worker's internal
-              # address and set MAPS_WORKER_INTERNAL_TOKEN here to the same
-              # value generated on the jamot-google-maps-worker service.
-              - key: MAPS_WORKER_URL
-                value: ""
-              - key: MAPS_WORKER_INTERNAL_TOKEN
-                sync: false
 
           - type: web
             name: jamot-web
@@ -189,51 +179,6 @@ projects:
                   type: keyvalue
                   name: jamot-redis
                   property: connectionString
-
-          # Isolated Google Maps discovery worker (services/google-maps-worker).
-          # NOT functional yet: the vendored scraper
-          # (services/google-maps-worker/src/provider/omkarcloud/VENDORED_COMMIT.md)
-          # has not been checked in, so every job will fail at the search step.
-          # This entry exists so the service builds and is reachable on Render's
-          # private network once that's done — do not point Jamot Core's
-          # MAPS_WORKER_URL at it in production before then.
-          #
-          # Before first use: apply services/google-maps-worker/src/db/schema.sql
-          # against jamot-ts-db manually (no preDeployCommand here — this is a
-          # Docker runtime with no psql/pnpm toolchain guaranteed available at
-          # predeploy time, unlike the Node-runtime services above).
-          - type: pserv
-            name: jamot-google-maps-worker
-            runtime: docker
-            region: oregon
-            plan: starter
-            dockerfilePath: ./services/google-maps-worker/Dockerfile
-            dockerContext: ./services/google-maps-worker
-            buildFilter:
-              paths:
-                - services/google-maps-worker/**
-            envVars:
-              - key: DATABASE_URL
-                fromDatabase:
-                  name: jamot-ts-db
-                  property: connectionString
-              - key: MAPS_WORKER_ENABLED
-                value: "true"
-              - key: MAPS_WORKER_CONCURRENCY
-                value: "2"
-              - key: MAPS_JOB_TIMEOUT
-                value: "1800"
-              - key: MAPS_RETRY_COUNT
-                value: "3"
-              - key: MAPS_PROVIDER
-                value: omkarcloud
-              # Jamot Core authenticates to this worker with this token
-              # (leads/google-maps-worker secret, or MAPS_WORKER_INTERNAL_TOKEN
-              # env on jamot-api) — never expose it to a frontend client.
-              - key: MAPS_WORKER_INTERNAL_TOKEN
-                generateValue: true
-              - key: PORT
-                value: "8081"
 
           - type: keyvalue
             name: jamot-redis

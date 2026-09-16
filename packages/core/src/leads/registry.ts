@@ -2,7 +2,6 @@ import type { LeadProvider, LeadProviderServices } from "./types.js";
 import { createApolloProvider } from "./providers/apollo.js";
 import { createComposioLeadProvider } from "./providers/composio.js";
 import { createGoogleMapsProvider } from "./providers/google-maps.js";
-import { createGoogleMapsWorkerProvider } from "./providers/google-maps-worker.js";
 import { createMcpLeadProvider } from "./providers/mcp.js";
 
 export interface LeadProviderRegistry {
@@ -25,7 +24,6 @@ export function createLeadProviderRegistry(
   install(createApolloProvider(services));
   install(createComposioLeadProvider(services));
   install(createGoogleMapsProvider(services));
-  install(createGoogleMapsWorkerProvider(services));
   install(createMcpLeadProvider(services));
 
   for (const provider of seed) install(provider);
