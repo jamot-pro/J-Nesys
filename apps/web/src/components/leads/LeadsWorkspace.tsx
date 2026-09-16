@@ -8,10 +8,10 @@ import { useAppShell } from "@/components/app-shell/app-shell-context";
 import { useAuth } from "@/components/auth/auth-context";
 import type { LeadArea, LeadList, LeadPersona } from "@/lib/api-client";
 import {
+  MapAreaPicker,
   useLeadListRun,
   useLeadListsController,
 } from "@jamot/canvas-lead-generation";
-import { LeadMapAreaPicker } from "./LeadMapAreaPicker";
 import { LeadConfigPanel } from "./LeadConfigPanel";
 import { LeadResultsTable } from "./LeadResultsTable";
 
@@ -225,7 +225,7 @@ function NewResearch({
           <label className="text-xs font-medium text-muted-foreground">
             Target area on the map
           </label>
-          <LeadMapAreaPicker value={area} onChange={setArea} />
+          <MapAreaPicker value={area} onChange={setArea} />
         </div>
         <LeadConfigPanel
           area={area}
