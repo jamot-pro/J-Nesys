@@ -20,6 +20,7 @@
     "@dnd-kit/utilities": "^3.2.2",
     "@googlemaps/js-api-loader": "^1.16.8",
     "@jamot/archetype-engine": "workspace:*",
+    "@jamot/canvas-lead-generation": "workspace:*",
     "@jamot/client": "workspace:*",
     "@xyflow/react": "^12.11.3",
     "class-variance-authority": "^0.7.1",

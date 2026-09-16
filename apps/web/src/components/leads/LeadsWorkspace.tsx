@@ -1,25 +1,16 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { Loader2, Plus, Radar } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
 import { useAppShell } from "@/components/app-shell/app-shell-context";
 import { useAuth } from "@/components/auth/auth-context";
+import type { LeadArea, LeadList, LeadPersona } from "@/lib/api-client";
 import {
-  createLeadList,
-  deleteLeadList,
-  enrichLead,
-  listLeadLists,
-  listLeadListLeads,
-  listLeadProviders,
-  runLeadList,
-  type LeadArea,
-  type LeadList,
-  type LeadPersona,
-  type LeadProviderView,
-  type LeadView,
-} from "@/lib/api-client";
+  useLeadListRun,
+  useLeadListsController,
+} from "@jamot/canvas-lead-generation";
 import { LeadMapAreaPicker } from "./LeadMapAreaPicker";
 import { LeadConfigPanel } from "./LeadConfigPanel";
 import { LeadResultsTable } from "./LeadResultsTable";
@@ -41,33 +32,13 @@ export function LeadsWorkspace() {
   const spaceId = space.spaceId ?? user?.person?.membershipSpaceIds[0] ?? null;
   const organizationId = space.organizationId ?? null;
 
-  const [lists, setLists] = useState<LeadList[]>([]);
   const [selectedId, setSelectedId] = useState<string | null>(null);
-  const [loading, setLoading] = useState(true);
   const [creating, setCreating] = useState(false);
 
-  const reloadLists = useCallback(async () => {
-    if (!spaceId) {
-      setLists([]);
-      setLoading(false);
-      return [];
-    }
-    try {
-      const items = await listLeadLists(spaceId, organizationId);
-      setLists(items);
-      return items;
-    } catch {
-      setLists([]);
-      return [];
-    } finally {
-      setLoading(false);
-    }
-  }, [spaceId, organizationId]);
-
-  useEffect(() => {
-    // eslint-disable-next-line react-hooks/set-state-in-effect -- initial list load
-    void reloadLists();
-  }, [reloadLists]);
+  const { lists, loading, reload: reloadLists, remove } = useLeadListsController(
+    spaceId,
+    organizationId,
+  );
 
   const selected = useMemo(
     () => lists.find((list) => list.id === selectedId) ?? null,
@@ -141,9 +112,8 @@ export function LeadsWorkspace() {
                 list={selected}
                 onRefresh={() => void reloadLists()}
                 onDelete={async () => {
-                  await deleteLeadList(selected.id);
+                  await remove(selected.id);
                   setSelectedId(null);
-                  void reloadLists();
                 }}
               />
             ) : (
@@ -167,39 +137,11 @@ function SelectedList({
   onRefresh: () => void;
   onDelete: () => void;
 }) {
-  const [leads, setLeads] = useState<LeadView[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [running, setRunning] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-
-  const loadLeads = useCallback(async () => {
-    try {
-      const items = await listLeadListLeads(list.id);
-      setLeads(items);
-    } catch {
-      setLeads([]);
-    } finally {
-      setLoading(false);
-    }
-  }, [list.id]);
-
-  useEffect(() => {
-    // eslint-disable-next-line react-hooks/set-state-in-effect -- reload on list change
-    void loadLeads();
-  }, [loadLeads]);
+  const { leads, loadingLeads, running, error, run, enrichOne } = useLeadListRun(list.id);
 
   const handleRun = async () => {
-    setRunning(true);
-    setError(null);
-    try {
-      await runLeadList(list.id);
-      await loadLeads();
-      onRefresh();
-    } catch (err) {
-      setError(err instanceof Error ? err.message : "Could not generate leads");
-    } finally {
-      setRunning(false);
-    }
+    await run();
+    onRefresh();
   };
 
   return (
@@ -207,20 +149,10 @@ function SelectedList({
       <LeadResultsTable
         list={list}
         leads={leads}
-        loading={loading}
+        loading={loadingLeads}
         running={running}
         onRun={() => void handleRun()}
-        onEnrich={async (personId) => {
-          setError(null);
-          try {
-            await enrichLead(list.id, personId);
-            await loadLeads();
-          } catch (err) {
-            setError(
-              err instanceof Error ? err.message : "Could not enrich lead",
-            );
-          }
-        }}
+        onEnrich={(personId) => enrichOne(personId).catch(() => {})}
       />
       {error ? (
         <p className="shrink-0 border-t border-border px-3 py-2 text-xs text-destructive">
@@ -253,36 +185,25 @@ function NewResearch({
   onCancel: () => void;
 }) {
   const [area, setArea] = useState<LeadArea | null>(null);
-  const [providers, setProviders] = useState<LeadProviderView[]>([]);
   const [providerId, setProviderId] = useState("");
   const [persona, setPersona] = useState<LeadPersona>(EMPTY_PERSONA);
   const [name, setName] = useState("");
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
+  const { providers, create } = useLeadListsController(spaceId, organizationId);
+
   useEffect(() => {
-    void listLeadProviders(spaceId, organizationId)
-      .then((items) => {
-        setProviders(items);
-        const configured = items.find((p) => p.configured);
-        setProviderId((current) => current || configured?.id || items[0]?.id || "");
-      })
-      .catch(() => setProviders([]));
-  }, [spaceId, organizationId]);
+    const configured = providers.find((p) => p.configured);
+    setProviderId((current) => current || configured?.id || providers[0]?.id || "");
+  }, [providers]);
 
   const handleSave = async () => {
     if (!area || !name.trim() || !providerId) return;
     setSaving(true);
     setError(null);
     try {
-      const list = await createLeadList({
-        spaceId,
-        organizationId,
-        name,
-        persona,
-        area,
-        providerId,
-      });
+      const list = await create({ name, persona, area, providerId });
       onDone(list);
     } catch (err) {
       setError(err instanceof Error ? err.message : String(err));
