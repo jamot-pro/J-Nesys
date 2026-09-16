@@ -231,4 +231,77 @@ describe("agents", () => {
     });
     expect(listedAgain.json().items).toHaveLength(0);
   });
+
+  it("deleting an agent removes its actor entirely, not just the agent row", async () => {
+    const app = await makeApp();
+    const cookie = await registerAndLogin(app, "erin@example.com", "password123", "Erin");
+
+    const created = await app.inject({
+      method: "POST",
+      url: "/api/agents",
+      headers: { cookie },
+      payload: { name: "Disposable", harness: { kind: "generic_http", endpoint: null, config: {} } },
+    });
+    const agent = created.json();
+
+    const deleted = await app.inject({
+      method: "DELETE",
+      url: `/api/agents/${agent.id}`,
+      headers: { cookie },
+    });
+    expect(deleted.statusCode).toBe(204);
+
+    const gotAgent = await app.inject({
+      method: "GET",
+      url: `/api/agents/${agent.id}`,
+      headers: { cookie },
+    });
+    expect(gotAgent.statusCode).toBe(404);
+
+    // The actor itself is gone, not merely deactivated.
+    const actors = await app.inject({ method: "GET", url: "/api/actors", headers: { cookie } });
+    expect(actors.json().items.some((a: { id: string }) => a.id === agent.actorId)).toBe(false);
+  });
+
+  it("orphans what the agent created instead of deleting it, and cleans up what is meaningless without it", async () => {
+    const app = await makeApp();
+    const cookie = await registerAndLogin(app, "frank@example.com", "password123", "Frank");
+    const me = await app.inject({ method: "GET", url: "/api/auth/me", headers: { cookie } });
+    const spaceId = me.json().person.membershipSpaceIds[0] as string;
+
+    const created = await app.inject({
+      method: "POST",
+      url: "/api/agents",
+      headers: { cookie },
+      payload: { name: "Prolific", harness: { kind: "generic_http", endpoint: null, config: {} } },
+    });
+    const agent = created.json();
+
+    // A deal the agent's actor is recorded as having created.
+    const deal = await app.inject({
+      method: "POST",
+      url: "/api/deals",
+      headers: { cookie },
+      payload: { spaceId, title: "Deal made before deletion" },
+    });
+    expect(deal.statusCode).toBe(201);
+    const dealId = deal.json().id as string;
+
+    const deleted = await app.inject({
+      method: "DELETE",
+      url: `/api/agents/${agent.id}`,
+      headers: { cookie },
+    });
+    expect(deleted.statusCode).toBe(204);
+
+    // The deal survives; only its createdBy is cleared.
+    const gotDeal = await app.inject({
+      method: "GET",
+      url: `/api/deals/${dealId}`,
+      headers: { cookie },
+    });
+    expect(gotDeal.statusCode).toBe(200);
+    expect(gotDeal.json().title).toBe("Deal made before deletion");
+  });
+
 });

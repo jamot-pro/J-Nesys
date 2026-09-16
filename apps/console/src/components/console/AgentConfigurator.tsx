@@ -4,6 +4,7 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import {
   addAgentRelationship,
   createAgent,
+  deleteAgent,
   getAgentActivity,
   getAgents,
   getMe,
@@ -99,6 +100,9 @@ export function AgentConfigurator() {
   const [ownerId, setOwnerId] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
+  /** Deleting an agent removes its actor entirely — irreversible — so a
+   * click opens a confirmation rather than deleting immediately. */
+  const [confirmDeleteId, setConfirmDeleteId] = useState<string | null>(null);
   const [purpose, setPurpose] = useState("");
   const [name, setName] = useState("");
 
@@ -148,6 +152,7 @@ export function AgentConfigurator() {
   useEffect(() => {
     setPurpose(selected?.purpose ?? "");
     setName(selected ? nameOf(selected) : "");
+    setConfirmDeleteId(null);
     if (!selected) {
       setRelationships([]);
       setActivity([]);
@@ -172,6 +177,24 @@ export function AgentConfigurator() {
     },
     [loadAgents],
   );
+
+  async function deleteSelected(agent: ApiAgent) {
+    setBusy(true);
+    try {
+      await deleteAgent(agent.id);
+      await loadAgents();
+      setSelectedId(null);
+      setConfirmDeleteId(null);
+      setError(null);
+    } catch (err) {
+      /* A block (e.g. this actor still owns another agent) leaves the
+         confirmation open so the reason stays visible next to the button
+         that triggered it, rather than clearing selection on failure. */
+      setError(err instanceof Error ? err.message : "Could not delete this agent.");
+    } finally {
+      setBusy(false);
+    }
+  }
 
   /** The mockup's headline score, from the agent's real performance map. */
   function scoreOf(agent: ApiAgent): number | null {
@@ -253,6 +276,11 @@ export function AgentConfigurator() {
                     borderRadius: "var(--radius-sm)",
                     cursor: "pointer",
                     font: "inherit",
+                    /* A <button> does not inherit text colour from its
+                       ancestors the way other elements do — without this the
+                       name fell back to the browser's own control colour,
+                       which stayed dark even under body[data-theme="dark"]. */
+                    color: "var(--color-text)",
                     border: `1px solid ${on ? "var(--color-text)" : "var(--color-divider)"}`,
                     background: on ? "var(--color-surface)" : "transparent",
                   }}
@@ -342,8 +370,66 @@ export function AgentConfigurator() {
                     <div style={{ marginTop: 4, fontSize: 11, letterSpacing: "0.06em", textTransform: "uppercase", color: DIM }}>
                       Score
                     </div>
+                    <button
+                      type="button"
+                      disabled={busy}
+                      onClick={() => setConfirmDeleteId(selected.id)}
+                      style={{
+                        marginTop: 10,
+                        background: "none",
+                        border: "none",
+                        padding: 0,
+                        font: "inherit",
+                        fontSize: 11,
+                        letterSpacing: "0.06em",
+                        textTransform: "uppercase",
+                        color: "var(--color-accent)",
+                        cursor: busy ? "default" : "pointer",
+                      }}
+                    >
+                      Delete agent
+                    </button>
                   </div>
                 </div>
+
+                {confirmDeleteId === selected.id ? (
+                  <div
+                    style={{
+                      marginTop: "var(--space-4)",
+                      padding: "var(--space-3) var(--space-4)",
+                      borderRadius: "var(--radius-sm)",
+                      border: "1px solid var(--color-accent)",
+                      background: "color-mix(in srgb, var(--color-accent) 8%, transparent)",
+                    }}
+                  >
+                    <p style={{ margin: 0, fontSize: 13, lineHeight: 1.6 }}>
+                      <strong>This permanently deletes {nameOf(selected)}.</strong> Its actor is removed
+                      from the system entirely, not just deactivated — this cannot be undone. Anything it
+                      created (lead lists, deals, skills, connectors) stays, just no longer credited to
+                      it. If it still owns another agent, still has a person record, or made a custom
+                      app, deletion is refused until that is resolved first.
+                    </p>
+                    <div style={{ display: "flex", gap: "var(--space-2)", marginTop: "var(--space-3)" }}>
+                      <button
+                        type="button"
+                        className="btn"
+                        disabled={busy}
+                        onClick={() => void deleteSelected(selected)}
+                        style={{ background: "var(--color-accent)", color: "#fff", borderColor: "var(--color-accent)" }}
+                      >
+                        {busy ? "Deleting…" : "Yes, delete permanently"}
+                      </button>
+                      <button
+                        type="button"
+                        className="btn btn-secondary"
+                        disabled={busy}
+                        onClick={() => setConfirmDeleteId(null)}
+                      >
+                        Cancel
+                      </button>
+                    </div>
+                  </div>
+                ) : null}
 
                 {Object.keys(selected.performance ?? {}).length === 0 ? (
                   <p style={{ margin: "var(--space-4) 0 0", fontSize: 12, color: MUTED }}>

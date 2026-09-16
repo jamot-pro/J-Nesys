@@ -107,6 +107,7 @@ import {
   dreamListings,
   dreamBelievers,
   deals,
+  positions,
 } from "../schema/index.js";
 import type {
   JamotRepository,
@@ -154,6 +155,7 @@ import type {
   DreamListingRow,
   ProviderModelRecord,
 } from "./repository.js";
+import { DeleteActorBlockedError } from "./repository.js";
 
 type ActorRow = typeof actors.$inferSelect;
 type AgentRow = typeof agents.$inferSelect;
@@ -1851,6 +1853,43 @@ export function createPgRepository(db: Db): JamotRepository {
 
     async deleteAgent(id) {
       await q.delete(agents).where(eq(agents.id, id));
+    },
+
+    async deleteActor(id) {
+      const [ownsAgent] = await q.select({ id: agents.id }).from(agents).where(eq(agents.ownerId, id)).limit(1);
+      if (ownsAgent) {
+        throw new DeleteActorBlockedError("This actor still owns another agent — delete or reassign that agent first.");
+      }
+      const [hasPerson] = await q.select({ id: people.id }).from(people).where(eq(people.actorId, id)).limit(1);
+      if (hasPerson) {
+        throw new DeleteActorBlockedError("This actor has its own person record and cannot be removed this way.");
+      }
+      const [madeCustomApp] = await q
+        .select({ id: customApps.id })
+        .from(customApps)
+        .where(eq(customApps.createdByActorId, id))
+        .limit(1);
+      if (madeCustomApp) {
+        throw new DeleteActorBlockedError("This actor created a custom app — remove that app first.");
+      }
+
+      /* What the actor made outlives it: orphaned to null, not deleted. */
+      await q.update(leadLists).set({ createdBy: null }).where(eq(leadLists.createdBy, id));
+      await q.update(peopleLists).set({ createdBy: null }).where(eq(peopleLists.createdBy, id));
+      await q.update(deals).set({ createdBy: null }).where(eq(deals.createdBy, id));
+      await q.update(skills).set({ ownerActorId: null }).where(eq(skills.ownerActorId, id));
+      await q.update(connectors).set({ ownerActorId: null }).where(eq(connectors.ownerActorId, id));
+      await q.update(positions).set({ holderActorId: null }).where(eq(positions.holderActorId, id));
+
+      /* What means nothing without the actor goes with it — including its
+         own agent row, if it is one: agents.actorId is NOT NULL and would
+         otherwise block the actor delete below. */
+      await q.delete(agents).where(eq(agents.actorId, id));
+      await q.delete(roles).where(eq(roles.actorId, id));
+      await q.delete(notifications).where(eq(notifications.actorId, id));
+      await q.delete(composioOauthStates).where(eq(composioOauthStates.actorId, id));
+
+      await q.delete(actors).where(eq(actors.id, id));
     },
 
     async createRelationship(input) {

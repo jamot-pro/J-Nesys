@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { createMemoryRepository } from "./memory.js";
+import { DeleteActorBlockedError } from "./repository.js";
 import type { Id } from "@jamot/contracts";
 
 const UUID = "00000000-0000-4000-8000-000000000001";
@@ -191,5 +192,83 @@ describe("memory repository", () => {
 
     const limited = await repo.listEvents({ actorId: actor.id, limit: 1 });
     expect(limited).toHaveLength(1);
+  });
+
+  describe("deleteActor", () => {
+    it("removes the actor and its own agent row together", async () => {
+      const repo = createMemoryRepository();
+      const owner = await repo.createActor({ type: "human", source: "internal", displayName: "Owner" });
+      const actor = await repo.createActor({ type: "agent", source: "internal", displayName: "Maria" });
+      const agent = await repo.createAgent({
+        actorId: actor.id,
+        ownerId: owner.id,
+        harness: { kind: "mcp", endpoint: null, config: {} },
+      });
+
+      await repo.deleteActor(actor.id);
+
+      expect(await repo.getActor(actor.id)).toBeNull();
+      expect(await repo.getAgent(agent.id)).toBeNull();
+    });
+
+    it("orphans what the actor created rather than deleting it", async () => {
+      const repo = createMemoryRepository();
+      const owner = await repo.createActor({ type: "human", source: "internal", displayName: "Owner" });
+      const actor = await repo.createActor({ type: "agent", source: "internal", displayName: "Maria" });
+      await repo.createAgent({
+        actorId: actor.id,
+        ownerId: owner.id,
+        harness: { kind: "mcp", endpoint: null, config: {} },
+      });
+      const space = await repo.createSpace({ kind: "personal", ownerActorId: owner.id, name: "Owner's space" });
+      const deal = await repo.createDeal({ spaceId: space.id, createdBy: actor.id, title: "Made before deletion" });
+
+      await repo.deleteActor(actor.id);
+
+      const survived = await repo.getDeal(deal.id);
+      expect(survived).not.toBeNull();
+      expect(survived?.createdBy).toBeNull();
+      expect(survived?.title).toBe("Made before deletion");
+    });
+
+    it("deletes roles and notifications that are meaningless without the actor", async () => {
+      const repo = createMemoryRepository();
+      const owner = await repo.createActor({ type: "human", source: "internal", displayName: "Owner" });
+      const actor = await repo.createActor({ type: "agent", source: "internal", displayName: "Maria" });
+      await repo.createAgent({
+        actorId: actor.id,
+        ownerId: owner.id,
+        harness: { kind: "mcp", endpoint: null, config: {} },
+      });
+      const space = await repo.createSpace({ kind: "personal", ownerActorId: owner.id, name: "Owner's space" });
+      await repo.createRole({ actorId: actor.id, spaceId: space.id, kind: "member" });
+
+      await repo.deleteActor(actor.id);
+
+      expect(await repo.listRolesForActor(actor.id)).toHaveLength(0);
+    });
+
+    it("refuses to delete an actor that still owns another agent", async () => {
+      const repo = createMemoryRepository();
+      const owner = await repo.createActor({ type: "human", source: "internal", displayName: "Owner" });
+      const actor = await repo.createActor({ type: "agent", source: "internal", displayName: "Maria" });
+      // actor (not owner) owns this agent, so deleting actor would orphan it.
+      await repo.createAgent({
+        actorId: owner.id,
+        ownerId: actor.id,
+        harness: { kind: "mcp", endpoint: null, config: {} },
+      });
+
+      await expect(repo.deleteActor(actor.id)).rejects.toBeInstanceOf(DeleteActorBlockedError);
+      expect(await repo.getActor(actor.id)).not.toBeNull();
+    });
+
+    it("refuses to delete an actor with its own person record", async () => {
+      const repo = createMemoryRepository();
+      const actor = await repo.createActor({ type: "human", source: "internal", displayName: "Real person" });
+      await repo.createPerson({ actorId: actor.id });
+
+      await expect(repo.deleteActor(actor.id)).rejects.toBeInstanceOf(DeleteActorBlockedError);
+    });
   });
 });

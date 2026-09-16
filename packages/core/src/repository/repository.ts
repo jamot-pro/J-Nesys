@@ -49,6 +49,15 @@ import type {
  * ownership/tenant scoping by the caller, not the store.
  */
 
+/** Thrown by deleteActor when the actor still owns something that cannot
+ * be safely orphaned. `reason` is written for a human, not parsed. */
+export class DeleteActorBlockedError extends Error {
+  constructor(reason: string) {
+    super(reason);
+    this.name = "DeleteActorBlockedError";
+  }
+}
+
 // --- Create inputs (server generates id + timestamps) ---
 
 export type ChannelProtocol = "telegram" | "matrix";
@@ -617,6 +626,17 @@ export interface JamotRepository {
   getActor(id: string): Promise<Actor | null>;
   listActors(filter?: { spaceId?: string }): Promise<Actor[]>;
   updateActor(id: string, patch: Partial<Pick<Actor, "displayName" | "status" | "personalSpaceId">>): Promise<Actor | null>;
+  /**
+   * Permanently removes an actor row, not just its agent. Anything created
+   * under it (lead lists, people lists, deals, skills, connectors, an org
+   * position) is orphaned to null rather than deleted with it — that data
+   * outlives the actor that made it. Roles, notifications and pending
+   * Composio OAuth states are removed outright, since they mean nothing
+   * without the actor. Throws DeleteActorBlockedError if the actor still
+   * owns something that cannot be orphaned (a person record, another agent,
+   * a custom app) — the caller decides what to do with that.
+   */
+  deleteActor(id: string): Promise<void>;
   findActorByExternalIdentity(provider: string, value: string): Promise<Actor | null>;
   findPersonByActorId(actorId: string): Promise<Person | null>;
 

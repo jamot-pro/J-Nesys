@@ -89,6 +89,7 @@ import type {
   DreamListingRow,
   ProviderModelRecord,
 } from "./repository.js";
+import { DeleteActorBlockedError } from "./repository.js";
 
 const now = () => new Date().toISOString();
 const uuid = () => randomUUID();
@@ -836,6 +837,49 @@ export function createMemoryRepository(): JamotRepository {
 
     async deleteAgent(id) {
       agents.delete(id);
+    },
+
+    async deleteActor(id) {
+      if ([...agents.values()].some((a) => a.ownerId === id)) {
+        throw new DeleteActorBlockedError("This actor still owns another agent — delete or reassign that agent first.");
+      }
+      if ([...people.values()].some((p) => p.actorId === id)) {
+        throw new DeleteActorBlockedError("This actor has its own person record and cannot be removed this way.");
+      }
+      if ([...customAppStore.values()].some((a) => a.createdByActorId === id)) {
+        throw new DeleteActorBlockedError("This actor created a custom app — remove that app first.");
+      }
+
+      /* What the actor made outlives it: orphaned to null, not deleted. */
+      for (const [key, list] of leadListStore) {
+        if (list.createdBy === id) leadListStore.set(key, { ...list, createdBy: null });
+      }
+      for (const [key, list] of peopleListStore) {
+        if (list.createdBy === id) peopleListStore.set(key, { ...list, createdBy: null });
+      }
+      for (const [key, deal] of dealStore) {
+        if (deal.createdBy === id) dealStore.set(key, { ...deal, createdBy: null });
+      }
+      for (const [key, skill] of skills) {
+        if (skill.ownerActorId === id) skills.set(key, { ...skill, ownerActorId: null });
+      }
+      for (const [key, connector] of connectors) {
+        if (connector.ownerActorId === id) connectors.set(key, { ...connector, ownerActorId: null });
+      }
+
+      /* What means nothing without the actor goes with it — including its
+         own agent row, if it is one. */
+      for (const [key, agent] of agents) {
+        if (agent.actorId === id) agents.delete(key);
+      }
+      for (const [key, role] of roles) {
+        if (role.actorId === id) roles.delete(key);
+      }
+      for (const [key, notification] of notificationStore) {
+        if (notification.actorId === id) notificationStore.delete(key);
+      }
+
+      actors.delete(id);
     },
 
     async createRelationship(input) {
