@@ -357,8 +357,10 @@ export function AgentConfigurator({ initialAgentId }: { initialAgentId?: string 
             style={{
               display: "flex",
               flexDirection: "column",
-              gap: 6,
-              maxHeight: 216,
+              gap: 4,
+              /* Exactly 3 rows tall (each ~54px incl. border+gap) — a hundred
+                 agents sits behind the same scroll, never a taller list. */
+              maxHeight: 174,
               overflowY: "auto",
             }}
           >
@@ -371,10 +373,12 @@ export function AgentConfigurator({ initialAgentId }: { initialAgentId?: string 
                   key={a.id}
                   onClick={() => setSelectedId(a.id)}
                   style={{
-                    display: "block",
+                    display: "flex",
+                    alignItems: "center",
+                    gap: 10,
                     width: "100%",
                     textAlign: "left",
-                    padding: "11px 12px",
+                    padding: "8px 12px",
                     borderRadius: "var(--radius-sm)",
                     cursor: "pointer",
                     font: "inherit",
@@ -387,46 +391,69 @@ export function AgentConfigurator({ initialAgentId }: { initialAgentId?: string 
                     background: on ? "var(--color-surface)" : "transparent",
                   }}
                 >
-                  <span style={{ display: "flex", alignItems: "center", gap: 8 }}>
-                    {/* eslint-disable-next-line @next/next/no-img-element */}
-                    {avatarUrl ? (
-                      <img
-                        src={avatarUrl}
-                        alt=""
-                        width={22}
-                        height={22}
-                        style={{ borderRadius: "50%", flex: "none", objectFit: "cover" }}
-                      />
-                    ) : null}
+                  {/* eslint-disable-next-line @next/next/no-img-element */}
+                  {avatarUrl ? (
+                    <img
+                      src={avatarUrl}
+                      alt=""
+                      width={32}
+                      height={32}
+                      style={{ borderRadius: "50%", flex: "none", objectFit: "cover" }}
+                    />
+                  ) : (
                     <span
                       style={{
-                        flex: 1,
-                        minWidth: 0,
+                        width: 32,
+                        height: 32,
+                        borderRadius: "50%",
+                        flex: "none",
+                        display: "flex",
+                        alignItems: "center",
+                        justifyContent: "center",
+                        background: "var(--color-surface)",
+                        border: "1px solid var(--color-divider)",
                         fontFamily: "var(--font-heading)",
                         fontWeight: 800,
-                        fontSize: 14,
+                        fontSize: 13,
+                        color: DIM,
+                      }}
+                    >
+                      {nameOf(a).slice(0, 1).toUpperCase()}
+                    </span>
+                  )}
+                  <span style={{ flex: 1, minWidth: 0, display: "flex", flexDirection: "column", gap: 1 }}>
+                    <span style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                      <span
+                        style={{
+                          flex: 1,
+                          minWidth: 0,
+                          fontFamily: "var(--font-heading)",
+                          fontWeight: 800,
+                          fontSize: 14,
+                          overflow: "hidden",
+                          textOverflow: "ellipsis",
+                          whiteSpace: "nowrap",
+                        }}
+                      >
+                        {nameOf(a)}
+                      </span>
+                      <span style={{ flex: "none", fontFamily: MONO, fontSize: 12, fontWeight: 700, color: "var(--accent-ink)" }}>
+                        {score ?? "—"}
+                      </span>
+                    </span>
+                    <span
+                      style={{
+                        fontSize: 11,
+                        letterSpacing: "0.06em",
+                        textTransform: "uppercase",
+                        color: DIM,
                         overflow: "hidden",
                         textOverflow: "ellipsis",
                         whiteSpace: "nowrap",
                       }}
                     >
-                      {nameOf(a)}
+                      {a.autonomy} · {a.availability}
                     </span>
-                    <span style={{ flex: "none", fontFamily: MONO, fontSize: 12, fontWeight: 700, color: "var(--accent-ink)" }}>
-                      {score ?? "—"}
-                    </span>
-                  </span>
-                  <span
-                    style={{
-                      display: "block",
-                      marginTop: 3,
-                      fontSize: 11,
-                      letterSpacing: "0.06em",
-                      textTransform: "uppercase",
-                      color: DIM,
-                    }}
-                  >
-                    {a.autonomy} · {a.availability}
                   </span>
                 </button>
               );
