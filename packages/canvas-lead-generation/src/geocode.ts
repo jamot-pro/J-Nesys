@@ -1,4 +1,4 @@
-import type { LatLng } from "./tileMath.js";
+import type { LatLng } from "./tileMath";
 
 export interface GeocodeResult {
   label: string;
