@@ -22,8 +22,17 @@ projects:
         previews:
           generation: on
         databases:
-          - name: jamot-db
-            plan: starter
+          # Was "jamot-db" (basic_256mb, oregon) — that instance is suspended
+          # and unused. The live jamot-api/scheduler/channels services had
+          # DATABASE_URL unset in production (confirmed from jamot-api's own
+          # logs: "[migrate] DATABASE_URL unset — skipping migrations" on
+          # 2026-09-13/14/15), meaning this blueprint's database wiring had
+          # drifted from what's actually running. jamot-ts-db is the database
+          # actually in use; every fromDatabase reference below now points
+          # at it. jamot-db should be deleted from the Render dashboard once
+          # this is confirmed working — no tool here can delete it.
+          - name: jamot-ts-db
+            plan: basic_256mb
             region: oregon
 
         services:
@@ -53,7 +62,7 @@ projects:
             envVars:
               - key: DATABASE_URL
                 fromDatabase:
-                  name: jamot-db
+                  name: jamot-ts-db
                   property: connectionString
               - key: REDIS_URL
                 fromService:
@@ -173,7 +182,7 @@ projects:
             envVars:
               - key: DATABASE_URL
                 fromDatabase:
-                  name: jamot-db
+                  name: jamot-ts-db
                   property: connectionString
               - key: REDIS_URL
                 fromService:
@@ -190,7 +199,7 @@ projects:
           # MAPS_WORKER_URL at it in production before then.
           #
           # Before first use: apply services/google-maps-worker/src/db/schema.sql
-          # against jamot-db manually (no preDeployCommand here — this is a
+          # against jamot-ts-db manually (no preDeployCommand here — this is a
           # Docker runtime with no psql/pnpm toolchain guaranteed available at
           # predeploy time, unlike the Node-runtime services above).
           - type: pserv
@@ -206,7 +215,7 @@ projects:
             envVars:
               - key: DATABASE_URL
                 fromDatabase:
-                  name: jamot-db
+                  name: jamot-ts-db
                   property: connectionString
               - key: MAPS_WORKER_ENABLED
                 value: "true"
@@ -252,7 +261,7 @@ projects:
             envVars:
               - key: DATABASE_URL
                 fromDatabase:
-                  name: jamot-db
+                  name: jamot-ts-db
                   property: connectionString
               - key: REDIS_URL
                 fromService:
