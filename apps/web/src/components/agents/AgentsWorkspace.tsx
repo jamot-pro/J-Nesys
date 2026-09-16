@@ -11,7 +11,7 @@ import type { DirectoryMatch } from "@/components/directory/search";
 import { useAppShell } from "@/components/app-shell/app-shell-context";
 import { getAgents } from "@/lib/api-client";
 import { agentToAgentProfile } from "@/lib/live-directory";
-import { AgentConfigurator } from "./config/agent-configurator";
+import { agentConsoleUrl } from "@/lib/agent-console-link";
 import { CreateAgentWizard } from "./CreateAgentWizard";
 import { AgentsTable } from "./AgentsTable";
 import type { AgentProfile as Agent } from "./agents-data";
@@ -38,7 +38,7 @@ function AgentsDirectory({
   const [agents, setAgents] = useState<Agent[]>([]);
   const [loading, setLoading] = useState(true);
   const [creating, setCreating] = useState(false);
-  const [selectedId, setSelectedId] = useState<string | null>(null);
+  const [navError, setNavError] = useState<string | null>(null);
   const [reloadKey, setReloadKey] = useState(0);
 
   useEffect(() => {
@@ -61,11 +61,6 @@ function AgentsDirectory({
       cancelled = true;
     };
   }, [orgId, reloadKey]);
-
-  const reloadAgents = () => {
-    setLoading(true);
-    setReloadKey((key) => key + 1);
-  };
 
   const search = useDirectorySearch({ kind: "agents", people: [], agents });
 
@@ -90,30 +85,28 @@ function AgentsDirectory({
 
   const showSearchResult = search.query.trim() !== "" && search.hasSearched;
 
-  const openAgent = (id: string) => setSelectedId(id);
+  /* There is no in-cockpit editor to open anymore — this resolves the
+     agent's organization and navigates to the console for it. */
+  const openAgent = (id: string) => {
+    setNavError(null);
+    void agentConsoleUrl(id)
+      .then((url) => window.location.assign(url))
+      .catch((err) => setNavError(err instanceof Error ? err.message : "Could not open that agent."));
+  };
 
   const handleCreated = (id: string) => {
     setCreating(false);
-    setSelectedId(id);
+    openAgent(id);
   };
 
   return (
     <div className="relative flex min-h-0 w-full flex-1 flex-col overflow-hidden">
-      {selectedId ? (
-        <AgentConfigurator
-          key={selectedId}
-          agentId={selectedId}
-          onBack={() => {
-            setSelectedId(null);
-            reloadAgents();
-          }}
-          onDeleted={() => {
-            setSelectedId(null);
-            reloadAgents();
-          }}
-        />
-      ) : (
-        <>
+      <>
+          {navError ? (
+            <div className="shrink-0 border-b border-border bg-destructive/10 px-4 py-2 text-sm text-destructive">
+              {navError}
+            </div>
+          ) : null}
           <DirectoryToolbar
             placeholder="Search agents… try “reconciliation”, “quiet hours”, “telegram”"
             query={search.query}
@@ -178,8 +171,7 @@ function AgentsDirectory({
               </div>
             )}
           </section>
-        </>
-      )}
+      </>
 
       <AnimatePresence>
         {creating ? (

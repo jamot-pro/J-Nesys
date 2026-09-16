@@ -19,7 +19,8 @@ import { createAgent } from "@/lib/api-client";
  * Chat-powered agent creation. The user describes the agent they want to
  * build in a CopilotKit chatbox (the Agent Builder agent), the agent asks a
  * few clarifying questions, then calls the `createAgent` frontend tool.
- * On success the new agent is opened in the full editor (AgentConfigurator).
+ * On success the caller navigates to the console's Agent configurator for
+ * the new agent — this app no longer has its own editor to open it in.
  */
 export function CreateAgentWizard({
   onCreated,

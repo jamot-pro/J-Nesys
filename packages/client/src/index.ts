@@ -421,6 +421,13 @@ export async function deleteAgent(id: string): Promise<void> {
   await api<void>(`/api/agents/${encodeURIComponent(id)}`, { method: "DELETE" });
 }
 
+export async function uploadAgentAvatar(id: string, dataUri: string): Promise<{ avatarUrl: string }> {
+  return api<{ avatarUrl: string }>(`/api/agents/${encodeURIComponent(id)}/avatar`, {
+    method: "PUT",
+    body: JSON.stringify({ dataUri }),
+  });
+}
+
 export async function getAgentActivity(id: string): Promise<ApiEvent[]> {
   const data = await api<{ items: ApiEvent[] }>(
     `/api/agents/${encodeURIComponent(id)}/activity`,
@@ -1247,6 +1254,7 @@ export interface ApiActor {
   id: string;
   type: "human" | "agent";
   displayName: string;
+  avatarUrl: string | null;
 }
 
 export async function listActors(): Promise<ApiActor[]> {

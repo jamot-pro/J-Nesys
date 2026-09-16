@@ -23,6 +23,7 @@ export const Actor = EntityBase.extend({
   type: ActorType,
   source: ActorSource.default("internal"),
   displayName: z.string().min(1),
+  avatarUrl: z.string().nullable().default(null),
   status: ActorStatus.default("active"),
   externalIdentities: z.array(ExternalIdentity).default([]),
   /** Personal space that owns this actor (null for org-only external actors). */

@@ -15,6 +15,7 @@ function actor(id: string, displayName: string, sender: string): Actor {
     type: "human",
     source: "external",
     displayName,
+    avatarUrl: null,
     status: "active",
     externalIdentities: [
       { provider: WHATSAPP_IDENTITY_PROVIDER, value: sender, verified: true },

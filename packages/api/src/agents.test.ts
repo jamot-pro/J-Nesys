@@ -304,4 +304,42 @@ describe("agents", () => {
     expect(gotDeal.json().title).toBe("Deal made before deletion");
   });
 
+  it("uploads an avatar for an agent's actor, gated the same as editing it", async () => {
+    const app = await makeApp();
+    const owner = await registerAndLogin(app, "henry@example.com", "password123", "Henry");
+    const stranger = await registerAndLogin(app, "iris@example.com", "password123", "Iris");
+
+    const created = await app.inject({
+      method: "POST",
+      url: "/api/agents",
+      headers: { cookie: owner },
+      payload: { name: "Picturable", harness: { kind: "generic_http", endpoint: null, config: {} } },
+    });
+    const agent = created.json();
+
+    const pixel =
+      "data:image/png;base64," +
+      "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk+A8AAQUBAScY42YAAAAASUVORK5CYII=";
+
+    const byStranger = await app.inject({
+      method: "PUT",
+      url: `/api/agents/${agent.id}/avatar`,
+      headers: { cookie: stranger },
+      payload: { dataUri: pixel },
+    });
+    expect(byStranger.statusCode).toBe(403);
+
+    const uploaded = await app.inject({
+      method: "PUT",
+      url: `/api/agents/${agent.id}/avatar`,
+      headers: { cookie: owner },
+      payload: { dataUri: pixel },
+    });
+    expect(uploaded.statusCode).toBe(200);
+    expect(uploaded.json().avatarUrl).toMatch(new RegExp(`^/uploads/actors/${agent.actorId}/`));
+
+    const actors = await app.inject({ method: "GET", url: "/api/actors", headers: { cookie: owner } });
+    const actor = actors.json().items.find((a: { id: string }) => a.id === agent.actorId);
+    expect(actor.avatarUrl).toBe(uploaded.json().avatarUrl);
+  });
 });

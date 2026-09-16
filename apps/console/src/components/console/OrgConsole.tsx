@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
+import { useSearchParams } from "next/navigation";
 import type { OrgPublicBranding } from "@jamot/client/branding";
 
 import { AgentConfigurator } from "./AgentConfigurator";
@@ -24,7 +25,6 @@ import { OutreachSection } from "../OutreachSection";
  * Commerce.dc.html) — they carry real data in design-system components, and the
  * mockup's own layout for each is still to be ported. */
 const WIRED: Record<string, React.ReactNode> = {
-  "agent-configurator": <AgentConfigurator />,
   channels: <Channels />,
   crm: <People />,
   "lead-generation": <LeadGen />,
@@ -60,11 +60,24 @@ export function OrgConsole({ branding }: { branding: OrgPublicBranding }) {
   const [activeApp, setActiveApp] = useState<string | null>(null);
   const [configOpen, setConfigOpen] = useState(false);
   const [apps, setApps] = useState<RailApp[]>([]);
+  const [deepLinkAgentId, setDeepLinkAgentId] = useState<string | null>(null);
+
+  /* The cockpit no longer has its own agent editor — it redirects here with
+     ?app=agent-configurator&agent=<id> instead of re-implementing the
+     screen. Read that once on mount and open straight to the right agent. */
+  const searchParams = useSearchParams();
+  useEffect(() => {
+    const app = searchParams.get("app");
+    const agent = searchParams.get("agent");
+    if (app) setActiveApp(app);
+    if (agent) setDeepLinkAgentId(agent);
+  }, [searchParams]);
 
   // The rail is the organization's enabled apps, in enabledAppIds order —
   // which is what the Apps settings claims ("Activated apps appear in the
   // rail; order here is rail order"). Reloaded when the settings dialog
   // closes, since that is where the list changes.
+  const [appsLoaded, setAppsLoaded] = useState(false);
   const loadApps = useCallback(async () => {
     try {
       const allocation = await getOrganizationApps(organizationId);
@@ -80,6 +93,8 @@ export function OrgConsole({ branding }: { branding: OrgPublicBranding }) {
     } catch {
       // A rail that cannot load its apps should still render the shell.
       setApps([]);
+    } finally {
+      setAppsLoaded(true);
     }
   }, [organizationId]);
 
@@ -91,9 +106,9 @@ export function OrgConsole({ branding }: { branding: OrgPublicBranding }) {
   // no title, because the rail no longer carried it. Fall back to Discover
   // unless the open surface is a platform one, which is not installable.
   useEffect(() => {
-    if (!activeApp || PLATFORM_SURFACES.has(activeApp)) return;
+    if (!appsLoaded || !activeApp || PLATFORM_SURFACES.has(activeApp)) return;
     if (!apps.some((a) => a.id === activeApp)) setActiveApp(null);
-  }, [apps, activeApp]);
+  }, [apps, appsLoaded, activeApp]);
   const [dark, setDark] = useState(true);
 
   /* The badge is polled rather than pushed: there is no realtime channel for
@@ -186,6 +201,8 @@ export function OrgConsole({ branding }: { branding: OrgPublicBranding }) {
                 if (WIRED[section] || PLATFORM_SURFACES.has(section)) setActiveApp(section);
               }}
             />
+          ) : activeApp === "agent-configurator" ? (
+            <AgentConfigurator initialAgentId={deepLinkAgentId} />
           ) : WIRED[activeApp] ? (
             WIRED[activeApp]
           ) : (
