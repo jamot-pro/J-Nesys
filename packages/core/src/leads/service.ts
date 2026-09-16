@@ -13,7 +13,7 @@ import type { JamotRepository } from "../repository/repository.js";
 import type { LeadProviderRegistry } from "./registry.js";
 import type { LeadProviderContext, LeadProviderServices } from "./types.js";
 import { mergeLead } from "./normalize.js";
-import { toPersonInput } from "./person-mapper.js";
+import { personToLeadView, toPersonInput } from "./person-mapper.js";
 
 export interface LeadGenerationService {
   createList(input: CreateLeadList, createdBy: string | null): Promise<LeadList>;
@@ -21,7 +21,9 @@ export interface LeadGenerationService {
   listLists(filter: { spaceId?: string; organizationId?: string }): Promise<LeadList[]>;
   updateList(id: string, patch: UpdateLeadList): Promise<LeadList | null>;
   deleteList(id: string): Promise<void>;
-  listLeads(listId: string): Promise<Array<LeadListMember & { person: Person | null }>>;
+  listLeads(
+    listId: string,
+  ): Promise<Array<LeadListMember & { person: ReturnType<typeof personToLeadView> | null }>>;
   listProviders(ctx: LeadProviderContext): Promise<LeadProviderView[]>;
   runList(id: string): Promise<LeadRunResult>;
   enrichLead(listId: string, personId: string): Promise<Person>;
@@ -113,10 +115,20 @@ export function createLeadGenerationService(
     async listLeads(listId) {
       const members = await repo.listLeadListMembers(listId);
       const people = await Promise.all(members.map((m) => repo.getPerson(m.personId)));
-      return members.map((member, index) => ({
-        ...member,
-        person: people[index] ?? null,
-      }));
+      // getPerson() returns the bare Person row: no displayName (that lives on
+      // the linked Actor, not the person table) and firmographics still
+      // nested under profile.integral.*.value. personToLeadView flattens both
+      // into the shape the frontend's LeadView type actually expects.
+      const actors = await Promise.all(
+        people.map((person) => (person ? repo.getActor(person.actorId) : null)),
+      );
+      return members.map((member, index) => {
+        const person = people[index] ?? null;
+        return {
+          ...member,
+          person: person ? personToLeadView(person, actors[index]?.displayName ?? null) : null,
+        };
+      });
     },
 
     async listProviders(ctx) {

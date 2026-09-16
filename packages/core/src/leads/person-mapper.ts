@@ -91,10 +91,16 @@ export function toPersonInput(
   };
 }
 
-export function personToLeadView(person: Person, actorDisplayName: string | null): Record<string, unknown> {
+/**
+ * Flattens a Person into the shape the frontend's LeadView.person type
+ * expects (@jamot/client): displayName lives on the linked Actor, not the
+ * Person row, and every firmographic is nested under profile.integral.*.value
+ * with provenance — neither of which the raw Person object exposes directly.
+ */
+export function personToLeadView(person: Person, actorDisplayName: string | null) {
   const integral = person.profile?.integral ?? {};
   return {
-    personId: person.id,
+    id: person.id,
     actorId: person.actorId,
     displayName: actorDisplayName ?? "Unknown",
     email: person.email,
