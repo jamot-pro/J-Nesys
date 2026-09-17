@@ -88,10 +88,9 @@ export function LeadGen() {
   const [actors, setActors] = useState<ApiActor[]>([]);
 
   const { lists, providers, update, create } = useLeadListsController(spaceId, organizationId);
-  const { lists: peopleLists, create: createPeopleList } = usePeopleListsController(spaceId);
+  const { lists: peopleLists } = usePeopleListsController(spaceId);
   const [listId, setListId] = useState<string>("");
   const [peopleListId, setPeopleListId] = useState<string>("");
-  const [newListName, setNewListName] = useState("");
   const [searchQueue, setSearchQueue] = useState<CityArea[] | null>(null);
   const [queueTotal, setQueueTotal] = useState(0);
   const [totals, setTotals] = useState({ added: 0, skipped: 0, found: 0 });
@@ -150,6 +149,13 @@ export function LeadGen() {
     void loadAgents();
   }, [loadAgents]);
 
+  // Lead Generation never creates a People List itself — it only searches
+  // into one that already exists (created over in People). Default to the
+  // first one once they've loaded, same idea as picking a default provider.
+  useEffect(() => {
+    if (!peopleListId && peopleLists[0]) setPeopleListId(peopleLists[0].id);
+  }, [peopleLists, peopleListId]);
+
   // Runs one city at a time against `listId`. Queued rather than looped
   // inline because a freshly created list's id only takes effect on
   // `useLeadListRun(listId)` after a render — the same reason a single run
@@ -207,18 +213,8 @@ export function LeadGen() {
     setNote("Saving the target…");
     try {
       if (!provider) throw new Error("no lead provider is available");
-
-      // "Create a new list" is the default; picking an existing People List
-      // just reuses its id. Either way this is the durable target — every
-      // match across every search lands here, which is what makes it show
-      // up in People and be usable from Outreach.
-      let targetPeopleListId = peopleListId;
-      if (!targetPeopleListId) {
-        if (!newListName.trim()) throw new Error("Name the new list, or pick an existing one.");
-        const createdList = await createPeopleList(newListName.trim());
-        targetPeopleListId = createdList.id;
-        setPeopleListId(createdList.id);
-        setNewListName("");
+      if (!peopleListId) {
+        throw new Error("Create a People list first (in People), then pick it here.");
       }
 
       const persona = { summary: icp.trim(), keywords, titles: [] as string[] };
@@ -227,7 +223,7 @@ export function LeadGen() {
         providerId: provider.id,
         persona: persona as never,
         area: cities[0]!,
-        peopleListId: targetPeopleListId,
+        peopleListId,
       });
       setListId(created.id);
       // create() only persists cities[0] as the list's initial area — it
@@ -293,7 +289,7 @@ export function LeadGen() {
             className="btn btn-primary"
             style={{ justifyContent: "flex-start" }}
             onClick={() => void search()}
-            disabled={starting || running || cities.length === 0 || (!peopleListId && !newListName.trim())}
+            disabled={starting || running || cities.length === 0 || !peopleListId}
           >
             {starting || running ? "Searching…" : "Search"}
           </button>
@@ -348,26 +344,23 @@ export function LeadGen() {
           </div>
           <div className="field">
             <label htmlFor="lg-people-list">People list</label>
-            <select
-              className="input"
-              id="lg-people-list"
-              value={peopleListId}
-              onChange={(e) => setPeopleListId(e.target.value)}
-            >
-              <option value="">Create a new list</option>
-              {peopleLists.map((l) => (
-                <option key={l.id} value={l.id}>{l.name}</option>
-              ))}
-            </select>
-            {peopleListId === "" ? (
-              <input
+            {peopleLists.length === 0 ? (
+              <p style={{ margin: 0, fontSize: 12, color: MUTED }}>
+                No People lists yet. Create one in <strong>People</strong>, then come back here to
+                search into it.
+              </p>
+            ) : (
+              <select
                 className="input"
-                style={{ marginTop: "var(--space-2)" }}
-                placeholder="New list name"
-                value={newListName}
-                onChange={(e) => setNewListName(e.target.value)}
-              />
-            ) : null}
+                id="lg-people-list"
+                value={peopleListId}
+                onChange={(e) => setPeopleListId(e.target.value)}
+              >
+                {peopleLists.map((l) => (
+                  <option key={l.id} value={l.id}>{l.name}</option>
+                ))}
+              </select>
+            )}
           </div>
         </section>
       </div>
