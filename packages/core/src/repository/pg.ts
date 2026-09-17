@@ -847,6 +847,7 @@ function toPeopleList(row: typeof peopleLists.$inferSelect): PeopleList {
     organizationId: (row.organizationId as Id | null) ?? null,
     createdBy: (row.createdBy as Id | null) ?? null,
     name: row.name,
+    replyAgentId: (row.replyAgentId as Id | null) ?? null,
     createdAt: normalizePgTimestamp(row.createdAt),
     updatedAt: normalizePgTimestamp(row.updatedAt),
   };
@@ -1652,6 +1653,7 @@ export function createPgRepository(db: Db): JamotRepository {
           spaceId: input.spaceId,
           createdBy: input.createdBy ?? null,
           name: input.name,
+          replyAgentId: input.replyAgentId ?? null,
         })
         .returning();
       if (!row) throw new Error("failed to create people list");
@@ -1676,6 +1678,15 @@ export function createPgRepository(db: Db): JamotRepository {
       const [row] = await q
         .update(peopleLists)
         .set({ name, updatedAt: new Date().toISOString() })
+        .where(eq(peopleLists.id, id))
+        .returning();
+      return row ? toPeopleList(row) : null;
+    },
+
+    async setPeopleListReplyAgent(id, agentId) {
+      const [row] = await q
+        .update(peopleLists)
+        .set({ replyAgentId: agentId, updatedAt: new Date().toISOString() })
         .where(eq(peopleLists.id, id))
         .returning();
       return row ? toPeopleList(row) : null;
@@ -1718,6 +1729,15 @@ export function createPgRepository(db: Db): JamotRepository {
         .where(eq(peopleListMembers.peopleListId, peopleListId))
         .orderBy(peopleListMembers.createdAt);
       return rows.map(toPeopleListMember);
+    },
+
+    async listPeopleListsForPerson(personId, spaceId) {
+      const rows = await q
+        .select({ list: peopleLists })
+        .from(peopleListMembers)
+        .innerJoin(peopleLists, eq(peopleLists.id, peopleListMembers.peopleListId))
+        .where(and(eq(peopleListMembers.personId, personId), eq(peopleLists.spaceId, spaceId)));
+      return rows.map((r) => toPeopleList(r.list));
     },
 
     async getDreamListing(organizationId) {

@@ -1383,6 +1383,10 @@ export const peopleLists = pgTable(
       .references(() => spaces.id),
     createdBy: uuid("created_by").references(() => actors.id),
     name: text("name").notNull(),
+    /* The agent that answers inbound WhatsApp (and other channel) messages
+       from anyone on this list. ON DELETE SET NULL: removing an agent must
+       not remove the list it happened to be assigned to. */
+    replyAgentId: uuid("reply_agent_id").references(() => agents.id, { onDelete: "set null" }),
     ...timestamps(),
   },
   (table) => [

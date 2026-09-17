@@ -60,6 +60,7 @@ export default async function outreachRoutes(
     id: string;
     spaceId: string;
     name: string;
+    replyAgentId?: string | null;
     createdAt: string;
     updatedAt: string;
   }) {
@@ -71,6 +72,8 @@ export default async function outreachRoutes(
       description: "",
       memberPersonIds: members.map((m) => m.personId),
       sourcePeopleListId: list.id,
+      /** Agent that answers inbound messages from anyone on this list. */
+      replyAgentId: list.replyAgentId ?? null,
       createdAt: list.createdAt,
       updatedAt: list.updatedAt,
     };

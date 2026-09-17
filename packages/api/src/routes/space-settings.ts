@@ -15,6 +15,9 @@ export interface SpaceSettingsRoutesOptions {
 
 const PatchBody = z.object({
   orchestratorModel: z.string().nullable().optional(),
+  /** Agent that answers inbound WhatsApp messages from senders who aren't
+   * on any people list yet. `null`/unset means "don't auto-reply". */
+  defaultReplyAgentId: z.string().nullable().optional(),
 });
 
 /**
@@ -52,7 +55,10 @@ export default async function spaceSettingsRoutes(
     }
 
     const config = await repository.getSpaceSettings(spaceId as Id);
-    return { orchestratorModel: (config.orchestratorModel as string | null) ?? null };
+    return {
+      orchestratorModel: (config.orchestratorModel as string | null) ?? null,
+      defaultReplyAgentId: (config.defaultReplyAgentId as string | null) ?? null,
+    };
   });
 
   app.patch(
@@ -78,8 +84,14 @@ export default async function spaceSettingsRoutes(
       if (body.orchestratorModel !== undefined) {
         patch.orchestratorModel = body.orchestratorModel;
       }
+      if (body.defaultReplyAgentId !== undefined) {
+        patch.defaultReplyAgentId = body.defaultReplyAgentId;
+      }
       const config = await repository.setSpaceSettings(spaceId as Id, patch);
-      return { orchestratorModel: (config.orchestratorModel as string | null) ?? null };
+      return {
+        orchestratorModel: (config.orchestratorModel as string | null) ?? null,
+        defaultReplyAgentId: (config.defaultReplyAgentId as string | null) ?? null,
+      };
     },
   );
 }

@@ -22,10 +22,14 @@ import {
   createModelProvider,
   deleteModelProvider,
   deleteProviderModel,
+  getAgents,
+  listActors,
   listModelProviders,
   setProviderModelEnabled,
   testModelProvider,
   updateModelProvider,
+  type ApiActor,
+  type ApiAgent,
   type ApiModelProvider,
   getSpaceSettings,
   updateSpaceSettings,
@@ -314,6 +318,44 @@ export function ModelsSection() {
     }
   };
 
+  /* Default WhatsApp reply agent (per-space setting): answers senders who
+     aren't on any people list yet. */
+  const [defaultReplyAgentId, setDefaultReplyAgentId] = useState<string | null>(null);
+  const [savingReplyAgent, setSavingReplyAgent] = useState(false);
+  const [agents, setAgents] = useState<ApiAgent[]>([]);
+  const [actors, setActors] = useState<ApiActor[]>([]);
+
+  useEffect(() => {
+    if (!settingsSpaceId) return;
+    getSpaceSettings(settingsSpaceId)
+      .then((s) => setDefaultReplyAgentId(s.defaultReplyAgentId ?? null))
+      .catch(() => {});
+    Promise.all([getAgents().catch(() => []), listActors().catch(() => [])]).then(
+      ([agentItems, actorItems]) => {
+        setAgents(agentItems);
+        setActors(actorItems);
+      },
+    );
+  }, [settingsSpaceId]);
+
+  const agentName = (agent: ApiAgent) =>
+    actors.find((a) => a.id === agent.actorId)?.displayName ??
+    agent.role ??
+    `Untitled agent · ${agent.id.slice(0, 8)}`;
+
+  const saveDefaultReplyAgent = async (value: string | null) => {
+    if (!settingsSpaceId) return;
+    setDefaultReplyAgentId(value);
+    setSavingReplyAgent(true);
+    try {
+      await updateSpaceSettings(settingsSpaceId, { defaultReplyAgentId: value });
+    } catch {
+      // Revert on error — user keeps old selection shown
+    } finally {
+      setSavingReplyAgent(false);
+    }
+  };
+
   const reload = useCallback(async () => {
     try {
       setProviders(await listModelProviders(organizationId ?? undefined));
@@ -379,6 +421,29 @@ export function ModelsSection() {
               onChange={(v) => void saveOrchestratorModel(v)}
               disabled={savingSettings}
             />
+          )}
+        </Field>
+
+        <Field
+          label="Default WhatsApp reply agent"
+          hint="Answers anyone who messages this space's WhatsApp number and isn't on any people list yet. Lists can override this with their own reply agent. Leave unset for no auto-reply."
+        >
+          {loadingSettings ? (
+            <Loader2 className="size-3.5 animate-spin text-muted-foreground" />
+          ) : (
+            <select
+              value={defaultReplyAgentId ?? ""}
+              onChange={(e) => void saveDefaultReplyAgent(e.target.value || null)}
+              disabled={savingReplyAgent}
+              className="h-9 rounded-md border border-border bg-background px-2 text-sm"
+            >
+              <option value="">No auto-reply</option>
+              {agents.map((agent) => (
+                <option key={agent.id} value={agent.id}>
+                  {agentName(agent)}
+                </option>
+              ))}
+            </select>
           )}
         </Field>
 

@@ -36,3 +36,9 @@ export type {
   WhatsAppManager,
   WhatsAppManagerOpts,
 } from "./manager.js";
+export { resolveReplyAgent, draftAgentReply } from "./autoresponder.js";
+export type {
+  AutoresponderRepo,
+  ResolveReplyAgentInput,
+  DraftReplyInput,
+} from "./autoresponder.js";

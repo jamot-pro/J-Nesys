@@ -87,6 +87,8 @@ export const PeopleList = z.object({
   organizationId: Id.nullable().default(null),
   createdBy: Id.nullable().default(null),
   name: z.string().min(1),
+  /** Agent that answers inbound messages from anyone on this list. */
+  replyAgentId: Id.nullable().default(null),
   createdAt: Timestamp,
   updatedAt: Timestamp,
 });

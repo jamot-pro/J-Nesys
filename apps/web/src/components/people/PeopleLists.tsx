@@ -12,13 +12,18 @@ import {
   addOutreachListMembers,
   createOutreachList,
   deleteOutreachList,
-  getOrganizationMembers,
+  getAgents,
   getOutreachListMembers,
+  listActors,
   listOutreachLists,
   removeOutreachListMembers,
+  setPeopleListReplyAgent,
+  type ApiActor,
+  type ApiAgent,
   type OutreachList,
   type OutreachListMember,
 } from "@/lib/api-client";
+import { searchPeople } from "@/components/people/people-api";
 
 export function PeopleLists({
   spaceId,
@@ -35,6 +40,8 @@ export function PeopleLists({
   const [members, setMembers] = useState<Record<string, OutreachListMember[]>>({});
   const [membersLoading, setMembersLoading] = useState<Record<string, boolean>>({});
   const [error, setError] = useState<string | null>(null);
+  const [agents, setAgents] = useState<ApiAgent[]>([]);
+  const [actors, setActors] = useState<ApiActor[]>([]);
 
   useEffect(() => {
     let cancelled = false;
@@ -58,6 +65,26 @@ export function PeopleLists({
       cancelled = true;
     };
   }, [spaceId]);
+
+  useEffect(() => {
+    let cancelled = false;
+    Promise.all([getAgents().catch(() => []), listActors().catch(() => [])]).then(
+      ([agentItems, actorItems]) => {
+        if (cancelled) return;
+        setAgents(agentItems);
+        setActors(actorItems);
+      },
+    );
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  /** An agent's name lives on its actor; role is what it does, not what it is. */
+  const agentName = (agent: ApiAgent) =>
+    actors.find((a) => a.id === agent.actorId)?.displayName ??
+    agent.role ??
+    `Untitled agent · ${agent.id.slice(0, 8)}`;
 
   // CopilotKit natural language action listener
   useEffect(() => {
@@ -142,6 +169,17 @@ export function PeopleLists({
       } finally {
         setMembersLoading((prev) => ({ ...prev, [id]: false }));
       }
+    }
+  };
+
+  const handleReplyAgentChange = async (listId: string, agentId: string) => {
+    setError(null);
+    const value = agentId || null;
+    setLists((prev) => prev.map((l) => (l.id === listId ? { ...l, replyAgentId: value } : l)));
+    try {
+      await setPeopleListReplyAgent(listId, value);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Could not assign reply agent");
     }
   };
 
@@ -256,6 +294,22 @@ export function PeopleLists({
                       className="overflow-hidden"
                     >
                       <div className="flex flex-col gap-1.5 border-t border-border pt-2">
+                        <label className="flex items-center justify-between gap-2 text-xs text-muted-foreground">
+                          <span>Reply agent (WhatsApp)</span>
+                          <select
+                            value={list.replyAgentId ?? ""}
+                            onChange={(e) => void handleReplyAgentChange(list.id, e.target.value)}
+                            onClick={(e) => e.stopPropagation()}
+                            className="h-7 max-w-[60%] rounded-md border border-border bg-background px-1.5 text-xs"
+                          >
+                            <option value="">No auto-reply</option>
+                            {agents.map((agent) => (
+                              <option key={agent.id} value={agent.id}>
+                                {agentName(agent)}
+                              </option>
+                            ))}
+                          </select>
+                        </label>
                         {membersLoading[list.id] ? (
                           <p className="text-xs text-muted-foreground">Loading members…</p>
                         ) : (members[list.id] ?? []).length === 0 ? (
@@ -291,7 +345,7 @@ export function PeopleLists({
                         )}
                         <AddMembers
                           listId={list.id}
-                          orgId={orgId}
+                          spaceId={spaceId}
                           existing={members[list.id] ?? []}
                           onAdded={(added) =>
                             setMembers((prev) => ({
@@ -323,36 +377,40 @@ export function PeopleLists({
 
 function AddMembers({
   listId,
-  orgId,
+  spaceId,
   existing,
   onAdded,
 }: {
   listId: string;
-  orgId: string | undefined;
+  spaceId: string | null;
   existing: OutreachListMember[];
   onAdded: (members: OutreachListMember[]) => void;
 }) {
   const [people, setPeople] = useState<
     { personId: string; displayName: string; email: string | null }[]
   >([]);
+  const [query, setQuery] = useState("");
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
+  // Every person in the space, not just org teammates — this is how WhatsApp
+  // (and other channel) contacts who were never given an org role get onto a
+  // list at all.
   useEffect(() => {
-    if (!orgId) return;
+    if (!spaceId) return;
     let cancelled = false;
-    getOrganizationMembers(orgId)
-      .then((members) => {
+    searchPeople({ spaceId, q: query || undefined, perPage: 25 })
+      .then(({ items }) => {
         if (cancelled) return;
         const existingIds = new Set(existing.map((m) => m.personId));
         setPeople(
-          members
-            .filter((m) => !existingIds.has(m.personId))
-            .map((m) => ({
-              personId: m.personId,
-              displayName: m.displayName,
-              email: m.email,
+          items
+            .filter((p) => !existingIds.has(p.id))
+            .map((p) => ({
+              personId: p.id,
+              displayName: p.displayName,
+              email: p.email,
             })),
         );
       })
@@ -363,7 +421,7 @@ function AddMembers({
       cancelled = true;
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [orgId, listId]);
+  }, [spaceId, listId, query]);
 
   const toggle = (personId: string) => {
     setSelected((prev) => {
@@ -403,12 +461,21 @@ function AddMembers({
     }
   };
 
-  if (!orgId || people.length === 0) {
+  if (!spaceId) {
     return null;
   }
 
   return (
     <div className="flex flex-col gap-1.5">
+      <Input
+        value={query}
+        onChange={(e) => setQuery(e.target.value)}
+        placeholder="Search people to add…"
+        className="h-7 text-xs"
+      />
+      {people.length === 0 ? (
+        <p className="text-xs text-muted-foreground">No matching people.</p>
+      ) : null}
       <div className="flex max-h-32 flex-col gap-1 overflow-y-auto">
         {people.map((person) => (
           <label
