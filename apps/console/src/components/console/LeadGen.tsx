@@ -8,11 +8,11 @@ import {
   type ApiActor,
 } from "@jamot/client";
 import {
-  MultiCityPicker,
+  MapAreaPicker,
   useLeadListRun,
   useLeadListsController,
   usePeopleListsController,
-  type CityArea,
+  type MapArea,
 } from "@jamot/canvas-lead-generation";
 
 import { useOrgScope } from "../console-context";
@@ -41,8 +41,6 @@ interface LogLine {
 }
 
 const CARD: React.CSSProperties = {
-  /* Without this a wide child — a select carrying a long agent name — pushes
-     the card past its grid track instead of being clipped to it. */
   minWidth: 0,
   border: "1px solid var(--color-divider)",
   borderRadius: "var(--radius-md)",
@@ -54,32 +52,16 @@ const CARD: React.CSSProperties = {
   gap: "var(--space-3)",
 };
 
-function Chip({ text, onRemove }: { text: string; onRemove: () => void }) {
-  return (
-    <span style={{ display: "flex", alignItems: "center", gap: 7, padding: "6px 8px 6px 12px", background: "var(--color-surface)", borderRadius: 999, fontSize: 13 }}>
-      {text}
-      <button
-        onClick={onRemove}
-        title="Remove"
-        style={{ display: "flex", alignItems: "center", justifyContent: "center", width: 18, height: 18, background: "none", border: "none", borderRadius: 999, color: "var(--color-text)", cursor: "pointer" }}
-      >
-        <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.6" strokeLinecap="round">
-          <path d="M18 6 6 18M6 6l12 12" />
-        </svg>
-      </button>
-    </span>
-  );
-}
-
 /**
- * Lead Generation, wired to the real lead-list API. The prompt/keywords map
- * onto LeadPersona; each selected city (packages/canvas-lead-generation's
- * MultiCityPicker — real geocoded center + radius per city, highlighted on
- * one map) becomes one LeadArea. "Search" runs the same list once per
- * selected city, sequentially, aggregating everything into one People list.
- * There is no agent to pick for the search itself — one fixed provider
- * (Apify's Google Maps actor) always reads the prompt and keywords; agent
- * selection only applies to enrichment, a separate step below.
+ * Lead Generation, deliberately minimal: one thing to say who you're looking
+ * for (the target prompt — no separate keyword chips; the provider already
+ * falls back to this free text as its search term, see google-maps.ts's
+ * searchTerms()), one existing People list to save into, how many leads, one
+ * city + radius, and an optional "what not to search" exclusion applied
+ * server-side against the results. Then Search. No agent to pick for the
+ * search itself — one fixed provider (Apify's Google Maps actor) always
+ * reads the prompt; agent selection only applies to enrichment, a separate
+ * step below.
  */
 export function LeadGen() {
   const { organizationId, spaceId } = useOrgScope();
@@ -91,17 +73,15 @@ export function LeadGen() {
   const { lists: peopleLists } = usePeopleListsController(spaceId);
   const [listId, setListId] = useState<string>("");
   const [peopleListId, setPeopleListId] = useState<string>("");
-  const [searchQueue, setSearchQueue] = useState<CityArea[] | null>(null);
-  const [queueTotal, setQueueTotal] = useState(0);
-  const [totals, setTotals] = useState({ added: 0, skipped: 0, found: 0 });
+  const [pendingRunVolume, setPendingRunVolume] = useState<number | null>(null);
   const { leads: results, running, error, setError, run, enrichOne } = useLeadListRun(
     listId || null,
   );
   const [starting, setStarting] = useState(false);
 
   const [icp, setIcp] = useState("");
-  const [keywords, setKeywords] = useState<string[]>([]);
-  const [cities, setCities] = useState<CityArea[]>([]);
+  const [exclude, setExclude] = useState("");
+  const [area, setArea] = useState<MapArea | null>(null);
   const [volume, setVolume] = useState(50);
   const [enrichTask, setEnrichTask] = useState(ENRICH_TASKS[0]!);
   const [enrichScope, setEnrichScope] = useState<"new" | "list" | "missing">("new");
@@ -156,60 +136,29 @@ export function LeadGen() {
     if (!peopleListId && peopleLists[0]) setPeopleListId(peopleLists[0].id);
   }, [peopleLists, peopleListId]);
 
-  // Runs one city at a time against `listId`. Queued rather than looped
-  // inline because a freshly created list's id only takes effect on
-  // `useLeadListRun(listId)` after a render — the same reason a single run
-  // used to be deferred — and queuing generalizes that to N cities.
+  // A newly created list only gets its id after `create()` resolves, so the
+  // run that was requested against it is queued here and fired once the
+  // `useLeadListRun(listId)` hook above has rebound to the new id.
   useEffect(() => {
-    if (!searchQueue || searchQueue.length === 0 || !listId) return;
-    const [city, ...rest] = searchQueue as [CityArea, ...CityArea[]];
-    const step = queueTotal - rest.length;
-    setNote(`Searching ${city.place.split(",")[0]} (${step}/${queueTotal})…`);
-
-    void (async () => {
-      try {
-        await update(listId, { area: city });
-        const result = await run(volume);
-        if (result) {
-          if (result.error) setError(result.error);
-          setTotals((t) => ({
-            added: t.added + result.added,
-            skipped: t.skipped + result.skipped,
-            found: t.found + result.totalFound,
-          }));
-        }
-      } catch (err) {
-        setError(err instanceof Error ? err.message : "The run failed.");
-      } finally {
-        if (rest.length === 0) {
-          setStarting(false);
-          setSearchQueue(null);
-        } else {
-          setSearchQueue(rest);
-        }
-      }
-    })();
+    if (pendingRunVolume === null || !listId) return;
+    const runVolume = pendingRunVolume;
+    setPendingRunVolume(null);
+    void run(runVolume)
+      .then((result) => {
+        if (!result) return;
+        if (result.error) setError(result.error);
+        setNote(`${result.added} added · ${result.skipped} skipped · ${result.totalFound} found`);
+      })
+      .finally(() => setStarting(false));
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [listId, searchQueue]);
-
-  // Once every queued city has run, summarize — the queue effect above only
-  // has per-step totals, not the final tally, since it fires per city.
-  useEffect(() => {
-    if (starting || searchQueue !== null) return;
-    if (totals.added || totals.skipped || totals.found) {
-      setNote(`${totals.added} added · ${totals.skipped} skipped · ${totals.found} found`);
-    }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [starting, searchQueue]);
+  }, [listId, pendingRunVolume]);
 
   const provider = providers.find((p) => p.configured) ?? providers[0];
 
   async function search() {
-    if (cities.length === 0) return;
+    if (!area) return;
     setError(null);
     setStarting(true);
-    setTotals({ added: 0, skipped: 0, found: 0 });
-    setQueueTotal(cities.length);
     setNote("Saving the target…");
     try {
       if (!provider) throw new Error("no lead provider is available");
@@ -217,26 +166,24 @@ export function LeadGen() {
         throw new Error("Create a People list first (in People), then pick it here.");
       }
 
-      const persona = { summary: icp.trim(), keywords, titles: [] as string[] };
+      const persona = { summary: icp.trim(), keywords: [], titles: [] as string[] };
       const created = await create({
-        name: `${cities[0]!.place.split(",")[0]}${cities.length > 1 ? ` +${cities.length - 1}` : ""} — ${new Date().toLocaleDateString()}`,
+        name: `${area.place.split(",")[0]} — ${new Date().toLocaleDateString()}`,
         providerId: provider.id,
         persona: persona as never,
-        area: cities[0]!,
+        area,
         peopleListId,
+        providerConfig: exclude.trim() ? { exclude: exclude.trim() } : {},
       });
+      setNote("Searching…");
+      setPendingRunVolume(volume);
       setListId(created.id);
-      // create() only persists cities[0] as the list's initial area — it
-      // does not run a search. The queue below processes all of `cities` in
-      // order once useLeadListRun(listId) rebinds to this new id.
-      setSearchQueue(cities);
     } catch (err) {
       setError(err instanceof Error ? err.message : "The search failed.");
       setNote(null);
       setStarting(false);
     }
   }
-
 
   async function runEnrichment() {
     if (!listId || enriching) return;
@@ -277,22 +224,9 @@ export function LeadGen() {
         <div style={{ flex: 1, minWidth: 240 }}>
           <h1 style={{ margin: 0, fontSize: 36, lineHeight: 1.1, letterSpacing: "-0.02em" }}>Lead Generation</h1>
           <p style={{ margin: "8px 0 0", fontSize: 14, lineHeight: 1.6, color: MUTED, maxWidth: "62ch" }}>
-            Pick a People list, describe who you're looking for, add cities, and press Search.
-            Everything found lands in that list, so Outreach can work it immediately.
+            Say who you're looking for, pick a list to save them in, set how many, and pick a city.
+            Press Search — that's it.
           </p>
-        </div>
-        <div style={{ display: "flex", gap: "var(--space-2)", flexWrap: "wrap" }}>
-          <button className="btn btn-secondary" style={{ justifyContent: "flex-start" }} onClick={() => setNote(null)}>
-            Clear results
-          </button>
-          <button
-            className="btn btn-primary"
-            style={{ justifyContent: "flex-start" }}
-            onClick={() => void search()}
-            disabled={starting || running || cities.length === 0 || !peopleListId}
-          >
-            {starting || running ? "Searching…" : "Search"}
-          </button>
         </div>
       </div>
 
@@ -307,68 +241,75 @@ export function LeadGen() {
         </p>
       ) : null}
 
-      <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit,minmax(320px,1fr))", gap: "var(--space-3)" }}>
+      <section style={CARD}>
+        <span style={UPPER}>Who are we searching?</span>
+        <textarea
+          className="input"
+          rows={4}
+          value={icp}
+          onChange={(e) => setIcp(e.target.value)}
+          placeholder="e.g. Independent restaurants worth reaching out to for a POS/payments offering."
+        />
+      </section>
+
+      <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit,minmax(220px,1fr))", gap: "var(--space-3)", marginTop: "var(--space-3)" }}>
         <section style={CARD}>
-          <span style={UPPER}>Target prompt</span>
-          <textarea
-            className="input"
-            rows={7}
-            value={icp}
-            onChange={(e) => setIcp(e.target.value)}
-            placeholder="Who they are, what they run, what makes them worth reaching out to, and who to skip."
-          />
+          <span style={UPPER}>Where do we save them?</span>
+          {peopleLists.length === 0 ? (
+            <p style={{ margin: 0, fontSize: 12, color: MUTED }}>
+              No People lists yet. Create one in <strong>People</strong>, then come back here.
+            </p>
+          ) : (
+            <select
+              className="input"
+              value={peopleListId}
+              onChange={(e) => setPeopleListId(e.target.value)}
+            >
+              {peopleLists.map((l) => (
+                <option key={l.id} value={l.id}>{l.name}</option>
+              ))}
+            </select>
+          )}
         </section>
 
         <section style={CARD}>
-          <span style={UPPER}>Keywords</span>
-          <div style={{ display: "flex", flexWrap: "wrap", gap: 8 }}>
-            {keywords.map((k, i) => (
-              <Chip key={`${k}-${i}`} text={k} onRemove={() => setKeywords((v) => v.filter((_, j) => j !== i))} />
-            ))}
-            <input
-              className="input"
-              placeholder="Add keyword, press Enter"
-              style={{ flex: 1, minWidth: 180, height: 33 }}
-              onKeyDown={(e) => {
-                if (e.key !== "Enter") return;
-                e.preventDefault();
-                const v = e.currentTarget.value.trim();
-                if (v) setKeywords((k) => [...k, v]);
-                e.currentTarget.value = "";
-              }}
-            />
-          </div>
-          <div className="field">
-            <label htmlFor="lg-vol">Leads to find per run</label>
-            <input className="input" id="lg-vol" type="number" min={5} max={500} step={5} value={volume} onChange={(e) => setVolume(Number(e.target.value) || 5)} />
-          </div>
-          <div className="field">
-            <label htmlFor="lg-people-list">People list</label>
-            {peopleLists.length === 0 ? (
-              <p style={{ margin: 0, fontSize: 12, color: MUTED }}>
-                No People lists yet. Create one in <strong>People</strong>, then come back here to
-                search into it.
-              </p>
-            ) : (
-              <select
-                className="input"
-                id="lg-people-list"
-                value={peopleListId}
-                onChange={(e) => setPeopleListId(e.target.value)}
-              >
-                {peopleLists.map((l) => (
-                  <option key={l.id} value={l.id}>{l.name}</option>
-                ))}
-              </select>
-            )}
-          </div>
+          <span style={UPPER}>Number of leads</span>
+          <input
+            className="input"
+            type="number"
+            min={5}
+            max={500}
+            step={5}
+            value={volume}
+            onChange={(e) => setVolume(Number(e.target.value) || 5)}
+          />
         </section>
       </div>
 
       <section style={{ ...CARD, marginTop: "var(--space-3)" }}>
-        <span style={UPPER}>Cities</span>
-        <MultiCityPicker value={cities} onChange={setCities} height={300} />
+        <span style={UPPER}>Area</span>
+        <MapAreaPicker value={area} onChange={setArea} height={280} />
       </section>
+
+      <section style={{ ...CARD, marginTop: "var(--space-3)" }}>
+        <span style={UPPER}>What not to search (optional)</span>
+        <textarea
+          className="input"
+          rows={2}
+          value={exclude}
+          onChange={(e) => setExclude(e.target.value)}
+          placeholder="e.g. fast food chains, closed businesses"
+        />
+      </section>
+
+      <button
+        className="btn btn-primary"
+        style={{ marginTop: "var(--space-4)", width: "100%" }}
+        onClick={() => void search()}
+        disabled={starting || running || !area || !peopleListId}
+      >
+        {starting || running ? "Searching…" : "Search"}
+      </button>
 
       {starting || running ? (
         <div style={{ marginTop: "var(--space-3)", background: "var(--color-surface)", borderRadius: "var(--radius-md)", padding: "var(--space-4)", display: "flex", alignItems: "center", gap: "var(--space-4)", flexWrap: "wrap" }}>
@@ -395,7 +336,7 @@ export function LeadGen() {
           </thead>
           <tbody>
             {results.length === 0 ? (
-              <tr><td colSpan={6} style={{ padding: "10px var(--space-3)", color: MUTED }}>Nothing found yet. Pick cities and press Search.</td></tr>
+              <tr><td colSpan={6} style={{ padding: "10px var(--space-3)", color: MUTED }}>Nothing found yet. Pick a city and press Search.</td></tr>
             ) : (
               results.map((r) => (
                 <tr key={r.id} style={{ borderBottom: "1px solid var(--color-divider)" }}>

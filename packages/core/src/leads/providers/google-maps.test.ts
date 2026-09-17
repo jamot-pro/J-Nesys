@@ -84,6 +84,30 @@ describe("google maps lead provider", () => {
     expect(sent.customGeolocation).toBeUndefined();
   });
 
+  it("drops results matching the free-text 'what not to search' exclusion", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async () =>
+        ({
+          ok: true,
+          json: async () => [
+            { title: "Joe's Fast Food", categoryName: "Fast food restaurant" },
+            { title: "Trattoria Roma", categoryName: "Italian restaurant" },
+          ],
+        }) as unknown as Response,
+      ),
+    );
+
+    const provider = createGoogleMapsProvider(services("tok"));
+    const leads = await provider.search(
+      { persona: { industries: ["restaurant"] } as never, limit: 10 },
+      { ...ctx, config: { exclude: "fast food, chain" } },
+    );
+
+    expect(leads).toHaveLength(1);
+    expect(leads[0]!.company).toBe("Trattoria Roma");
+  });
+
   it("maps a place to a company lead, keeping the payload for provenance", async () => {
     vi.stubGlobal(
       "fetch",

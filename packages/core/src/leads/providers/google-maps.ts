@@ -77,6 +77,23 @@ function searchTerms(criteria: LeadCriteria): string[] {
   return summary ? [summary] : [];
 }
 
+/** Splits the free-text "what not to search" prompt into lowercase terms. */
+function excludeTermsFrom(raw: unknown): string[] {
+  if (typeof raw !== "string") return [];
+  return raw
+    .split(/[,\n]/)
+    .map((term) => term.trim().toLowerCase())
+    .filter(Boolean);
+}
+
+function matchesExcludeTerms(lead: RawLead, terms: string[]): boolean {
+  if (terms.length === 0) return false;
+  const haystack = [lead.company, lead.industry, ...((lead.extra.categories as string[] | undefined) ?? [])]
+    .join(" ")
+    .toLowerCase();
+  return terms.some((term) => haystack.includes(term));
+}
+
 const text = (value: unknown): string => (value == null ? "" : String(value).trim());
 
 const httpUrl = (value: unknown): string | null => {
@@ -252,9 +269,17 @@ export function createGoogleMapsProvider(
       const rows = (await response.json()) as unknown;
       if (!Array.isArray(rows)) return [];
 
+      /* "What not to search" is free text, not a filter DSL Apify
+         understands, so it can't be sent as part of the actor input — it's
+         applied here instead, as a simple case-insensitive substring check
+         against the business name and its category. Good enough for "skip
+         fast food chains" style exclusions without needing an LLM call. */
+      const excludeTerms = excludeTermsFrom(ctx.config?.exclude);
+
       return rows
         .map((row) => toLead(row as MapsPlace))
         .filter((lead) => lead.company.length > 0)
+        .filter((lead) => !matchesExcludeTerms(lead, excludeTerms))
         .slice(0, limit);
     },
   };
