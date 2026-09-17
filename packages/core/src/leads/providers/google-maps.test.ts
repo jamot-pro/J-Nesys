@@ -51,9 +51,37 @@ describe("google maps lead provider", () => {
     );
 
     expect(sent.searchStringsArray).toEqual(["plumber", "boiler repair"]);
-    expect(sent.locationQuery).toBe("Utrecht");
     expect(sent.maxCrawledPlacesPerSearch).toBe(50);
-    expect(sent.customGeolocation).toMatchObject({ type: "Point", coordinates: [5.12, 52.09] });
+    // The actor's own docs: locationQuery always overrides customGeolocation
+    // when both are present ("use either section but not both") — so a
+    // radius circle must be sent alone, never alongside locationQuery, or
+    // the radius is silently discarded.
+    expect(sent.customGeolocation).toMatchObject({ type: "Point", coordinates: [5.12, 52.09], radiusKm: 10 });
+    expect(sent.locationQuery).toBeUndefined();
+  });
+
+  it("falls back to locationQuery only when no center/radius or polygon is given", async () => {
+    let sent: Record<string, unknown> = {};
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async (_url: string, init: { body: string }) => {
+        sent = JSON.parse(init.body);
+        return { ok: true, json: async () => [] } as unknown as Response;
+      }),
+    );
+
+    const provider = createGoogleMapsProvider(services("tok"));
+    await provider.search(
+      {
+        area: { place: "Utrecht" },
+        persona: { industries: ["plumber"] } as never,
+        limit: 100,
+      },
+      ctx,
+    );
+
+    expect(sent.locationQuery).toBe("Utrecht");
+    expect(sent.customGeolocation).toBeUndefined();
   });
 
   it("maps a place to a company lead, keeping the payload for provenance", async () => {

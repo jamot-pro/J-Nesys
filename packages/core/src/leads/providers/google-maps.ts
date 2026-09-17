@@ -203,22 +203,28 @@ export function createGoogleMapsProvider(
         skipClosedPlaces: true,
       };
 
-      if (area?.place) input.locationQuery = area.place;
+      /* The actor's own docs: "Location settings always take priority over
+         Geolocation, so use either section but not both at the same time" —
+         setting locationQuery alongside customGeolocation doesn't combine
+         them, it silently discards the radius/polygon entirely. So this
+         picks exactly one: an explicit shape (radius circle, then polygon)
+         takes precedence over the free-text place, since a shape is a
+         deliberate narrowing the place string can't express. */
       if (area?.center && area.radiusKm) {
-        /* The actor takes a custom geolocation circle in metres. */
         input.customGeolocation = {
           type: "Point",
           coordinates: [area.center.lng, area.center.lat],
           radiusKm: area.radiusKm,
         };
-      }
-      if (area?.polygon && area.polygon.length >= 3) {
+      } else if (area?.polygon && area.polygon.length >= 3) {
         input.customGeolocation = {
           type: "Polygon",
           coordinates: [
             [...area.polygon, area.polygon[0]!].map((point) => [point.lng, point.lat]),
           ],
         };
+      } else if (area?.place) {
+        input.locationQuery = area.place;
       }
 
       /* run-sync-get-dataset-items runs the actor and returns the rows in one
