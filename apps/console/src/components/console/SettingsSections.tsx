@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
+import { signOut } from "@jamot/client/auth";
 import {
   changePassword,
   createComposioConnection,
@@ -254,6 +255,17 @@ export function ProfileSection() {
         onClick={() => void changeOwnPassword()}
       >
         Change password
+      </button>
+
+      <div className="hr" style={{ margin: "var(--space-6) 0 var(--space-4)" }} />
+
+      <button
+        className="btn btn-secondary"
+        onClick={() => {
+          void signOut().then(() => window.location.reload());
+        }}
+      >
+        Log out
       </button>
     </>
   );
