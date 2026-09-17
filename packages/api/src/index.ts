@@ -12,6 +12,7 @@ import {
   type InboundMessage,
 } from "@jamot/core/channels";
 import { createWhatsAppPersonProvisioner } from "@jamot/core/ingest";
+import { resolveReplyAgent, draftAgentReply } from "@jamot/core/channels";
 import { createPostgresMemoryProvider } from "@jamot/core/memory";
 import { createGraphitiMemoryMirror } from "@jamot/core/memory";
 import { createDualWriteMemoryProvider } from "@jamot/core/memory";
@@ -19,7 +20,7 @@ import { createMcpClient } from "@jamot/core/mcp";
 import { createPostgresKnowledgeStore } from "@jamot/core/knowledge";
 import { createPostgresReputationService } from "@jamot/core/reputation";
 import { createPostgresTreasuryService } from "@jamot/core/treasury";
-import { createLLMProvider } from "@jamot/core/llm";
+import { createLLMProvider, resolveEnabledModel } from "@jamot/core/llm";
 import type { MemoryProvider } from "@jamot/core/memory";
 import type { KnowledgeStore } from "@jamot/core/knowledge";
 import type { ReputationService } from "@jamot/core/reputation";
@@ -91,6 +92,40 @@ let whatsAppManager: ReturnType<typeof createWhatsAppManager> | undefined;
 const whatsappSessionDir = process.env.WHATSAPP_SESSION_DIR;
 if (whatsappSessionDir) {
   const eventBus = createEventBus(db);
+
+  // Reply-agent LLM resolution reuses the same org/agent model-provider
+  // config the Settings > Models screen manages — not the single global
+  // OPENAI_API_KEY `llm`, which is unset in production and would otherwise
+  // make every auto-reply silently a no-op.
+  const replySecretStore = createSecretStore({
+    encryptionKey: createHash("sha256").update(secret).digest("base64"),
+  });
+  const resolveReplyLlm = async (
+    spaceId: string,
+    agentId: string,
+  ): Promise<LLMProvider | null> => {
+    const [org, agent] = await Promise.all([
+      repository.getOrganizationBySpaceId(spaceId),
+      repository.getAgent(agentId),
+    ]);
+    const cfg = await resolveEnabledModel({
+      repo: repository,
+      store: replySecretStore,
+      organizationId: org?.id ?? null,
+      actorId: agent?.ownerId ?? undefined,
+      prefer: agent?.model ?? undefined,
+    });
+    if (!cfg) return llm ?? null;
+    try {
+      return createLLMProvider(cfg.kind, {
+        apiKey: cfg.apiKey,
+        baseUrl: cfg.baseUrl,
+        model: cfg.model,
+      });
+    } catch {
+      return llm ?? null;
+    }
+  };
   const onMessage = (msg: InboundMessage) => {
     console.log(`[channel:whatsapp] ${msg.sender}: ${msg.text}`);
     void eventBus
@@ -130,6 +165,7 @@ if (whatsappSessionDir) {
       channelId?: string;
       kind?: string;
       sender?: string;
+      text?: string;
       timestamp?: string;
     };
     if (!payload?.channelId || !payload?.sender || !payload?.timestamp) return;
@@ -148,6 +184,39 @@ if (whatsappSessionDir) {
         console.log(
           `[channel] provisioned person ${result.person?.id} (${payload.sender})`,
         );
+      }
+
+      /* List-assigned agents answer whoever sends a message: which agent
+         replies depends on which list (if any) the sender is on, with a
+         space-wide default agent standing in for people on no list yet. A
+         known person on an agent-less list, or an unlisted person with no
+         default configured, gets no automatic reply. */
+      if (result.person && payload.text && payload.kind === "whatsapp" && whatsAppManager) {
+        const account = await repository.getWaAccount(payload.channelId);
+        if (account) {
+          const agentId = await resolveReplyAgent(repository, {
+            personId: result.person.id,
+            spaceId: account.spaceId,
+            isNewPerson: result.created,
+          });
+          if (agentId) {
+            const replyLlm = await resolveReplyLlm(account.spaceId, agentId);
+            if (replyLlm) {
+              const reply = await draftAgentReply(
+                { repo: repository, llm: replyLlm, memory: memoryProvider },
+                { agentId, personId: result.person.id, messageText: payload.text },
+              );
+              if (reply) {
+                const adapter = whatsAppManager.get(payload.channelId);
+                if (adapter) await adapter.send(payload.sender, reply);
+              }
+            } else {
+              console.warn(
+                `[channel] no model configured for agent ${agentId} in space ${account.spaceId} — skipping auto-reply`,
+              );
+            }
+          }
+        }
       }
     } catch (err) {
       console.error("[channel] person provisioning failed", err);

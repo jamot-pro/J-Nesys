@@ -201,4 +201,40 @@ describe("people lists", () => {
     });
     expect(lists.json().items).toHaveLength(0);
   });
+
+  it("assigns and clears the list's reply agent, for routing inbound replies", async () => {
+    const { app, cookie, spaceId } = await signUp("router@example.com");
+    const list = await app.inject({
+      method: "POST",
+      url: "/api/people/lists",
+      headers: { cookie },
+      payload: { spaceId, name: "VIP" },
+    });
+    const listId = list.json().id as string;
+    expect(list.json().replyAgentId).toBeNull();
+
+    const agent = await app.inject({
+      method: "POST",
+      url: "/api/agents",
+      headers: { cookie },
+      payload: { name: "Concierge", harness: { kind: "generic_http", endpoint: null, config: {} } },
+    });
+    const agentId = agent.json().id as string;
+
+    const assigned = await app.inject({
+      method: "PATCH",
+      url: `/api/people/lists/${listId}`,
+      headers: { cookie },
+      payload: { replyAgentId: agentId },
+    });
+    expect(assigned.json().replyAgentId).toBe(agentId);
+
+    const cleared = await app.inject({
+      method: "PATCH",
+      url: `/api/people/lists/${listId}`,
+      headers: { cookie },
+      payload: { replyAgentId: null },
+    });
+    expect(cleared.json().replyAgentId).toBeNull();
+  });
 });

@@ -574,6 +574,7 @@ export function createMemoryRepository(): JamotRepository {
         organizationId: input.organizationId ?? null,
         createdBy: input.createdBy ?? null,
         name: input.name,
+        replyAgentId: input.replyAgentId ?? null,
         createdAt: now(),
         updatedAt: now(),
       });
@@ -595,6 +596,14 @@ export function createMemoryRepository(): JamotRepository {
       const existing = peopleListStore.get(id);
       if (!existing) return null;
       const updated = PeopleList.parse({ ...existing, name, updatedAt: now() });
+      peopleListStore.set(id, updated);
+      return updated;
+    },
+
+    async setPeopleListReplyAgent(id, agentId) {
+      const existing = peopleListStore.get(id);
+      if (!existing) return null;
+      const updated = PeopleList.parse({ ...existing, replyAgentId: agentId, updatedAt: now() });
       peopleListStore.set(id, updated);
       return updated;
     },
@@ -634,6 +643,17 @@ export function createMemoryRepository(): JamotRepository {
       return [...peopleListMemberStore.values()]
         .filter((m) => m.peopleListId === peopleListId)
         .sort((a, b) => a.createdAt.localeCompare(b.createdAt));
+    },
+
+    async listPeopleListsForPerson(personId, spaceId) {
+      const listIds = new Set(
+        [...peopleListMemberStore.values()]
+          .filter((m) => m.personId === personId)
+          .map((m) => m.peopleListId),
+      );
+      return [...peopleListStore.values()].filter(
+        (l) => listIds.has(l.id) && l.spaceId === spaceId,
+      );
     },
 
     async createLeadList(input: NewLeadList) {

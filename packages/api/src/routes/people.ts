@@ -572,7 +572,14 @@ export function peopleRoutes(repo: JamotRepository) {
     app.patch("/people/lists/:listId", { preHandler: requireAuth }, async (request, reply) => {
       const listId = parse(Id, (request.params as { listId?: string }).listId, reply);
       if (!listId) return;
-      const body = parse(z.object({ name: z.string().min(1).max(200) }), request.body, reply);
+      const body = parse(
+        z.object({
+          name: z.string().min(1).max(200).optional(),
+          replyAgentId: Id.nullable().optional(),
+        }),
+        request.body,
+        reply,
+      );
       if (!body) return;
 
       const list = await repo.getPeopleList(listId);
@@ -581,7 +588,14 @@ export function peopleRoutes(repo: JamotRepository) {
         return fail(reply, 403, "no access to this space");
       }
 
-      return await repo.renamePeopleList(listId, body.name);
+      let updated = list;
+      if (body.name !== undefined) {
+        updated = (await repo.renamePeopleList(listId, body.name)) ?? updated;
+      }
+      if (body.replyAgentId !== undefined) {
+        updated = (await repo.setPeopleListReplyAgent(listId, body.replyAgentId)) ?? updated;
+      }
+      return updated;
     });
 
     app.delete("/people/lists/:listId", { preHandler: requireAuth }, async (request, reply) => {

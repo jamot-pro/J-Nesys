@@ -774,6 +774,9 @@ export function decodeModelRef(ref: string | null | undefined): {
 
 export interface SpaceSettingsResponse {
   orchestratorModel: string | null;
+  /** Agent that answers inbound WhatsApp messages from senders who aren't
+   * on any people list yet. `null` means "don't auto-reply". */
+  defaultReplyAgentId: string | null;
 }
 
 export async function getSpaceSettings(
@@ -784,7 +787,7 @@ export async function getSpaceSettings(
 
 export async function updateSpaceSettings(
   spaceId: string,
-  input: { orchestratorModel?: string | null },
+  input: { orchestratorModel?: string | null; defaultReplyAgentId?: string | null },
 ): Promise<SpaceSettingsResponse> {
   return api(`/api/spaces/${encodeURIComponent(spaceId)}/settings`, {
     method: "PATCH",
@@ -1461,6 +1464,8 @@ export interface OutreachList {
   memberPersonIds: string[];
   /** The People list this was built from, when it was. */
   sourcePeopleListId: string | null;
+  /** Agent that answers inbound messages from anyone on this list. */
+  replyAgentId: string | null;
   createdAt: string;
   updatedAt: string;
 }
@@ -2402,6 +2407,8 @@ export interface PeopleList {
   organizationId: string | null;
   createdBy: string | null;
   name: string;
+  /** Agent that answers inbound messages from anyone on this list. */
+  replyAgentId: string | null;
   createdAt: string;
   updatedAt: string;
   people: PeopleListPerson[];
@@ -2425,6 +2432,16 @@ export async function renamePeopleList(listId: string, name: string): Promise<Pe
   return api<PeopleList>(`/api/people/lists/${listId}`, {
     method: "PATCH",
     body: JSON.stringify({ name }),
+  });
+}
+
+export async function setPeopleListReplyAgent(
+  listId: string,
+  agentId: string | null,
+): Promise<PeopleList> {
+  return api<PeopleList>(`/api/people/lists/${listId}`, {
+    method: "PATCH",
+    body: JSON.stringify({ replyAgentId: agentId }),
   });
 }
 

@@ -192,6 +192,7 @@ export interface NewPeopleList {
   organizationId?: string | null;
   createdBy?: string | null;
   name: string;
+  replyAgentId?: string | null;
 }
 
 export interface NewLeadList {
@@ -750,10 +751,15 @@ export interface JamotRepository {
   getPeopleList(id: string): Promise<PeopleList | null>;
   listPeopleLists(filter: { spaceId: string }): Promise<PeopleList[]>;
   renamePeopleList(id: string, name: string): Promise<PeopleList | null>;
+  /** Assign (or clear, with `null`) the agent that answers inbound messages
+   * from anyone on this list. */
+  setPeopleListReplyAgent(id: string, agentId: string | null): Promise<PeopleList | null>;
   deletePeopleList(id: string): Promise<void>;
   addPeopleListMember(peopleListId: string, personId: string): Promise<PeopleListMember>;
   removePeopleListMember(peopleListId: string, personId: string): Promise<void>;
   listPeopleListMembers(peopleListId: string): Promise<PeopleListMember[]>;
+  /** Every list in a space that a person belongs to, in no particular order. */
+  listPeopleListsForPerson(personId: string, spaceId: string): Promise<PeopleList[]>;
 
   /** Public presentation for a dream, absent until someone fills it in. */
   getDreamListing(organizationId: string): Promise<DreamListingRow | null>;
