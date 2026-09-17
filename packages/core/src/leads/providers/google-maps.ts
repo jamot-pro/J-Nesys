@@ -4,6 +4,7 @@ import type {
   LeadProviderContext,
   LeadProviderServices,
 } from "../types.js";
+import { createLLMProvider, resolveEnabledModel } from "../../llm/index.js";
 
 /**
  * Google Maps places as leads, collected through Apify.
@@ -63,7 +64,7 @@ async function resolveToken(
  * the query and titles are ignored — a person's seniority is not something a
  * place listing knows.
  */
-function searchTerms(criteria: LeadCriteria): string[] {
+function explicitSearchTerms(criteria: LeadCriteria): string[] {
   const persona = criteria.persona ?? {};
   const terms = [
     ...(persona.industries ?? []),
@@ -71,10 +72,80 @@ function searchTerms(criteria: LeadCriteria): string[] {
   ]
     .map((term) => term.trim())
     .filter(Boolean);
+  return [...new Set(terms)];
+}
 
-  if (terms.length > 0) return [...new Set(terms)];
-  const summary = (persona.summary ?? "").trim();
-  return summary ? [summary] : [];
+function extractKeywordArray(text: string): string[] {
+  const match = text.match(/\[[\s\S]*\]/);
+  if (!match) return [];
+  try {
+    const parsed = JSON.parse(match[0]) as unknown;
+    if (!Array.isArray(parsed)) return [];
+    return parsed
+      .map((value) => (typeof value === "string" ? value.trim() : ""))
+      .filter(Boolean)
+      .slice(0, 3);
+  } catch {
+    return [];
+  }
+}
+
+/**
+ * When the persona gives no industries/keywords, the only signal is a
+ * free-text sentence ("I want all the banks") — sent to Apify verbatim, that
+ * matches nothing, since Maps' search box wants a trade/category, not a
+ * sentence. A cheap model call turns that sentence, plus what to avoid (for
+ * context only — exclusion itself still happens post-fetch), into 1-3 short
+ * search keywords. Any failure — no model configured for the org, the call
+ * errors, the response doesn't parse — falls back to the raw sentence so a
+ * missing/broken model never blocks a search that used to work.
+ */
+async function deriveKeywordsFromPrompt(
+  summary: string,
+  exclude: string,
+  services: LeadProviderServices,
+  ctx: LeadProviderContext,
+): Promise<string[]> {
+  try {
+    const runtime = await resolveEnabledModel({
+      repo: services.repo,
+      store: services.secretStore,
+      organizationId: ctx.organizationId,
+      env: services.env,
+    });
+    if (!runtime) return [summary];
+
+    const llm = createLLMProvider(runtime.kind, {
+      apiKey: runtime.apiKey,
+      baseUrl: runtime.baseUrl,
+      model: runtime.model,
+    });
+
+    const result = await llm.complete([
+      {
+        role: "system",
+        content:
+          "You turn a salesperson's plain-language description of who they want to find into concise Google Maps search keywords — business types or categories, never a full sentence. Respond with ONLY a JSON array of 1 to 3 short keyword strings, in the same language as the input, and nothing else.",
+      },
+      {
+        role: "user",
+        content: [
+          `What to search for: ${summary}`,
+          exclude
+            ? `What NOT to search for (context only, to sharpen the keywords — do not turn this into a keyword itself): ${exclude}`
+            : null,
+        ]
+          .filter(Boolean)
+          .join("\n"),
+      },
+    ]);
+
+    const keywords = extractKeywordArray(result.content);
+    if (keywords.length > 0) return keywords;
+  } catch {
+    // No model configured, or the call failed — fall back to the raw sentence.
+  }
+  return [summary];
 }
 
 /** Splits the free-text "what not to search" prompt into lowercase terms. */
@@ -201,7 +272,14 @@ export function createGoogleMapsProvider(
       const apifyToken = await token(ctx);
       if (!apifyToken) throw new Error("Google Maps provider has no Apify token");
 
-      const terms = searchTerms(criteria);
+      const excludeText = typeof ctx.config?.exclude === "string" ? ctx.config.exclude : "";
+      const explicit = explicitSearchTerms(criteria);
+      const summary = (criteria.persona?.summary ?? "").trim();
+      const terms = explicit.length > 0
+        ? explicit
+        : summary
+          ? await deriveKeywordsFromPrompt(summary, excludeText, services, ctx)
+          : [];
       if (terms.length === 0) {
         throw new Error(
           "Google Maps needs something to search for — give the list an industry or a keyword",

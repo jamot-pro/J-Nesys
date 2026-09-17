@@ -1,14 +1,18 @@
 import { describe, expect, it, vi, afterEach } from "vitest";
 import { createGoogleMapsProvider } from "./google-maps.js";
 import type { LeadProviderContext, LeadProviderServices } from "../types.js";
+import * as llm from "../../llm/index.js";
 
 const ctx: LeadProviderContext = { organizationId: null, spaceId: "s1", config: {} };
 
-function services(token?: string): LeadProviderServices {
+function services(token?: string, extraEnv?: NodeJS.ProcessEnv): LeadProviderServices {
   return {
     repo: { getSecret: async () => null } as unknown as LeadProviderServices["repo"],
     secretStore: { decrypt: (v: string) => v } as unknown as LeadProviderServices["secretStore"],
-    env: token ? ({ APIFY_TOKEN: token } as NodeJS.ProcessEnv) : ({} as NodeJS.ProcessEnv),
+    env: {
+      ...(token ? { APIFY_TOKEN: token } : {}),
+      ...extraEnv,
+    } as NodeJS.ProcessEnv,
   };
 }
 
@@ -41,6 +45,7 @@ function stubApifyRun(items: unknown[], captureInput?: (input: Record<string, un
 
 afterEach(() => {
   vi.unstubAllGlobals();
+  vi.restoreAllMocks();
 });
 
 describe("google maps lead provider", () => {
@@ -201,5 +206,44 @@ describe("google maps lead provider", () => {
     await expect(
       provider.search({ persona: { industries: ["plumber"] } as never, limit: 5 }, ctx),
     ).rejects.toThrow(/ended as FAILED/);
+  });
+
+  it("asks the org's configured model to turn a free-text prompt into keywords", async () => {
+    let sent: Record<string, unknown> = {};
+    stubApifyRun([], (input) => (sent = input));
+
+    vi.spyOn(llm, "resolveEnabledModel").mockResolvedValue({
+      kind: "anthropic",
+      model: "claude-3-5-haiku-latest",
+      apiKey: "sk-test",
+      providerName: "test",
+    });
+    vi.spyOn(llm, "createLLMProvider").mockReturnValue({
+      name: "test",
+      complete: vi.fn().mockResolvedValue({ content: '["bank", "credit union"]' }),
+    });
+
+    const provider = createGoogleMapsProvider(services("tok"));
+    await provider.search(
+      { persona: { summary: "I want all the banks" } as never, limit: 10 },
+      { ...ctx, config: { exclude: "ATM machines" } },
+    );
+
+    expect(sent.searchStringsArray).toEqual(["bank", "credit union"]);
+  });
+
+  it("falls back to the raw sentence when no model is configured or the call fails", async () => {
+    let sent: Record<string, unknown> = {};
+    stubApifyRun([], (input) => (sent = input));
+
+    vi.spyOn(llm, "resolveEnabledModel").mockResolvedValue(null);
+
+    const provider = createGoogleMapsProvider(services("tok"));
+    await provider.search(
+      { persona: { summary: "I want all the banks" } as never, limit: 10 },
+      ctx,
+    );
+
+    expect(sent.searchStringsArray).toEqual(["I want all the banks"]);
   });
 });
