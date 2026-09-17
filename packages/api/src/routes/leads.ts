@@ -217,8 +217,17 @@ export default async function leadsRoutes(
         actorId: request.session.actorId ?? null,
         payload: { listId: id },
       });
-      const result = await leads.runList(id);
-      return result;
+
+      // Not awaited: a Google Maps run can take minutes, and holding the
+      // HTTP connection open that long is what made starting a second
+      // search from the UI feel blocked on the first. runList() itself
+      // updates the list's status/leadCount as it goes (including on
+      // failure), so the caller finds out how it went by polling
+      // GET /lead-lists rather than waiting on this response.
+      void leads.runList(id).catch((err) => {
+        request.log.error(err, "lead list run failed");
+      });
+      return { listId: id, status: "running", totalFound: 0, added: 0, skipped: 0, error: null };
     },
   );
 

@@ -63,6 +63,17 @@ export function useLeadListsController(spaceId: string | null, organizationId: s
     void reloadProviders();
   }, [reload, reloadProviders]);
 
+  // A run is fire-and-forget server-side now (packages/api's /run route
+  // doesn't block on it), so this is the only way anything finds out how a
+  // running search is doing — poll while at least one list is "running",
+  // and stop as soon as none are, rather than polling forever.
+  const hasRunning = lists.some((l) => l.status === "running");
+  useEffect(() => {
+    if (!hasRunning) return;
+    const interval = setInterval(() => void reload(), 3000);
+    return () => clearInterval(interval);
+  }, [hasRunning, reload]);
+
   const create = useCallback(
     async (input: Omit<CreateLeadListInput, "spaceId" | "organizationId">) => {
       if (!spaceId) throw new Error("no space selected");
