@@ -181,7 +181,14 @@ export function createLeadGenerationService(
         if (!(await provider.configured(ctx))) {
           throw new Error(`lead provider "${list.providerId}" is not configured`);
         }
-        const raw = await provider.search(criteria, ctx);
+        // leadCount doubles as "found so far" while running and "added +
+        // skipped" once complete — real interim progress for a run that can
+        // take minutes, visible to anyone polling listLists() in the
+        // meantime. Fire-and-forget: a slow/failed progress write must never
+        // fail or delay the search itself.
+        const raw = await provider.search(criteria, ctx, (foundSoFar) => {
+          void repo.updateLeadList(id, { leadCount: foundSoFar }).catch(() => {});
+        });
 
         let added = 0;
         let skipped = 0;

@@ -33,8 +33,18 @@ export interface LeadProvider {
   configured(ctx: LeadProviderContext): Promise<boolean>;
   /** Detail string surfaced in the UI (e.g. the connected toolkit). */
   describe(ctx: LeadProviderContext): Promise<string>;
-  /** Search the provider for leads matching the criteria. */
-  search(criteria: LeadCriteria, ctx: LeadProviderContext): Promise<RawLead[]>;
+  /**
+   * Search the provider for leads matching the criteria. `onProgress`, when
+   * given, is called as results accumulate (real interim counts, not a
+   * heuristic) so a caller can show progress on a run that can take minutes.
+   * A provider with no way to report interim progress (a single blocking
+   * call) may simply never call it — the run still completes normally.
+   */
+  search(
+    criteria: LeadCriteria,
+    ctx: LeadProviderContext,
+    onProgress?: (foundSoFar: number) => void,
+  ): Promise<RawLead[]>;
   /** Optionally enrich a previously collected lead with more firmographics. */
   enrich?(lead: RawLead, ctx: LeadProviderContext): Promise<RawLead>;
 }

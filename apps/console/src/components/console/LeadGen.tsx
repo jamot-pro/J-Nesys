@@ -4,8 +4,10 @@ import { useCallback, useEffect, useState } from "react";
 import {
   getAgents,
   listActors,
+  runLeadList,
   type ApiAgent,
   type ApiActor,
+  type LeadList,
 } from "@jamot/client";
 import {
   MapAreaPicker,
@@ -52,16 +54,87 @@ const CARD: React.CSSProperties = {
   gap: "var(--space-3)",
 };
 
+/** How far along a running search is, from leadCount (found so far) vs. the requested limit. */
+function progressPercent(list: LeadList): number {
+  const limit = typeof list.providerConfig.limit === "number" ? list.providerConfig.limit : 100;
+  if (limit <= 0) return 0;
+  return Math.min(100, Math.round((list.leadCount / limit) * 100));
+}
+
+function ResearchCard({
+  list,
+  selected,
+  onSelect,
+}: {
+  list: LeadList;
+  selected: boolean;
+  onSelect: () => void;
+}) {
+  const running = list.status === "running";
+  const percent = progressPercent(list);
+  const statusLabel =
+    list.status === "complete" ? "Done" :
+    list.status === "failed" ? "Failed" :
+    list.status === "running" ? `${percent}%` : list.status;
+
+  return (
+    <button
+      onClick={onSelect}
+      style={{
+        textAlign: "left",
+        border: `1px solid ${selected ? "var(--color-accent)" : "var(--color-divider)"}`,
+        borderRadius: "var(--radius-sm)",
+        background: "var(--color-bg)",
+        padding: "var(--space-3)",
+        display: "flex",
+        flexDirection: "column",
+        gap: 6,
+        cursor: "pointer",
+        width: "100%",
+      }}
+    >
+      <div style={{ display: "flex", justifyContent: "space-between", gap: 8, alignItems: "baseline" }}>
+        <span style={{ fontSize: 13, fontWeight: 600, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+          {list.name}
+        </span>
+        <span
+          style={{
+            fontSize: 11,
+            fontFamily: "ui-monospace,'SF Mono',Menlo,monospace",
+            color: list.status === "failed" ? "var(--accent-ink)" : MUTED,
+            flex: "none",
+          }}
+        >
+          {statusLabel}
+        </span>
+      </div>
+      <div style={{ height: 4, borderRadius: 999, background: "var(--color-divider)", overflow: "hidden" }}>
+        <div
+          style={{
+            height: "100%",
+            width: `${running ? percent : 100}%`,
+            background:
+              list.status === "failed" ? "var(--accent-ink)" : "var(--color-accent)",
+            transition: "width 0.4s ease",
+          }}
+        />
+      </div>
+      <span style={{ fontSize: 11, color: MUTED }}>
+        {list.leadCount} found{running ? "…" : ""}
+      </span>
+    </button>
+  );
+}
+
 /**
  * Lead Generation, deliberately minimal: one thing to say who you're looking
- * for (the target prompt — no separate keyword chips; the provider already
- * falls back to this free text as its search term, see google-maps.ts's
- * searchTerms()), one existing People list to save into, how many leads, one
- * city + radius, and an optional "what not to search" exclusion applied
- * server-side against the results. Then Search. No agent to pick for the
- * search itself — one fixed provider (Apify's Google Maps actor) always
- * reads the prompt; agent selection only applies to enrichment, a separate
- * step below.
+ * for (the target prompt), one existing People list to save into, how many
+ * leads, one city + radius, and an optional "what not to search" exclusion.
+ * Then Search. A run is fire-and-forget on the server (packages/api's /run
+ * route doesn't block on it), so pressing Search again immediately starts a
+ * second, independent search — the "Research" panel below polls every
+ * running list's real progress (found-so-far vs. the requested limit) and
+ * lets you switch which one's results the table shows.
  */
 export function LeadGen() {
   const { organizationId, spaceId } = useOrgScope();
@@ -73,11 +146,8 @@ export function LeadGen() {
   const { lists: peopleLists } = usePeopleListsController(spaceId);
   const [listId, setListId] = useState<string>("");
   const [peopleListId, setPeopleListId] = useState<string>("");
-  const [pendingRunVolume, setPendingRunVolume] = useState<number | null>(null);
-  const { leads: results, running, error, setError, run, enrichOne } = useLeadListRun(
-    listId || null,
-  );
-  const [starting, setStarting] = useState(false);
+  const { leads: results, enrichOne } = useLeadListRun(listId || null);
+  const [submitting, setSubmitting] = useState(false);
 
   const [icp, setIcp] = useState("");
   const [exclude, setExclude] = useState("");
@@ -87,8 +157,7 @@ export function LeadGen() {
   const [enrichScope, setEnrichScope] = useState<"new" | "list" | "missing">("new");
   const [enriching, setEnriching] = useState(false);
   const [log, setLog] = useState<LogLine[]>([]);
-
-  const [note, setNote] = useState<string | null>(null);
+  const [error, setError] = useState<string | null>(null);
 
   /** An agent's name lives on its actor; role is what it does, not what it is. */
   const agentName = useCallback(
@@ -110,7 +179,7 @@ export function LeadGen() {
         setError(err instanceof Error ? err.message : "Could not assign that agent.");
       }
     },
-    [listId, update, setError],
+    [listId, update],
   );
 
   /** The list the agent selects apply to. */
@@ -136,30 +205,18 @@ export function LeadGen() {
     if (!peopleListId && peopleLists[0]) setPeopleListId(peopleLists[0].id);
   }, [peopleLists, peopleListId]);
 
-  // A newly created list only gets its id after `create()` resolves, so the
-  // run that was requested against it is queued here and fired once the
-  // `useLeadListRun(listId)` hook above has rebound to the new id.
+  // Once at least one search has run, keep showing its results below by
+  // default — but only until the user picks a different card themselves.
   useEffect(() => {
-    if (pendingRunVolume === null || !listId) return;
-    const runVolume = pendingRunVolume;
-    setPendingRunVolume(null);
-    void run(runVolume)
-      .then((result) => {
-        if (!result) return;
-        if (result.error) setError(result.error);
-        setNote(`${result.added} added · ${result.skipped} skipped · ${result.totalFound} found`);
-      })
-      .finally(() => setStarting(false));
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [listId, pendingRunVolume]);
+    if (!listId && lists[0]) setListId(lists[0].id);
+  }, [lists, listId]);
 
   const provider = providers.find((p) => p.configured) ?? providers[0];
 
   async function search() {
     if (!area) return;
     setError(null);
-    setStarting(true);
-    setNote("Saving the target…");
+    setSubmitting(true);
     try {
       if (!provider) throw new Error("no lead provider is available");
       if (!peopleListId) {
@@ -173,15 +230,23 @@ export function LeadGen() {
         persona: persona as never,
         area,
         peopleListId,
-        providerConfig: exclude.trim() ? { exclude: exclude.trim() } : {},
+        providerConfig: {
+          limit: volume,
+          ...(exclude.trim() ? { exclude: exclude.trim() } : {}),
+        },
       });
-      setNote("Searching…");
-      setPendingRunVolume(volume);
+      // Fire-and-forget: the API responds immediately with status "running"
+      // and keeps working server-side, so this search doesn't block a second
+      // one from starting right after. The Research panel's polling (inside
+      // useLeadListsController) is what shows it progressing.
+      void runLeadList(created.id, volume).catch((err) => {
+        setError(err instanceof Error ? err.message : "The search failed to start.");
+      });
       setListId(created.id);
     } catch (err) {
       setError(err instanceof Error ? err.message : "The search failed.");
-      setNote(null);
-      setStarting(false);
+    } finally {
+      setSubmitting(false);
     }
   }
 
@@ -225,7 +290,7 @@ export function LeadGen() {
           <h1 style={{ margin: 0, fontSize: 36, lineHeight: 1.1, letterSpacing: "-0.02em" }}>Lead Generation</h1>
           <p style={{ margin: "8px 0 0", fontSize: 14, lineHeight: 1.6, color: MUTED, maxWidth: "62ch" }}>
             Say who you're looking for, pick a list to save them in, set how many, and pick a city.
-            Press Search — that's it.
+            Press Search — that's it. Start as many searches as you like; each runs on its own.
           </p>
         </div>
       </div>
@@ -239,6 +304,17 @@ export function LeadGen() {
           <strong>System configuration → Connectors → Lead providers</strong>. Available:{" "}
           {providers.map((p) => p.label).join(", ")}.
         </p>
+      ) : null}
+
+      {lists.length > 0 ? (
+        <section style={{ ...CARD, marginBottom: "var(--space-3)" }}>
+          <span style={UPPER}>Research</span>
+          <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill,minmax(220px,1fr))", gap: 8 }}>
+            {lists.map((l) => (
+              <ResearchCard key={l.id} list={l} selected={l.id === listId} onSelect={() => setListId(l.id)} />
+            ))}
+          </div>
+        </section>
       ) : null}
 
       <section style={CARD}>
@@ -306,21 +382,16 @@ export function LeadGen() {
         className="btn btn-primary"
         style={{ marginTop: "var(--space-4)", width: "100%" }}
         onClick={() => void search()}
-        disabled={starting || running || !area || !peopleListId}
+        disabled={submitting || !area || !peopleListId}
       >
-        {starting || running ? "Searching…" : "Search"}
+        {submitting ? "Starting…" : "Search"}
       </button>
-
-      {starting || running ? (
-        <div style={{ marginTop: "var(--space-3)", background: "var(--color-surface)", borderRadius: "var(--radius-md)", padding: "var(--space-4)", display: "flex", alignItems: "center", gap: "var(--space-4)", flexWrap: "wrap" }}>
-          <span style={{ ...UPPER, fontSize: 13, letterSpacing: "0.08em" }}>Searching</span>
-          <span style={{ fontSize: 12, color: MUTED }}>{note}</span>
-        </div>
-      ) : null}
 
       <div style={{ display: "flex", alignItems: "baseline", gap: "var(--space-3)", flexWrap: "wrap", marginTop: "var(--space-6)" }}>
         <h2 style={{ margin: 0, fontSize: 20 }}>Results</h2>
-        <span style={{ fontSize: 12, color: MUTED }}>{note ?? `${results.length} in this list`}</span>
+        <span style={{ fontSize: 12, color: MUTED }}>
+          {current ? `${current.name} · ${results.length} in this list` : `${results.length} in this list`}
+        </span>
       </div>
 
       <div style={{ marginTop: "var(--space-3)", border: "1px solid var(--color-divider)", borderRadius: "var(--radius-md)", overflowX: "auto" }}>

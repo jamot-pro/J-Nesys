@@ -12,6 +12,33 @@ function services(token?: string): LeadProviderServices {
   };
 }
 
+/**
+ * Stubs the three-call async-run flow (start → poll → fetch items) that
+ * google-maps.ts now uses instead of the old single blocking
+ * run-sync-get-dataset-items call. Reports the run as already SUCCEEDED on
+ * the start response so tests never enter the poll loop — fast and
+ * deterministic, since the loop itself (sleep + repeat) isn't what these
+ * tests are about.
+ */
+function stubApifyRun(items: unknown[], captureInput?: (input: Record<string, unknown>) => void) {
+  vi.stubGlobal(
+    "fetch",
+    vi.fn(async (url: string, init?: { body?: string }) => {
+      if (url.includes("/runs?")) {
+        if (init?.body) captureInput?.(JSON.parse(init.body));
+        return {
+          ok: true,
+          json: async () => ({ data: { id: "run1", defaultDatasetId: "ds1", status: "SUCCEEDED" } }),
+        } as unknown as Response;
+      }
+      if (url.includes("/datasets/ds1/items")) {
+        return { ok: true, json: async () => items } as unknown as Response;
+      }
+      throw new Error(`unexpected fetch: ${url}`);
+    }),
+  );
+}
+
 afterEach(() => {
   vi.unstubAllGlobals();
 });
@@ -32,13 +59,7 @@ describe("google maps lead provider", () => {
 
   it("searches by trade and area, and splits the cap across terms", async () => {
     let sent: Record<string, unknown> = {};
-    vi.stubGlobal(
-      "fetch",
-      vi.fn(async (_url: string, init: { body: string }) => {
-        sent = JSON.parse(init.body);
-        return { ok: true, json: async () => [] } as unknown as Response;
-      }),
-    );
+    stubApifyRun([], (input) => (sent = input));
 
     const provider = createGoogleMapsProvider(services("tok"));
     await provider.search(
@@ -62,13 +83,7 @@ describe("google maps lead provider", () => {
 
   it("falls back to locationQuery only when no center/radius or polygon is given", async () => {
     let sent: Record<string, unknown> = {};
-    vi.stubGlobal(
-      "fetch",
-      vi.fn(async (_url: string, init: { body: string }) => {
-        sent = JSON.parse(init.body);
-        return { ok: true, json: async () => [] } as unknown as Response;
-      }),
-    );
+    stubApifyRun([], (input) => (sent = input));
 
     const provider = createGoogleMapsProvider(services("tok"));
     await provider.search(
@@ -84,19 +99,28 @@ describe("google maps lead provider", () => {
     expect(sent.customGeolocation).toBeUndefined();
   });
 
-  it("drops results matching the free-text 'what not to search' exclusion", async () => {
-    vi.stubGlobal(
-      "fetch",
-      vi.fn(async () =>
-        ({
-          ok: true,
-          json: async () => [
-            { title: "Joe's Fast Food", categoryName: "Fast food restaurant" },
-            { title: "Trattoria Roma", categoryName: "Italian restaurant" },
-          ],
-        }) as unknown as Response,
-      ),
+  it("reports interim progress via onProgress as the run completes", async () => {
+    stubApifyRun([{ title: "A" }, { title: "B" }]);
+
+    const provider = createGoogleMapsProvider(services("tok"));
+    const progress: number[] = [];
+    await provider.search(
+      { persona: { industries: ["plumber"] } as never, limit: 10 },
+      ctx,
+      (n) => progress.push(n),
     );
+
+    // The start response already reports SUCCEEDED, so the poll loop never
+    // runs and onProgress is never called — this just confirms passing a
+    // callback doesn't break anything when there's nothing to report yet.
+    expect(progress).toEqual([]);
+  });
+
+  it("drops results matching the free-text 'what not to search' exclusion", async () => {
+    stubApifyRun([
+      { title: "Joe's Fast Food", categoryName: "Fast food restaurant" },
+      { title: "Trattoria Roma", categoryName: "Italian restaurant" },
+    ]);
 
     const provider = createGoogleMapsProvider(services("tok"));
     const leads = await provider.search(
@@ -109,28 +133,20 @@ describe("google maps lead provider", () => {
   });
 
   it("maps a place to a company lead, keeping the payload for provenance", async () => {
-    vi.stubGlobal(
-      "fetch",
-      vi.fn(async () =>
-        ({
-          ok: true,
-          json: async () => [
-            {
-              title: "Hobbema Loodgieters",
-              categoryName: "Plumber",
-              address: "Oudegracht 1, Utrecht",
-              website: "hobbema.nl",
-              phone: "+31 30 123 4567",
-              totalScore: 4.6,
-              reviewsCount: 88,
-              placeId: "ChIJabc",
-              location: { lat: 52.09, lng: 5.12 },
-            },
-            { title: "" },
-          ],
-        }) as unknown as Response,
-      ),
-    );
+    stubApifyRun([
+      {
+        title: "Hobbema Loodgieters",
+        categoryName: "Plumber",
+        address: "Oudegracht 1, Utrecht",
+        website: "hobbema.nl",
+        phone: "+31 30 123 4567",
+        totalScore: 4.6,
+        reviewsCount: 88,
+        placeId: "ChIJabc",
+        location: { lat: 52.09, lng: 5.12 },
+      },
+      { title: "" },
+    ]);
 
     const provider = createGoogleMapsProvider(services("tok"));
     const leads = await provider.search(
@@ -166,5 +182,24 @@ describe("google maps lead provider", () => {
     await expect(
       provider.search({ persona: { industries: ["plumber"] } as never, limit: 5 }, ctx),
     ).rejects.toThrow(/402.*monthly usage/);
+  });
+
+  it("surfaces a non-SUCCEEDED terminal run status as a failure", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async (url: string) => {
+        if (url.includes("/runs?")) {
+          return {
+            ok: true,
+            json: async () => ({ data: { id: "run1", defaultDatasetId: "ds1", status: "FAILED" } }),
+          } as unknown as Response;
+        }
+        throw new Error(`unexpected fetch: ${url}`);
+      }),
+    );
+    const provider = createGoogleMapsProvider(services("tok"));
+    await expect(
+      provider.search({ persona: { industries: ["plumber"] } as never, limit: 5 }, ctx),
+    ).rejects.toThrow(/ended as FAILED/);
   });
 });

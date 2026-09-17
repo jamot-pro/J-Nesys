@@ -3,11 +3,16 @@
 import { useCallback, useEffect, useState } from "react";
 import {
   enrichLead,
+  getLeadList,
   listLeadListLeads,
   runLeadList,
   type LeadRunResult,
   type LeadView,
 } from "@jamot/client";
+
+function sleep(ms: number): Promise<void> {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
 
 /**
  * The run/enrich orchestration for one Lead List: load its leads, trigger a
@@ -51,10 +56,26 @@ export function useLeadListRun(listId: string | null) {
       setRunning(true);
       setError(null);
       try {
-        const result = await runLeadList(listId, limit);
-        if (result.error) setError(result.error);
+        // The API kicks the run off and responds immediately (it doesn't
+        // block on a search that can take minutes) — so "running" here has
+        // to mean "poll until the list actually leaves the running state,"
+        // not "await this one call."
+        await runLeadList(listId, limit);
+        let list = await getLeadList(listId);
+        while (list.status === "running") {
+          await sleep(2000);
+          list = await getLeadList(listId);
+        }
+        if (list.error) setError(list.error);
         await reloadLeads();
-        return result;
+        return {
+          listId: list.id,
+          status: list.status,
+          totalFound: list.leadCount,
+          added: list.leadCount,
+          skipped: 0,
+          error: list.error,
+        };
       } catch (err) {
         setError(err instanceof Error ? err.message : "The run failed.");
         return null;

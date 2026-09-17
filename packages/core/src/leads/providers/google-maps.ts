@@ -197,7 +197,7 @@ export function createGoogleMapsProvider(
         : "Missing Apify token";
     },
 
-    async search(criteria, ctx) {
+    async search(criteria, ctx, onProgress) {
       const apifyToken = await token(ctx);
       if (!apifyToken) throw new Error("Google Maps provider has no Apify token");
 
@@ -244,29 +244,75 @@ export function createGoogleMapsProvider(
         input.locationQuery = area.place;
       }
 
-      /* run-sync-get-dataset-items runs the actor and returns the rows in one
-         call, so there is no run id to poll and no partial state to reconcile
-         if this process dies mid-search. */
-      const response = await fetch(
-        `${APIFY_BASE_URL}/acts/${ACTOR_ID}/run-sync-get-dataset-items?token=${encodeURIComponent(apifyToken)}`,
+      /* Started as an async run (not run-sync-get-dataset-items) specifically
+         so progress is observable: the run's dataset accumulates items while
+         the actor is still working, and Apify's dataset GET endpoint reports
+         itemCount for it in real time. A single blocking sync call has no
+         equivalent — it returns everything at once, at the end, with nothing
+         to poll in between. */
+      const startResponse = await fetch(
+        `${APIFY_BASE_URL}/acts/${ACTOR_ID}/runs?token=${encodeURIComponent(apifyToken)}`,
         {
           method: "POST",
           headers: { "content-type": "application/json" },
           body: JSON.stringify(input),
-          /* Maps runs take minutes, not seconds; the default fetch timeout
-             would abandon a run that is still being billed. */
-          signal: AbortSignal.timeout(10 * 60 * 1000),
+          signal: AbortSignal.timeout(30_000),
         },
       );
-
-      if (!response.ok) {
-        const detail = await response.text().catch(() => "");
+      if (!startResponse.ok) {
+        const detail = await startResponse.text().catch(() => "");
         throw new Error(
-          `Apify returned ${response.status}${detail ? `: ${detail.slice(0, 200)}` : ""}`,
+          `Apify returned ${startResponse.status} starting the run${detail ? `: ${detail.slice(0, 200)}` : ""}`,
+        );
+      }
+      const started = (await startResponse.json()) as {
+        data: { id: string; defaultDatasetId: string; status: string };
+      };
+      const runId = started.data.id;
+      const datasetId = started.data.defaultDatasetId;
+
+      const TERMINAL = new Set(["SUCCEEDED", "FAILED", "TIMED-OUT", "ABORTED"]);
+      const deadline = Date.now() + 10 * 60 * 1000; // same overall budget as before
+      let status = started.data.status;
+
+      while (!TERMINAL.has(status)) {
+        if (Date.now() > deadline) throw new Error("Apify run timed out after 10 minutes");
+        await new Promise((resolve) => setTimeout(resolve, 3000));
+
+        const [runRes, datasetRes] = await Promise.all([
+          fetch(`${APIFY_BASE_URL}/actor-runs/${runId}?token=${encodeURIComponent(apifyToken)}`, {
+            signal: AbortSignal.timeout(15_000),
+          }),
+          fetch(`${APIFY_BASE_URL}/datasets/${datasetId}?token=${encodeURIComponent(apifyToken)}`, {
+            signal: AbortSignal.timeout(15_000),
+          }),
+        ]);
+        if (runRes.ok) {
+          const runJson = (await runRes.json()) as { data: { status: string } };
+          status = runJson.data.status;
+        }
+        if (datasetRes.ok && onProgress) {
+          const datasetJson = (await datasetRes.json()) as { data: { itemCount: number } };
+          onProgress(datasetJson.data.itemCount);
+        }
+      }
+
+      if (status !== "SUCCEEDED") {
+        throw new Error(`Apify run ended as ${status}`);
+      }
+
+      const itemsResponse = await fetch(
+        `${APIFY_BASE_URL}/datasets/${datasetId}/items?token=${encodeURIComponent(apifyToken)}`,
+        { signal: AbortSignal.timeout(60_000) },
+      );
+      if (!itemsResponse.ok) {
+        const detail = await itemsResponse.text().catch(() => "");
+        throw new Error(
+          `Apify returned ${itemsResponse.status} fetching results${detail ? `: ${detail.slice(0, 200)}` : ""}`,
         );
       }
 
-      const rows = (await response.json()) as unknown;
+      const rows = (await itemsResponse.json()) as unknown;
       if (!Array.isArray(rows)) return [];
 
       /* "What not to search" is free text, not a filter DSL Apify
