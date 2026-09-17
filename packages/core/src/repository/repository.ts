@@ -202,6 +202,7 @@ export interface NewLeadList {
   description?: string;
   persona?: LeadList["persona"];
   area?: LeadList["area"];
+  peopleListId?: string | null;
   agentId?: string | null;
   enrichmentAgentId?: string | null;
   providerId: string;

@@ -88,6 +88,7 @@ export function createLeadGenerationService(
         description: input.description ?? "",
         persona: input.persona ?? { titles: [], seniority: [], functions: [], industries: [], companySizes: [], keywords: [], excludeEmails: [], summary: "" },
         area: input.area ?? null,
+        peopleListId: input.peopleListId ?? null,
         agentId: input.agentId ?? null,
         enrichmentAgentId: input.enrichmentAgentId ?? null,
         providerId: input.providerId,
@@ -205,6 +206,14 @@ export function createLeadGenerationService(
               capturedAt: new Date().toISOString(),
             },
           });
+          // A match is a lead-generation-specific record (lead_list_members)
+          // by default; when this list targets a People List, every match
+          // also lands there, so Outreach and the People screen see it the
+          // same way they see any other list of people. Idempotent — running
+          // the same list against a second city just adds new members.
+          if (list.peopleListId) {
+            await repo.addPeopleListMember(list.peopleListId, person.id);
+          }
         }
 
         const completed = await repo.updateLeadList(id, {

@@ -1759,6 +1759,8 @@ export interface LeadList {
   description: string;
   persona: LeadPersona;
   area: LeadArea | null;
+  /** The People List every match lands in. */
+  peopleListId: string | null;
   /** The agent that runs a search on this list, when one is assigned. */
   agentId: string | null;
   /** The agent that enriches what the search found. */
@@ -1810,6 +1812,7 @@ export interface CreateLeadListInput {
   description?: string;
   persona?: Partial<LeadPersona>;
   area?: LeadArea | null;
+  peopleListId?: string | null;
   providerId: string;
   providerConfig?: Record<string, unknown>;
 }
@@ -1842,6 +1845,7 @@ export async function updateLeadList(
     description: string;
     persona: LeadPersona;
     area: LeadArea | null;
+    peopleListId: string | null;
     agentId: string | null;
     enrichmentAgentId: string | null;
     providerId: string;

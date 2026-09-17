@@ -1275,6 +1275,12 @@ export const leadLists = pgTable(
       .notNull()
       .default(sql`'{}'::jsonb`),
     area: jsonb("area").$type<LeadArea | null>(),
+    /* Every match lands here, so the rest of the platform (Outreach, People)
+       sees it as an ordinary list of people, not a lead-generation-only
+       concept. */
+    peopleListId: uuid("people_list_id").references(() => peopleLists.id, {
+      onDelete: "set null",
+    }),
     /* The agents that work this list: one searches, one enriches. */
     agentId: uuid("agent_id").references(() => agents.id, { onDelete: "set null" }),
     enrichmentAgentId: uuid("enrichment_agent_id").references(() => agents.id, {
