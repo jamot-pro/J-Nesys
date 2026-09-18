@@ -1,5 +1,6 @@
 import type { Actor, Event, Identity, MergeCandidate, Person } from "@jamot/contracts";
 import type { InboundMessage } from "../channels/channel.js";
+import { mergePeople } from "../people/merge.js";
 
 /**
  * Channel → Identity resolution → Person.
@@ -16,6 +17,12 @@ export interface ChannelPersonIngestRepo {
   findPersonByActorId(actorId: string): Promise<Person | null>;
   findPersonByEmail(email: string): Promise<Person | null>;
   findPersonByPhone(phone: string): Promise<Person | null>;
+  getPerson(id: string): Promise<Person | null>;
+  listIdentitiesForPerson(personId: string): Promise<Identity[]>;
+  findIdentity(provider: string, value: string): Promise<Identity | null>;
+  updateIdentity(id: string, patch: { personId: Person["id"] }): Promise<Identity | null>;
+  removeIdentity(id: string): Promise<void>;
+  deletePerson(id: string): Promise<void>;
   addIdentity(input: {
     actorId: string;
     personId?: string | null;
@@ -240,16 +247,18 @@ export function createChannelPersonProvisioner(
         }
       }
 
+      // Auto-merge: each collision's pre-existing person becomes the keeper,
+      // absorbing whichever id is currently canonical for this contact — a
+      // second collision (e.g. phone AND email each matching someone) merges
+      // into the first merge's own keeper rather than the now-deleted
+      // original id.
+      let currentPersonId: string = person.id;
       for (const collision of collisions) {
-        await repo.createMergeCandidate({
-          spaceId: spaceId ?? msg.spaceId ?? null,
-          personAId: collision.otherId,
-          personBId: person.id,
-          reason: `${collision.reason} ${collision.value} matches another person`,
-          detail: { provider, value },
-        });
+        if (collision.otherId === currentPersonId) continue;
+        await mergePeople(repo, { keeperId: collision.otherId, absorbedId: currentPersonId });
+        currentPersonId = collision.otherId;
         await repo.recordEvent({
-          type: "person.merge.proposed",
+          type: "person.merge.auto",
           spaceId: spaceId ?? msg.spaceId ?? null,
           actorId: actor.id,
           payload: {
@@ -260,7 +269,9 @@ export function createChannelPersonProvisioner(
         });
       }
 
-      return { actor, person, created: true };
+      const finalPerson =
+        currentPersonId === person.id ? person : await repo.getPerson(currentPersonId);
+      return { actor, person: finalPerson, created: true };
     },
   };
 }

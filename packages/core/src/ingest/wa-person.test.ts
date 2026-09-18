@@ -98,6 +98,53 @@ function fakeRepo(
       }
       return null;
     },
+    async getPerson(id) {
+      for (const p of people.values()) {
+        if (p.id === id) return p;
+      }
+      return null;
+    },
+    async listIdentitiesForPerson(personId) {
+      return state.identities
+        .filter((i) => i.personId === personId)
+        .map((i, index) => ({
+          id: `identity-${index}` as Id,
+          createdAt: new Date().toISOString(),
+          updatedAt: new Date().toISOString(),
+          actorId: i.actorId as Id,
+          personId: i.personId as Id | null,
+          provider: i.provider,
+          value: i.value,
+          verified: true,
+          confidence: 1,
+          source: "observed",
+        }));
+    },
+    async findIdentity(provider, value) {
+      const identity = state.identities.find((i) => i.provider === provider && i.value === value);
+      if (!identity) return null;
+      return {
+        id: "identity-found" as Id,
+        createdAt: new Date().toISOString(),
+        updatedAt: new Date().toISOString(),
+        actorId: identity.actorId as Id,
+        personId: identity.personId as Id | null,
+        provider: identity.provider,
+        value: identity.value,
+        verified: true,
+        confidence: 1,
+        source: "observed",
+      };
+    },
+    async updateIdentity(id, patch) {
+      return null;
+    },
+    async removeIdentity(id) {},
+    async deletePerson(id) {
+      for (const [actorId, p] of people.entries()) {
+        if (p.id === id) people.delete(actorId);
+      }
+    },
     async addIdentity(input) {
       state.identities.push({
         actorId: input.actorId,

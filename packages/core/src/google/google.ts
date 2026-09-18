@@ -1,6 +1,7 @@
 import type { Actor, Connector, Person } from "@jamot/contracts";
 import type { JamotRepository } from "../repository/repository.js";
 import type { SecretStore } from "../secrets/secret-store.js";
+import { mergePeople } from "../people/merge.js";
 
 /**
  * Google connector: People API import + Gmail sender ingestion.
@@ -206,8 +207,12 @@ export interface GoogleSyncService {
 }
 
 /**
- * Attach an identity to a person; when the identity is already held by a
- * different person, record a merge candidate instead of silently re-linking.
+ * Attach an identity to a person. When the identity is already held by a
+ * different person, that person already existed under this exact
+ * phone/email/provider value, so it is auto-merged as the keeper and the
+ * person just being processed is absorbed into it — no pending review, per
+ * the org's auto-merge setting. Returns the id identities should keep using
+ * for this contact for the rest of the sync (the keeper's, if merged).
  */
 async function linkIdentity(
   repo: JamotRepository,
@@ -219,7 +224,7 @@ async function linkIdentity(
     source: string;
     spaceId: string | null;
   },
-): Promise<void> {
+): Promise<string> {
   const identity = await repo.addIdentity({
     actorId: input.actorId,
     personId: input.personId,
@@ -230,20 +235,21 @@ async function linkIdentity(
     source: input.source,
   });
   if (identity.personId && identity.personId !== input.personId) {
-    await repo.createMergeCandidate({
-      spaceId: input.spaceId,
-      personAId: identity.personId,
-      personBId: input.personId,
-      reason: `${input.provider} ${input.value} matches another person`,
-      detail: { provider: input.provider, value: input.value, source: input.source },
-    });
+    await mergePeople(repo, { keeperId: identity.personId, absorbedId: input.personId });
     await repo.recordEvent({
-      type: "person.merge.proposed",
+      type: "person.merge.auto",
       spaceId: input.spaceId,
       actorId: input.actorId,
-      payload: { personAId: identity.personId, personBId: input.personId },
+      payload: {
+        personAId: identity.personId,
+        personBId: input.personId,
+        provider: input.provider,
+        value: input.value,
+      },
     });
+    return identity.personId;
   }
+  return input.personId;
 }
 
 async function ensureMembership(
@@ -356,7 +362,11 @@ export function createGoogleSyncService(deps: GoogleSyncDeps): GoogleSyncService
       person = await ensureMembership(repo, person, spaceId);
     }
 
-    await linkIdentity(repo, {
+    // Auto-merging on any of these links can change which person id is
+    // canonical for this contact partway through — thread the effective id
+    // through the rest of the links rather than the now-possibly-absorbed
+    // original person.id.
+    let currentPersonId = await linkIdentity(repo, {
       actorId: actor.id,
       personId: person.id,
       provider: GOOGLE_IDENTITY_PROVIDER,
@@ -365,9 +375,9 @@ export function createGoogleSyncService(deps: GoogleSyncDeps): GoogleSyncService
       spaceId,
     });
     for (const email of emails) {
-      await linkIdentity(repo, {
+      currentPersonId = await linkIdentity(repo, {
         actorId: actor.id,
-        personId: person.id,
+        personId: currentPersonId,
         provider: "email",
         value: email,
         source: "google_contacts",
@@ -375,9 +385,9 @@ export function createGoogleSyncService(deps: GoogleSyncDeps): GoogleSyncService
       });
     }
     for (const phone of phones) {
-      await linkIdentity(repo, {
+      currentPersonId = await linkIdentity(repo, {
         actorId: actor.id,
-        personId: person.id,
+        personId: currentPersonId,
         provider: "phone",
         value: phone,
         source: "google_contacts",
@@ -422,7 +432,7 @@ export function createGoogleSyncService(deps: GoogleSyncDeps): GoogleSyncService
 
     await repo.updatePerson(person.id, { lastInteractionAt: sender.timestamp });
 
-    await linkIdentity(repo, {
+    const currentPersonId = await linkIdentity(repo, {
       actorId: actor.id,
       personId: person.id,
       provider: "email",
@@ -432,7 +442,7 @@ export function createGoogleSyncService(deps: GoogleSyncDeps): GoogleSyncService
     });
     await linkIdentity(repo, {
       actorId: actor.id,
-      personId: person.id,
+      personId: currentPersonId,
       provider: GMAIL_IDENTITY_PROVIDER,
       value: sender.email,
       source: "gmail",

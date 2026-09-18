@@ -99,16 +99,17 @@ describe("channel person provisioner (identity resolution)", () => {
     expect(candidates).toHaveLength(0);
   });
 
-  it("flags a merge candidate when a new person collides on phone", async () => {
+  it("auto-merges into the existing person when a new person collides on phone", async () => {
     const repo = createMemoryRepository();
 
-    // A person already known with this phone (e.g. added manually).
+    // A person already known with this phone (e.g. added manually, or via
+    // Google contact sync).
     const existingActor = await repo.createActor({
       type: "human",
       source: "internal",
       displayName: "Andrea Rossi",
     });
-    await repo.createPerson({
+    const existingPerson = await repo.createPerson({
       actorId: existingActor.id,
       phone: "393331234567",
       membershipSpaceIds: [SPACE],
@@ -119,15 +120,17 @@ describe("channel person provisioner (identity resolution)", () => {
       msg({ kind: "whatsapp", sender: "+39 333 1234567" }),
     );
 
-    // The whatsapp identity is new, so a new person is created — but the
-    // phone collision is flagged for human review instead of auto-merging.
+    // The whatsapp identity is new, so a new person is created transiently —
+    // but the phone collision auto-merges it into the pre-existing person
+    // (the keeper) rather than leaving a pending review.
     expect(result.created).toBe(true);
+    expect(result.person?.id).toBe(existingPerson.id);
     const candidates = await repo.listMergeCandidates();
-    expect(candidates).toHaveLength(1);
-    expect(candidates[0]!.personBId).toBe(result.person!.id);
-    expect(candidates[0]!.reason).toContain("phone");
+    expect(candidates).toHaveLength(0);
     const people = await repo.listPeople();
-    expect(people).toHaveLength(2);
+    expect(people).toHaveLength(1);
+    const identities = await repo.listIdentitiesForPerson(existingPerson.id);
+    expect(identities.some((i) => i.provider === "whatsapp")).toBe(true);
   });
 
   it("creates an email person and links the email identity", async () => {
