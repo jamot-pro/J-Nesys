@@ -84,7 +84,7 @@ export function googleConnectorRoutes(
          on FRONTEND_URL — the cockpit — which reads as the whole UI reverting. */
       const returnTo = safeReturnUrl(
         query.returnTo,
-        process.env.FRONTEND_URL ?? "https://mvp.jamot.pro",
+        process.env.FRONTEND_URL ?? "https://sales.jamot.pro",
       );
 
       const state = randomUUID();
@@ -101,7 +101,7 @@ export function googleConnectorRoutes(
         overrides?.clientSecret,
         overrides?.redirectUri,
       );
-      const frontendUrl = process.env.FRONTEND_URL ?? "https://mvp.jamot.pro";
+      const frontendUrl = process.env.FRONTEND_URL ?? "https://sales.jamot.pro";
       /* Read the stored return target before any early exit below uses it. */
       let storedReturn: string | null = null;
       try {

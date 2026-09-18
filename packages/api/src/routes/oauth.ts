@@ -28,7 +28,7 @@ export default async function oauthRoutes(
     opts.googleRedirectUri ??
     process.env.GOOGLE_REDIRECT_URI ??
     "https://api.jamot.pro/api/auth/google/callback";
-  const frontendUrl = process.env.FRONTEND_URL ?? "https://mvp.jamot.pro";
+  const frontendUrl = process.env.FRONTEND_URL ?? "https://sales.jamot.pro";
 
   app.get("/auth/google", async (request, reply) => {
     if (!clientId) {
