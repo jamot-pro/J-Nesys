@@ -16,6 +16,12 @@ export interface Organization {
   enabledAppIds: string[];
   treasuryId: string | null;
   reputation: Record<string, number>;
+  /** Always null over the wire except from the super-admin telegram routes'
+   * own responses — see redactOrganization() in the API. */
+  telegramBotToken: string | null;
+  telegramBotUsername: string | null;
+  telegramMiniAppName: string | null;
+  telegramMiniAppUrl: string | null;
 }
 
 export interface Space {
@@ -310,6 +316,35 @@ export async function uploadOrganizationLogo(
   return api<{ logoUrl: string }>(`/api/organizations/${organizationId}/logo`, {
     method: "PUT",
     body: JSON.stringify({ dataUri }),
+  });
+}
+
+export interface TelegramConfig {
+  hasBotToken: boolean;
+  botUsername: string | null;
+  miniAppName: string | null;
+  miniAppUrl: string | null;
+}
+
+export async function getOrganizationTelegramConfig(
+  organizationId: string,
+): Promise<TelegramConfig> {
+  return api<TelegramConfig>(`/api/organizations/${organizationId}/telegram`);
+}
+
+/** Omit botToken to leave the stored token unchanged; pass "" or null to clear it. */
+export async function updateOrganizationTelegramConfig(
+  organizationId: string,
+  patch: {
+    botToken?: string | null;
+    botUsername?: string | null;
+    miniAppName?: string | null;
+    miniAppUrl?: string | null;
+  },
+): Promise<TelegramConfig> {
+  return api<TelegramConfig>(`/api/organizations/${organizationId}/telegram`, {
+    method: "PUT",
+    body: JSON.stringify(patch),
   });
 }
 

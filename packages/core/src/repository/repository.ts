@@ -847,7 +847,18 @@ export interface JamotRepository {
   updateOrganization(
     id: string,
     patch: Partial<
-      Pick<Organization, "dream" | "blueprint" | "enabledAppIds" | "slug" | "logoUrl">
+      Pick<
+        Organization,
+        | "dream"
+        | "blueprint"
+        | "enabledAppIds"
+        | "slug"
+        | "logoUrl"
+        | "telegramBotToken"
+        | "telegramBotUsername"
+        | "telegramMiniAppName"
+        | "telegramMiniAppUrl"
+      >
     >,
   ): Promise<Organization | null>;
   createWorkspace(input: {

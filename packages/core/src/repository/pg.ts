@@ -456,6 +456,10 @@ function toOrganization(row: OrganizationRow): Organization {
     enabledAppIds: row.enabledAppIds,
     treasuryId: (row.treasuryId as Id | null) ?? null,
     reputation: row.reputation,
+    telegramBotToken: row.telegramBotToken ?? null,
+    telegramBotUsername: row.telegramBotUsername ?? null,
+    telegramMiniAppName: row.telegramMiniAppName ?? null,
+    telegramMiniAppUrl: row.telegramMiniAppUrl ?? null,
   };
 }
 

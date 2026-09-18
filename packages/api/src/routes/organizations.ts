@@ -14,6 +14,7 @@ import {
   UpdateOrganizationSettings,
   UpdateWorkspaceBody,
 } from "@jamot/contracts";
+import type { Organization } from "@jamot/contracts";
 import type { OrganizationMember as OrganizationMemberType } from "@jamot/contracts";
 import type { MemoryProvider } from "@jamot/core/memory";
 import type { AppManifest, AppRegistry } from "@jamot/core/apps";
@@ -64,6 +65,23 @@ function normalizeSlug(slug: string | undefined): string | undefined {
   if (!SLUG_RE.test(s) || RESERVED_SLUGS.has(s)) return undefined;
   return s;
 }
+
+/**
+ * Strips the Telegram bot token before an organization is returned from any
+ * route reachable by a regular member/admin (list, resolve, get-by-id). Only
+ * the dedicated super-admin-only /organizations/:id/telegram routes ever
+ * return the real token.
+ */
+function redactOrganization(organization: Organization): Organization {
+  return { ...organization, telegramBotToken: null };
+}
+
+const TelegramConfigBody = z.object({
+  botToken: z.string().nullable().optional(),
+  botUsername: z.string().nullable().optional(),
+  miniAppName: z.string().nullable().optional(),
+  miniAppUrl: z.string().nullable().optional(),
+});
 
 function joinUploadsDir(): string {
   return join(process.cwd(), "uploads");
@@ -238,7 +256,7 @@ export function organizationsRoutes(
             actorId as Id,
             organization.spaceId as Id,
           );
-          items.push({ organization, space, role, workspaces });
+          items.push({ organization: redactOrganization(organization), space, role, workspaces });
           continue;
         }
         const role = await actorRoleInSpace(
@@ -247,7 +265,7 @@ export function organizationsRoutes(
           organization.spaceId as Id,
         );
         if (!role) continue;
-        items.push({ organization, space, role, workspaces });
+        items.push({ organization: redactOrganization(organization), space, role, workspaces });
       }
 
       items.sort((a, b) => {
@@ -309,7 +327,7 @@ export function organizationsRoutes(
         }
         const workspaces = await repo.listWorkspaces(organization.id);
         return SubdomainResolution.parse({
-          organization,
+          organization: redactOrganization(organization),
           space,
           workspaces,
           role,
@@ -347,7 +365,7 @@ export function organizationsRoutes(
         if (!id) return;
         const organization = await repo.getOrganization(id);
         if (!organization) return fail(reply, 404, "organization not found");
-        return organization;
+        return redactOrganization(organization);
       },
     );
 
@@ -536,7 +554,73 @@ export function organizationsRoutes(
           byActorId: request.session.actorId,
         });
 
-        return { organization: updatedOrg };
+        return { organization: redactOrganization(updatedOrg) };
+      },
+    );
+
+    /** Read-only summary for the super-admin Telegram tab: never returns the
+     * raw token, only whether one is set, so the UI can show "configured"
+     * without re-displaying a secret it already has no business re-reading. */
+    app.get(
+      "/organizations/:id/telegram",
+      { preHandler: rbac.requireSuperAdmin() },
+      async (request, reply) => {
+        const params = request.params as { id?: string };
+        const id = parse(Id, params.id, reply);
+        if (!id) return;
+        const organization = await repo.getOrganization(id);
+        if (!organization) return fail(reply, 404, "organization not found");
+        return {
+          hasBotToken: Boolean(organization.telegramBotToken),
+          botUsername: organization.telegramBotUsername,
+          miniAppName: organization.telegramMiniAppName,
+          miniAppUrl: organization.telegramMiniAppUrl,
+        };
+      },
+    );
+
+    app.put(
+      "/organizations/:id/telegram",
+      { preHandler: rbac.requireSuperAdmin() },
+      async (request, reply) => {
+        const params = request.params as { id?: string };
+        const id = parse(Id, params.id, reply);
+        if (!id) return;
+        const organization = await repo.getOrganization(id);
+        if (!organization) return fail(reply, 404, "organization not found");
+        const body = parse(TelegramConfigBody, request.body, reply);
+        if (!body) return;
+
+        // botToken omitted -> leave the stored token unchanged (so the UI
+        // never has to round-trip the secret just to edit the other fields).
+        // botToken: null/"" -> explicitly clear it.
+        const patch: Partial<
+          Pick<
+            Organization,
+            "telegramBotToken" | "telegramBotUsername" | "telegramMiniAppName" | "telegramMiniAppUrl"
+          >
+        > = {};
+        if (body.botToken !== undefined) {
+          patch.telegramBotToken = body.botToken || null;
+        }
+        if (body.botUsername !== undefined) patch.telegramBotUsername = body.botUsername || null;
+        if (body.miniAppName !== undefined) patch.telegramMiniAppName = body.miniAppName || null;
+        if (body.miniAppUrl !== undefined) patch.telegramMiniAppUrl = body.miniAppUrl || null;
+
+        const updated = await repo.updateOrganization(id, patch);
+        if (!updated) return fail(reply, 404, "organization not found");
+
+        await writeOrgMemory(id, {
+          type: "organization.telegram.updated",
+          byActorId: request.session.actorId,
+        });
+
+        return {
+          hasBotToken: Boolean(updated.telegramBotToken),
+          botUsername: updated.telegramBotUsername,
+          miniAppName: updated.telegramMiniAppName,
+          miniAppUrl: updated.telegramMiniAppUrl,
+        };
       },
     );
 

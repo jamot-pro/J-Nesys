@@ -19,6 +19,7 @@ import { Input } from "@/components/ui/input";
 import { Card, Field } from "@/components/settings/section-primitives";
 import { OrgAppsList } from "@/components/settings/org-apps-list";
 import { OrgSettingsSection } from "@/components/settings/org-settings-section";
+import { OrgTelegramSection } from "@/components/settings/org-telegram-section";
 import { OrgMembersSection } from "@/components/settings/org-members-section";
 import { WorkspacesSection } from "@/components/settings/workspaces-section";
 import { BrandLogo } from "@/components/brand-logo";
@@ -46,7 +47,7 @@ const ROLE_VARIANT: Record<
   external: "outline",
 };
 
-type Tab = "settings" | "members" | "workspaces" | "apps";
+type Tab = "settings" | "telegram" | "members" | "workspaces" | "apps";
 
 export default function AdminPage() {
   const { user } = useAuth();
@@ -387,6 +388,7 @@ function ManagePanel({
 }) {
   const tabs: { id: Tab; label: string }[] = [
     { id: "settings", label: "Settings" },
+    { id: "telegram", label: "Telegram" },
     { id: "members", label: "Admins & Members" },
     { id: "workspaces", label: "Workspaces" },
     { id: "apps", label: "Apps" },
@@ -425,6 +427,9 @@ function ManagePanel({
 
       {tab === "settings" ? (
         <OrgSettingsSection organizationId={item.organization.id} onChanged={onChanged} />
+      ) : null}
+      {tab === "telegram" ? (
+        <OrgTelegramSection organizationId={item.organization.id} onChanged={onChanged} />
       ) : null}
       {tab === "members" ? (
         <OrgMembersSection organizationId={item.organization.id} onChanged={onChanged} />

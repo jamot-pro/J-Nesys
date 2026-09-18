@@ -371,6 +371,13 @@ export const organizations = pgTable("organizations", {
     .$type<Record<string, number>>()
     .notNull()
     .default(sql`'{}'::jsonb`),
+  // Per-organization Telegram Mini App. Kept as dedicated columns (not in
+  // `blueprint`) because `blueprint` backs the public /organizations/:slug/branding
+  // response — the bot token must never end up there. Super-admin-only routes.
+  telegramBotToken: text("telegram_bot_token"),
+  telegramBotUsername: text("telegram_bot_username"),
+  telegramMiniAppName: text("telegram_mini_app_name"),
+  telegramMiniAppUrl: text("telegram_mini_app_url"),
   ...timestamps(),
 });
 

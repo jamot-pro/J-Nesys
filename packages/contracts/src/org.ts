@@ -25,6 +25,12 @@ export const Organization = EntityBase.extend({
   enabledAppIds: z.array(z.string()).default([]),
   treasuryId: Id.nullable(),
   reputation: z.record(z.string(), z.number()).default({}),
+  /** Per-org Telegram Mini App. Super-admin-only to read/write — never
+   * included in the public /organizations/:slug/branding response. */
+  telegramBotToken: z.string().nullable().default(null),
+  telegramBotUsername: z.string().nullable().default(null),
+  telegramMiniAppName: z.string().nullable().default(null),
+  telegramMiniAppUrl: z.string().nullable().default(null),
 });
 export type Organization = z.infer<typeof Organization>;
 
