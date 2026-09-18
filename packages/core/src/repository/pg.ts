@@ -2279,6 +2279,36 @@ export function createPgRepository(db: Db): JamotRepository {
           [$2],
         );
         await client.query(
+          `DELETE FROM notifications WHERE space_id = ANY($1::uuid[])`,
+          [$2],
+        );
+        await client.query(
+          `DELETE FROM space_settings WHERE space_id = ANY($1::uuid[])`,
+          [$2],
+        );
+        await client.query(
+          `DELETE FROM deals WHERE space_id = ANY($1::uuid[])`,
+          [$2],
+        );
+        // outreach_campaigns.people_list_id is a required, non-cascading FK
+        // to people_lists — must go before that delete below.
+        await client.query(
+          `DELETE FROM outreach_campaigns WHERE space_id = ANY($1::uuid[])`,
+          [$2],
+        );
+        await client.query(
+          `DELETE FROM lead_lists WHERE space_id = ANY($1::uuid[])`,
+          [$2],
+        );
+        await client.query(
+          `DELETE FROM outreach_lists WHERE space_id = ANY($1::uuid[])`,
+          [$2],
+        );
+        await client.query(
+          `DELETE FROM people_lists WHERE space_id = ANY($1::uuid[])`,
+          [$2],
+        );
+        await client.query(
           `DELETE FROM memories WHERE owner_id = $1::uuid OR owner_id = ANY($2::uuid[])`,
           [$1, $2],
         );
@@ -2349,13 +2379,16 @@ export function createPgRepository(db: Db): JamotRepository {
           `DELETE FROM workspaces WHERE organization_id = $1::uuid`,
           [$1],
         );
-        await client.query(
-          `DELETE FROM spaces WHERE id = ANY($1::uuid[])`,
-          [$2],
-        );
+        // organizations.space_id references spaces, so the organization row
+        // must go first — deleting spaces first (the previous order) tripped
+        // the organizations_space_id_fkey constraint on the org's own space.
         await client.query(
           `DELETE FROM organizations WHERE id = $1::uuid`,
           [$1],
+        );
+        await client.query(
+          `DELETE FROM spaces WHERE id = ANY($1::uuid[])`,
+          [$2],
         );
         await client.query("COMMIT");
       } catch (err) {
