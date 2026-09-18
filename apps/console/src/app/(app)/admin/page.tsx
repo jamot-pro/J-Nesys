@@ -1,7 +1,6 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import Link from "next/link";
 import { useRouter } from "next/navigation";
 import {
   ArrowLeft,
@@ -13,16 +12,11 @@ import {
   X,
 } from "lucide-react";
 
-import { Badge } from "@/components/ui/badge";
-import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-import { Card, Field } from "@/components/settings/section-primitives";
 import { OrgAppsList } from "@/components/settings/org-apps-list";
 import { OrgSettingsSection } from "@/components/settings/org-settings-section";
 import { OrgTelegramSection } from "@/components/settings/org-telegram-section";
 import { OrgMembersSection } from "@/components/settings/org-members-section";
 import { WorkspacesSection } from "@/components/settings/workspaces-section";
-import { BrandLogo } from "@/components/brand-logo";
 import { resolveLogoUrl } from "@/components/settings/use-org-branding";
 import { useAuth } from "@/components/auth/auth-context";
 import { useAppShell } from "@/components/app-shell/app-shell-context";
@@ -36,16 +30,146 @@ import {
 
 const ROOT_DOMAIN = process.env.NEXT_PUBLIC_ROOT_DOMAIN;
 
-const ROLE_VARIANT: Record<
-  NonNullable<OrgRole>,
-  "default" | "secondary" | "outline" | "accent"
-> = {
-  owner: "default",
-  admin: "accent",
-  member: "secondary",
-  agent: "outline",
-  external: "outline",
+// Shared visual language with the org console (ConsoleRoot/Dashboard/AppRail):
+// design-system.css tokens via inline style, Archivo headings, soft cards.
+// hq is not itself an organization, so it gets this shell rather than the
+// mono-org OrgConsole — but the look must match, not the old shadcn admin UI.
+const UPPER: React.CSSProperties = {
+  fontFamily: "var(--font-heading)",
+  fontWeight: 800,
+  fontSize: 12,
+  letterSpacing: "0.1em",
+  textTransform: "uppercase",
 };
+
+const CARD: React.CSSProperties = {
+  border: "1px solid var(--color-divider)",
+  borderRadius: "var(--radius-md)",
+  background: "var(--color-bg)",
+  boxShadow: "var(--shadow-sm)",
+  padding: "var(--space-4)",
+};
+
+const MUTED = "color-mix(in srgb, var(--color-text) 76%, transparent)";
+
+const ROLE_TONE: Record<NonNullable<OrgRole>, string> = {
+  owner: "var(--color-accent)",
+  admin: "oklch(0.55 0.14 250)",
+  member: MUTED,
+  agent: MUTED,
+  external: MUTED,
+};
+
+function Badge({ children, tone }: { children: React.ReactNode; tone: string }) {
+  return (
+    <span
+      style={{
+        ...UPPER,
+        fontSize: 10,
+        padding: "2px 8px",
+        borderRadius: 999,
+        color: tone,
+        background: "color-mix(in srgb, currentColor 14%, transparent)",
+        whiteSpace: "nowrap",
+      }}
+    >
+      {children}
+    </span>
+  );
+}
+
+function IconButton({
+  children,
+  onClick,
+  title,
+  danger,
+  disabled,
+}: {
+  children: React.ReactNode;
+  onClick: () => void;
+  title: string;
+  danger?: boolean;
+  disabled?: boolean;
+}) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      title={title}
+      disabled={disabled}
+      style={{
+        display: "flex",
+        alignItems: "center",
+        justifyContent: "center",
+        width: 32,
+        height: 32,
+        border: "none",
+        borderRadius: "var(--radius-sm)",
+        background: "none",
+        color: danger ? "oklch(0.5 0.16 30)" : "var(--color-text)",
+        cursor: disabled ? "default" : "pointer",
+        opacity: disabled ? 0.5 : 1,
+      }}
+    >
+      {children}
+    </button>
+  );
+}
+
+function PillButton({
+  children,
+  onClick,
+  disabled,
+  variant = "solid",
+}: {
+  children: React.ReactNode;
+  onClick: () => void;
+  disabled?: boolean;
+  variant?: "solid" | "outline" | "ghost";
+}) {
+  const base: React.CSSProperties = {
+    display: "inline-flex",
+    alignItems: "center",
+    gap: 6,
+    fontFamily: "var(--font-heading)",
+    fontWeight: 700,
+    fontSize: 13,
+    padding: "8px 14px",
+    borderRadius: "var(--radius-sm)",
+    cursor: disabled ? "default" : "pointer",
+    opacity: disabled ? 0.6 : 1,
+    border: "1px solid transparent",
+  };
+  const style: React.CSSProperties =
+    variant === "solid"
+      ? { ...base, background: "var(--color-accent)", color: "#fff" }
+      : variant === "outline"
+        ? { ...base, background: "none", border: "1px solid var(--color-divider)", color: "var(--color-text)" }
+        : { ...base, background: "none", color: "var(--color-text)" };
+  return (
+    <button type="button" onClick={onClick} disabled={disabled} style={style}>
+      {children}
+    </button>
+  );
+}
+
+function TextInput(props: React.InputHTMLAttributes<HTMLInputElement>) {
+  return (
+    <input
+      {...props}
+      style={{
+        width: "100%",
+        border: "1px solid var(--color-divider)",
+        borderRadius: "var(--radius-sm)",
+        background: "var(--color-surface)",
+        color: "var(--color-text)",
+        padding: "9px 11px",
+        fontSize: 14,
+        ...props.style,
+      }}
+    />
+  );
+}
 
 type Tab = "settings" | "telegram" | "members" | "workspaces" | "apps";
 
@@ -72,6 +196,14 @@ export default function AdminPage() {
   const [deleting, setDeleting] = useState(false);
 
   const selected = items.find((i) => i.organization.id === selectedId) ?? null;
+
+  // hq has no organization of its own — the console body normally carries
+  // per-org branding via html style (lib/brand.ts); this page sets the
+  // Modernist theme's dark/light attribute the same way ConsoleRoot does.
+  const [dark, setDark] = useState(true);
+  useEffect(() => {
+    document.body.dataset.theme = dark ? "dark" : "light";
+  }, [dark]);
 
   const reload = async () => {
     setLoading(true);
@@ -157,198 +289,288 @@ export default function AdminPage() {
 
   if (!user?.isSuperAdmin) {
     return (
-      <div className="flex h-dvh w-full items-center justify-center bg-background p-6 text-foreground">
-        <Card className="flex max-w-md flex-col items-center gap-3 text-center">
-          <ShieldAlert className="size-8 text-muted-foreground" />
-          <h1 className="font-display text-lg font-semibold">Access denied</h1>
-          <p className="text-sm text-muted-foreground">
-            Only super admins can view this console.
-          </p>
-          <Button onClick={() => router.push("/")}>Back to home</Button>
-        </Card>
+      <div
+        style={{
+          display: "flex",
+          height: "100dvh",
+          width: "100%",
+          alignItems: "center",
+          justifyContent: "center",
+          background: "var(--color-surface)",
+          color: "var(--color-text)",
+        }}
+      >
+        <div style={{ ...CARD, maxWidth: 380, display: "flex", flexDirection: "column", alignItems: "center", gap: 12, textAlign: "center" }}>
+          <ShieldAlert size={28} color={MUTED} />
+          <h1 style={{ margin: 0, fontFamily: "var(--font-heading)", fontWeight: 800, fontSize: 18 }}>
+            Access denied
+          </h1>
+          <p style={{ margin: 0, fontSize: 14, color: MUTED }}>Only super admins can view this console.</p>
+          <PillButton onClick={() => router.push("/")}>Back to home</PillButton>
+        </div>
       </div>
     );
   }
 
   return (
-    <div className="flex h-dvh w-full flex-col overflow-hidden bg-background text-foreground">
-      <header className="flex h-12 shrink-0 items-center gap-3 border-b border-border px-3">
-        <Link
-          href="/"
-          className="flex items-center gap-2 text-sm font-medium text-muted-foreground transition-colors hover:text-foreground"
+    <div
+      style={{
+        display: "flex",
+        gap: 12,
+        height: "100dvh",
+        width: "100%",
+        padding: 12,
+        overflow: "hidden",
+        background: "var(--color-surface)",
+        color: "var(--color-text)",
+      }}
+    >
+      {/* Rail — same chrome as the org console's AppRail, minimal since hq has
+          exactly one surface today (Organizations) plus the theme toggle. */}
+      <nav
+        style={{
+          flex: "none",
+          width: 60,
+          display: "flex",
+          flexDirection: "column",
+          alignItems: "center",
+          background: "var(--color-bg)",
+          borderRadius: "var(--radius-md)",
+          boxShadow: "var(--shadow-sm)",
+          overflow: "hidden",
+        }}
+      >
+        <div
+          style={{
+            flex: "none",
+            width: "100%",
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center",
+            height: 52,
+            borderBottom: "1px solid var(--color-divider)",
+          }}
         >
-          <ArrowLeft className="size-4" />
-          <BrandLogo className="size-5" forceJamot />
-        </Link>
-        <span className="font-display text-sm font-semibold">Admin</span>
-      </header>
-
-      <div className="flex min-h-0 flex-1 justify-center overflow-y-auto px-8 py-6">
-        <div className="w-full max-w-3xl">
-          <div className="mb-6 flex items-center gap-3">
-            <Sparkles className="size-6 text-space-accent" />
-            <div>
-              <h1 className="font-display text-lg font-semibold tracking-tight">
-                Super Admin Console
-              </h1>
-              <p className="text-sm text-muted-foreground">
-                Manage every organization, its admins, subdomains, logos and workspaces.
-              </p>
-            </div>
-          </div>
-
-          <Card className="mb-6 flex max-w-3xl flex-wrap items-end gap-3">
-            <div className="min-w-0 flex-1">
-              <label className="mb-1.5 block text-sm font-medium">Name</label>
-              <Input
-                placeholder="New organization name"
-                value={name}
-                onChange={(event) => setName(event.target.value)}
-              />
-            </div>
-            <div className="min-w-0 flex-1">
-              <label className="mb-1.5 block text-sm font-medium">Subdomain</label>
-              <Input
-                placeholder="organization"
-                value={slug}
-                onChange={(event) => setSlug(event.target.value.toLowerCase())}
-              />
-            </div>
-            <div className="min-w-0 flex-[2]">
-              <label className="mb-1.5 block text-sm font-medium">Dream</label>
-              <Input
-                placeholder="Optional long-term vision"
-                value={dream}
-                onChange={(event) => setDream(event.target.value)}
-                onKeyDown={(event) => {
-                  if (event.key === "Enter") void createOrg();
-                }}
-              />
-            </div>
-            <Button onClick={() => void createOrg()} disabled={creating}>
-              {creating ? <Loader2 className="size-4 animate-spin" /> : <Building2 className="size-4" />}
-              Create
-            </Button>
-          </Card>
-
-          {createError ? <p className="mb-3 text-sm text-red-600">{createError}</p> : null}
-          {error ? <p className="mb-3 text-sm text-red-600">{error}</p> : null}
-
-          {selected ? (
-            <ManagePanel
-              item={selected}
-              tab={tab}
-              setTab={setTab}
-              onClose={() => {
-                setSelectedId(null);
-                void reload();
+          <button
+            onClick={() => router.push("/")}
+            title="Back to jamot-console home"
+            style={{ width: 44, height: 44, display: "flex", alignItems: "center", justifyContent: "center", background: "none", border: "none", cursor: "pointer" }}
+          >
+            {/* eslint-disable-next-line @next/next/no-img-element */}
+            <img className="mark-light" src="/brand/jamot-logo.webp" alt="Jamot" width={26} height={26} />
+            {/* eslint-disable-next-line @next/next/no-img-element */}
+            <img className="mark-dark" src="/brand/jamot-logo-white.webp" alt="Jamot" width={26} height={26} />
+          </button>
+        </div>
+        <div style={{ flex: 1, width: "100%", display: "flex", flexDirection: "column", alignItems: "center", gap: 2, padding: "var(--space-2) 0" }}>
+          <div style={{ position: "relative", width: 44, height: 44 }}>
+            <button
+              title="Organizations"
+              style={{
+                width: 44,
+                height: 44,
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "center",
+                background: "color-mix(in srgb, var(--color-text) 12%, transparent)",
+                border: "none",
+                borderRadius: "var(--radius-sm)",
+                color: "var(--color-text)",
               }}
-              onChanged={() => void reload()}
-            />
-          ) : loading ? (
-            <p className="text-sm text-muted-foreground">Loading organizations…</p>
-          ) : items.length === 0 ? (
-            <Card className="max-w-3xl">
-              <p className="text-sm text-muted-foreground">No organizations yet.</p>
-            </Card>
-          ) : (
-            <div className="flex max-w-3xl flex-col gap-2">
-              {items.map((item) => {
-                return (
-                  <Card key={item.organization.id} className="flex flex-col gap-3 p-0">
-                    <div className="flex flex-wrap items-center gap-3 p-4">
+            >
+              <Building2 size={20} strokeWidth={2} style={{ opacity: 0.85 }} />
+            </button>
+          </div>
+        </div>
+        <div style={{ flex: "none", width: "100%", borderTop: "1px solid var(--color-divider)", display: "flex", justifyContent: "center", padding: "var(--space-2) 0" }}>
+          <IconButton title="Theme" onClick={() => setDark((v) => !v)}>
+            <span style={{ fontSize: 16 }}>{dark ? "☀" : "☾"}</span>
+          </IconButton>
+        </div>
+      </nav>
+
+      <main
+        style={{
+          flex: 1,
+          minWidth: 0,
+          display: "flex",
+          flexDirection: "column",
+          background: "var(--color-bg)",
+          borderRadius: "var(--radius-md)",
+          boxShadow: "var(--shadow-md)",
+          overflow: "hidden",
+        }}
+      >
+        <header
+          style={{
+            flex: "none",
+            display: "flex",
+            alignItems: "center",
+            gap: 12,
+            height: 52,
+            padding: "0 var(--space-4)",
+            borderBottom: "1px solid var(--color-divider)",
+          }}
+        >
+          <button
+            onClick={() => router.push("/")}
+            style={{ display: "flex", alignItems: "center", gap: 6, background: "none", border: "none", color: MUTED, cursor: "pointer", fontSize: 13 }}
+          >
+            <ArrowLeft size={16} />
+            Home
+          </button>
+        </header>
+
+        <div style={{ flex: 1, minHeight: 0, overflowY: "auto", padding: "var(--space-6)" }}>
+          <div style={{ maxWidth: 760, margin: "0 auto" }}>
+            <div style={{ display: "flex", alignItems: "center", gap: 12, marginBottom: "var(--space-6)" }}>
+              <Sparkles size={24} color="var(--color-accent)" />
+              <div>
+                <span style={UPPER}>HQ</span>
+                <h1 style={{ margin: "2px 0 0", fontFamily: "var(--font-heading)", fontWeight: 800, fontSize: 26, letterSpacing: "-0.01em" }}>
+                  Organizations
+                </h1>
+                <p style={{ margin: "4px 0 0", fontSize: 14, color: MUTED }}>
+                  Create and configure every organization&rsquo;s console — subdomain, logo, Telegram Mini App and more.
+                </p>
+              </div>
+            </div>
+
+            <div style={{ ...CARD, display: "flex", flexWrap: "wrap", gap: 12, alignItems: "flex-end", marginBottom: "var(--space-6)" }}>
+              <div style={{ flex: 1, minWidth: 160 }}>
+                <label style={{ ...UPPER, fontSize: 10, display: "block", marginBottom: 6 }}>Name</label>
+                <TextInput placeholder="New organization name" value={name} onChange={(e) => setName(e.target.value)} />
+              </div>
+              <div style={{ flex: 1, minWidth: 140 }}>
+                <label style={{ ...UPPER, fontSize: 10, display: "block", marginBottom: 6 }}>Subdomain</label>
+                <TextInput placeholder="organization" value={slug} onChange={(e) => setSlug(e.target.value.toLowerCase())} />
+              </div>
+              <div style={{ flex: 2, minWidth: 200 }}>
+                <label style={{ ...UPPER, fontSize: 10, display: "block", marginBottom: 6 }}>Dream</label>
+                <TextInput
+                  placeholder="Optional long-term vision"
+                  value={dream}
+                  onChange={(e) => setDream(e.target.value)}
+                  onKeyDown={(e) => {
+                    if (e.key === "Enter") void createOrg();
+                  }}
+                />
+              </div>
+              <PillButton onClick={() => void createOrg()} disabled={creating}>
+                {creating ? <Loader2 className="animate-spin" size={14} /> : <Building2 size={14} />}
+                Create
+              </PillButton>
+            </div>
+
+            {createError ? <p style={{ color: "oklch(0.5 0.16 30)", fontSize: 13, marginBottom: 12 }}>{createError}</p> : null}
+            {error ? <p style={{ color: "oklch(0.5 0.16 30)", fontSize: 13, marginBottom: 12 }}>{error}</p> : null}
+
+            {selected ? (
+              <ManagePanel
+                item={selected}
+                tab={tab}
+                setTab={setTab}
+                onClose={() => {
+                  setSelectedId(null);
+                  void reload();
+                }}
+                onChanged={() => void reload()}
+              />
+            ) : loading ? (
+              <p style={{ fontSize: 14, color: MUTED }}>Loading organizations…</p>
+            ) : items.length === 0 ? (
+              <div style={CARD}>
+                <p style={{ margin: 0, fontSize: 14, color: MUTED }}>No organizations yet.</p>
+              </div>
+            ) : (
+              <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+                {items.map((item) => (
+                  <div key={item.organization.id} style={{ ...CARD, padding: "var(--space-3) var(--space-4)" }}>
+                    <div style={{ display: "flex", flexWrap: "wrap", alignItems: "center", gap: 12 }}>
                       {item.organization.logoUrl ? (
                         // eslint-disable-next-line @next/next/no-img-element
                         <img
                           src={resolveLogoUrl(item.organization.logoUrl) ?? ""}
                           alt={item.space.name}
-                          className="size-9 shrink-0 rounded-md border border-border object-contain"
+                          style={{ width: 36, height: 36, borderRadius: "var(--radius-sm)", border: "1px solid var(--color-divider)", objectFit: "contain", flex: "none" }}
                         />
                       ) : (
-                        <Building2 className="size-9 shrink-0 text-muted-foreground" />
+                        <Building2 size={36} color={MUTED} style={{ flex: "none" }} />
                       )}
 
-                      <div className="flex min-w-0 flex-1 flex-col">
-                        <span className="truncate font-medium">{item.space.name}</span>
-                        <span className="truncate text-xs text-muted-foreground">
+                      <div style={{ minWidth: 0, flex: 1, display: "flex", flexDirection: "column" }}>
+                        <span style={{ fontFamily: "var(--font-heading)", fontWeight: 700, fontSize: 15, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                          {item.space.name}
+                        </span>
+                        <span style={{ fontSize: 12, color: MUTED, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
                           {item.organization.slug && ROOT_DOMAIN
                             ? `${item.organization.slug}.${ROOT_DOMAIN}`
                             : item.organization.dream || "No subdomain or dream set"}
                         </span>
                       </div>
 
-                      <div className="flex items-center gap-3 text-xs text-muted-foreground">
+                      <div style={{ display: "flex", alignItems: "center", gap: 10, fontSize: 12, color: MUTED }}>
                         <span>{item.workspaces.length} workspace(s)</span>
                         <span>{item.organization.enabledAppIds.length} apps</span>
-                        {item.role ? (
-                          <Badge variant={ROLE_VARIANT[item.role]}>{item.role}</Badge>
-                        ) : null}
+                        {item.role ? <Badge tone={ROLE_TONE[item.role]}>{item.role}</Badge> : null}
                       </div>
 
-                      <div className="flex items-center gap-1">
-                        <Button
+                      <div style={{ display: "flex", alignItems: "center", gap: 2 }}>
+                        <PillButton
                           variant="outline"
-                          size="sm"
                           onClick={() => {
                             setSelectedId(item.organization.id);
                             setTab("settings");
                           }}
                         >
                           Manage
-                        </Button>
-                        <Button size="sm" onClick={() => openOrg(item)}>
-                          Open
-                        </Button>
-                        <Button
-                          variant="ghost"
-                          size="icon"
-                          className="size-8 text-destructive"
-                          aria-label={`Delete ${item.space.name}`}
-                          onClick={() => setConfirmDeleteId(item.organization.id)}
-                        >
-                          <Trash2 className="size-4" />
-                        </Button>
+                        </PillButton>
+                        <PillButton onClick={() => openOrg(item)}>Open</PillButton>
+                        <IconButton danger title={`Delete ${item.space.name}`} onClick={() => setConfirmDeleteId(item.organization.id)}>
+                          <Trash2 size={16} />
+                        </IconButton>
                       </div>
                     </div>
-                  </Card>
-                );
-              })}
-            </div>
-          )}
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
         </div>
-      </div>
+      </main>
 
       {confirmDeleteId ? (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-6">
-          <Card className="w-full max-w-md">
-            <div className="mb-3 flex items-center justify-between">
-              <h2 className="font-display text-base font-semibold">Delete organization</h2>
+        <div style={{ position: "fixed", inset: 0, zIndex: 50, display: "flex", alignItems: "center", justifyContent: "center", background: "rgba(0,0,0,0.4)", padding: 24 }}>
+          <div style={{ ...CARD, width: "100%", maxWidth: 420 }}>
+            <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 12 }}>
+              <h2 style={{ margin: 0, fontFamily: "var(--font-heading)", fontWeight: 800, fontSize: 16 }}>Delete organization</h2>
               <button
                 type="button"
                 onClick={() => {
                   setConfirmDeleteId(null);
                   setConfirmName("");
                 }}
-                className="text-muted-foreground hover:text-foreground"
+                style={{ background: "none", border: "none", color: MUTED, cursor: "pointer" }}
               >
-                <X className="size-5" />
+                <X size={20} />
               </button>
             </div>
-            <p className="mb-4 text-sm text-muted-foreground">
-              This permanently deletes the organization, its workspaces, members and all data.
-              Type the organization name to confirm.
+            <p style={{ margin: "0 0 16px", fontSize: 13, color: MUTED }}>
+              This permanently deletes the organization, its workspaces, members and all data. Type the organization
+              name to confirm.
             </p>
-            <Field label={`Type "${items.find((i) => i.organization.id === confirmDeleteId)?.space.name ?? ""}" to confirm`}>
-              <Input
-                value={confirmName}
-                onChange={(e) => setConfirmName(e.target.value)}
-                onKeyDown={(e) => {
-                  if (e.key === "Enter") void confirmDelete();
-                }}
-              />
-            </Field>
-            <div className="mt-4 flex justify-end gap-2">
-              <Button
+            <label style={{ ...UPPER, fontSize: 10, display: "block", marginBottom: 6 }}>
+              {`Type "${items.find((i) => i.organization.id === confirmDeleteId)?.space.name ?? ""}" to confirm`}
+            </label>
+            <TextInput
+              value={confirmName}
+              onChange={(e) => setConfirmName(e.target.value)}
+              onKeyDown={(e) => {
+                if (e.key === "Enter") void confirmDelete();
+              }}
+            />
+            <div style={{ marginTop: 16, display: "flex", justifyContent: "flex-end", gap: 8 }}>
+              <PillButton
                 variant="outline"
                 onClick={() => {
                   setConfirmDeleteId(null);
@@ -356,17 +578,13 @@ export default function AdminPage() {
                 }}
               >
                 Cancel
-              </Button>
-              <Button
-                variant="destructive"
-                disabled={deleting}
-                onClick={() => void confirmDelete()}
-              >
-                {deleting ? <Loader2 className="size-4 animate-spin" /> : null}
+              </PillButton>
+              <PillButton onClick={() => void confirmDelete()} disabled={deleting}>
+                {deleting ? <Loader2 className="animate-spin" size={14} /> : null}
                 Delete permanently
-              </Button>
+              </PillButton>
             </div>
-          </Card>
+          </div>
         </div>
       ) : null}
     </div>
@@ -394,31 +612,35 @@ function ManagePanel({
     { id: "apps", label: "Apps" },
   ];
   return (
-    <div className="flex max-w-3xl flex-col gap-4">
-      <div className="flex items-center justify-between gap-3">
-        <div className="flex items-center gap-2">
-          <span className="flex items-center gap-2 text-sm font-medium">
-            <Building2 className="size-4 text-muted-foreground" />
-            {item.space.name}
-          </span>
-        </div>
-        <Button variant="ghost" size="sm" onClick={onClose}>
-          <X className="size-4" />
+    <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
+      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
+        <span style={{ display: "flex", alignItems: "center", gap: 8, fontSize: 14, fontWeight: 600 }}>
+          <Building2 size={16} color={MUTED} />
+          {item.space.name}
+        </span>
+        <PillButton variant="ghost" onClick={onClose}>
+          <X size={14} />
           Back to list
-        </Button>
+        </PillButton>
       </div>
 
-      <div className="flex gap-1 rounded-lg border border-border bg-card p-1">
+      <div style={{ display: "flex", gap: 4, borderRadius: "var(--radius-sm)", border: "1px solid var(--color-divider)", background: "var(--color-surface)", padding: 4 }}>
         {tabs.map((t) => (
           <button
             key={t.id}
             type="button"
             onClick={() => setTab(t.id)}
-            className={`flex-1 rounded-md px-3 py-1.5 text-sm font-medium transition-colors ${
-              tab === t.id
-                ? "bg-space-accent text-space-accent-foreground"
-                : "text-muted-foreground hover:bg-muted hover:text-foreground"
-            }`}
+            style={{
+              flex: 1,
+              padding: "6px 10px",
+              borderRadius: "var(--radius-sm)",
+              border: "none",
+              fontSize: 13,
+              fontWeight: 600,
+              cursor: "pointer",
+              background: tab === t.id ? "var(--color-accent)" : "transparent",
+              color: tab === t.id ? "#fff" : "var(--color-text)",
+            }}
           >
             {t.label}
           </button>
