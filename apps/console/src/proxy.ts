@@ -16,7 +16,7 @@ import type { NextRequest } from "next/server";
  */
 export const ORG_SLUG_HEADER = "x-jamot-org-slug";
 
-const RESERVED = new Set(["www", "api", "app", "admin", "mvp", "mail", "static"]);
+const RESERVED = new Set(["www", "api", "app", "admin", "mvp", "hq", "mail", "static"]);
 const SLUG_RE = /^[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?$/;
 
 export function orgSlugFromHost(host: string | null, rootDomain: string | undefined): string | null {

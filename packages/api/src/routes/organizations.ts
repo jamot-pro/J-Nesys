@@ -56,7 +56,7 @@ const LogoUploadBody = z.object({
 });
 
 const SLUG_RE = /^[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?$/;
-const RESERVED_SLUGS = new Set(["www", "api", "mvp", "admin", "app", "mail"]);
+const RESERVED_SLUGS = new Set(["www", "api", "mvp", "admin", "app", "hq", "mail"]);
 
 function normalizeSlug(slug: string | undefined): string | undefined {
   if (!slug) return undefined;

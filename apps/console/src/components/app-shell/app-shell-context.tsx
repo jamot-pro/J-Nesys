@@ -30,7 +30,7 @@ function currentSubdomain(): string | null {
   const suffix = `.${ROOT_DOMAIN}`;
   if (!host.endsWith(suffix)) return null;
   const sub = host.slice(0, -suffix.length);
-  if (!sub || ["www", "app", "api", "mvp", "mail"].includes(sub)) return null;
+  if (!sub || ["www", "app", "api", "mvp", "hq", "mail"].includes(sub)) return null;
   return sub;
 }
 
