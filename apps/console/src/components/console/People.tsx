@@ -6,10 +6,15 @@ import {
   createContact,
   createPeopleList,
   deletePeopleList,
+  getAgents,
+  listActors,
   listPeopleLists,
   removePersonFromList,
   renamePeopleList,
+  setPeopleListReplyAgent,
   updatePerson,
+  type ApiActor,
+  type ApiAgent,
   type PeopleList,
   type PeopleListPerson,
   type PeopleNote,
@@ -138,6 +143,8 @@ export function People() {
   const [collapsed, setCollapsed] = useState<Record<string, boolean>>({});
   const [open, setOpen] = useState<{ listId: string; personId: string } | null>(null);
   const [busy, setBusy] = useState(false);
+  const [agents, setAgents] = useState<ApiAgent[]>([]);
+  const [actors, setActors] = useState<ApiActor[]>([]);
 
   const load = useCallback(async () => {
     if (!spaceId) return;
@@ -153,6 +160,21 @@ export function People() {
   useEffect(() => {
     void load();
   }, [load]);
+
+  useEffect(() => {
+    Promise.all([getAgents().catch(() => []), listActors().catch(() => [])]).then(
+      ([agentItems, actorItems]) => {
+        setAgents(agentItems);
+        setActors(actorItems);
+      },
+    );
+  }, []);
+
+  /** An agent's name lives on its actor; role is what it does, not what it is. */
+  const agentName = (agent: ApiAgent) =>
+    actors.find((a) => a.id === agent.actorId)?.displayName ??
+    agent.role ??
+    `Untitled agent · ${agent.id.slice(0, 8)}`;
 
   /** Runs a mutation, then reloads, so the screen never drifts from the API. */
   const run = useCallback(
@@ -297,10 +319,31 @@ export function People() {
                 <span style={{ fontSize: 12, color: MUTED }}>
                   {list.people.length === 1 ? "1 person" : `${list.people.length} people`}
                 </span>
+                <label
+                  title="Agent that answers WhatsApp messages from anyone on this list"
+                  style={{ marginLeft: "auto", display: "flex", alignItems: "center", gap: 6, fontSize: 12, color: MUTED }}
+                >
+                  Reply agent
+                  <select
+                    className="input"
+                    value={list.replyAgentId ?? ""}
+                    disabled={busy}
+                    onChange={(e) =>
+                      run(() => setPeopleListReplyAgent(list.id, e.target.value || null))
+                    }
+                    style={{ height: 30, fontSize: 12, padding: "0 8px" }}
+                  >
+                    <option value="">No auto-reply</option>
+                    {agents.map((agent) => (
+                      <option key={agent.id} value={agent.id}>
+                        {agentName(agent)}
+                      </option>
+                    ))}
+                  </select>
+                </label>
                 <button
                   className="btn btn-ghost btn-icon"
                   title="Delete list"
-                  style={{ marginLeft: "auto" }}
                   disabled={busy}
                   onClick={() => run(() => deletePeopleList(list.id))}
                 >
@@ -660,6 +703,23 @@ function PersonCard({
               </div>
             </>
           )}
+
+          {person.contextSummary ? (
+            <div>
+              <span style={{ fontFamily: "var(--font-heading)", fontWeight: 800, fontSize: 11, letterSpacing: "0.1em", textTransform: "uppercase" }}>
+                Memory summary
+              </span>
+              <p style={{ margin: "var(--space-3) 0 0", fontSize: 13, lineHeight: 1.55, color: "var(--color-text)" }}>
+                {person.contextSummary}
+              </p>
+              <p style={{ margin: "var(--space-3) 0 0", fontSize: 11, lineHeight: 1.5, color: DIM }}>
+                Auto-generated from every interaction we&rsquo;ve had with this person across channels
+                {person.contextSummaryUpdatedAt
+                  ? ` — last updated ${new Date(person.contextSummaryUpdatedAt).toLocaleString()}.`
+                  : "."}
+              </p>
+            </div>
+          ) : null}
 
           <div>
             <span style={{ fontFamily: "var(--font-heading)", fontWeight: 800, fontSize: 11, letterSpacing: "0.1em", textTransform: "uppercase" }}>

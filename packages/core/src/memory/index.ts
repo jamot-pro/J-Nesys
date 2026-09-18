@@ -21,3 +21,7 @@ export {
   type MemoryServiceDeps,
   type MemoryService,
 } from "./service.js";
+export {
+  refreshPersonContextSummary,
+  type ContextSummaryRepo,
+} from "./summarize-person.js";

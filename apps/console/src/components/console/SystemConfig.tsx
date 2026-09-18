@@ -3,12 +3,18 @@
 import { useCallback, useEffect, useState } from "react";
 import {
   createChannelAccount,
+  getAgents,
+  getSpaceSettings,
+  listActors,
   listChannelAccounts,
   listEnabledModels,
   createModelProvider,
   deleteModelProvider,
   listModelProviders,
   testModelProvider,
+  updateSpaceSettings,
+  type ApiActor,
+  type ApiAgent,
   type ApiModelProvider,
   type ApiChannelAccount,
 } from "@jamot/client";
@@ -180,6 +186,40 @@ function ChannelsSection() {
   const [busy, setBusy] = useState(false);
   const [label, setLabel] = useState("");
   const [token, setToken] = useState("");
+  const [agents, setAgents] = useState<ApiAgent[]>([]);
+  const [actors, setActors] = useState<ApiActor[]>([]);
+  const [defaultReplyAgentId, setDefaultReplyAgentId] = useState<string | null>(null);
+  const [savingReplyAgent, setSavingReplyAgent] = useState(false);
+
+  useEffect(() => {
+    getSpaceSettings(spaceId)
+      .then((s) => setDefaultReplyAgentId(s.defaultReplyAgentId ?? null))
+      .catch(() => {});
+    Promise.all([getAgents().catch(() => []), listActors().catch(() => [])]).then(
+      ([agentItems, actorItems]) => {
+        setAgents(agentItems);
+        setActors(actorItems);
+      },
+    );
+  }, [spaceId]);
+
+  /** An agent's name lives on its actor; role is what it does, not what it is. */
+  const agentName = (agent: ApiAgent) =>
+    actors.find((a) => a.id === agent.actorId)?.displayName ??
+    agent.role ??
+    `Untitled agent · ${agent.id.slice(0, 8)}`;
+
+  async function saveDefaultReplyAgent(value: string) {
+    setDefaultReplyAgentId(value || null);
+    setSavingReplyAgent(true);
+    try {
+      await updateSpaceSettings(spaceId, { defaultReplyAgentId: value || null });
+    } catch {
+      // Revert on error — user keeps old selection shown
+    } finally {
+      setSavingReplyAgent(false);
+    }
+  }
 
   async function refresh() {
     // WhatsApp accounts are owned by <WhatsAppPairing/>, which polls their
@@ -214,6 +254,29 @@ function ChannelsSection() {
 
       <h3 style={{ fontSize: 15, margin: "0 0 var(--space-3)" }}>WhatsApp</h3>
       <WhatsAppPairing />
+
+      <div className="field" style={{ marginTop: "var(--space-4)", maxWidth: 420 }}>
+        <label htmlFor="default-reply-agent">Default reply agent</label>
+        <select
+          id="default-reply-agent"
+          className="input"
+          value={defaultReplyAgentId ?? ""}
+          disabled={savingReplyAgent}
+          onChange={(e) => void saveDefaultReplyAgent(e.target.value)}
+        >
+          <option value="">No auto-reply</option>
+          {agents.map((agent) => (
+            <option key={agent.id} value={agent.id}>
+              {agentName(agent)}
+            </option>
+          ))}
+        </select>
+        <p style={{ margin: "var(--space-2) 0 0", fontSize: 12, color: MUTED }}>
+          Answers anyone who messages this space&rsquo;s WhatsApp number and isn&rsquo;t on any
+          People list yet. A list can override this with its own reply agent, set on the{" "}
+          <strong>People</strong> screen.
+        </p>
+      </div>
 
       <h3 style={{ fontSize: 15, margin: "var(--space-6) 0 var(--space-3)" }}>
         Telegram and Matrix {channels ? <span style={{ opacity: 0.5 }}>({channels.length})</span> : null}

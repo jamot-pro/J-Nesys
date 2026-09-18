@@ -165,6 +165,11 @@ async function toListPerson(
           text: String(n?.text ?? ""),
         }))
       : [],
+    // Auto-maintained from this person's memory entries (see
+    // refreshPersonContextSummary) — distinct from the manually-edited
+    // `context` field above, which the person themselves owns.
+    contextSummary: person.contextSummary ?? null,
+    contextSummaryUpdatedAt: person.contextSummaryUpdatedAt ?? null,
   };
 }
 

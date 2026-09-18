@@ -1,3 +1,4 @@
+import { createHash } from "node:crypto";
 import { pathToFileURL } from "node:url";
 import {
   createChannelRegistry,
@@ -6,6 +7,9 @@ import {
   createTelegramAdapter,
   createWhatsAppControlServer,
   createWhatsAppManager,
+  resolveReplyAgent,
+  draftAgentReply,
+  recordInteractionMemory,
 } from "@jamot/core/channels";
 import type { InboundMessage } from "@jamot/core/channels";
 import { createDb, createEventBus } from "@jamot/core";
@@ -13,6 +17,15 @@ import { runMigrations } from "@jamot/core/migrate";
 import { createMemoryRepository } from "@jamot/core/repository/memory";
 import { createPgRepository } from "@jamot/core/repository/pg";
 import { createChannelPersonProvisioner } from "@jamot/core/ingest";
+import {
+  createPostgresMemoryProvider,
+  createGraphitiMemoryMirror,
+  createDualWriteMemoryProvider,
+  type MemoryProvider,
+} from "@jamot/core/memory";
+import { createMcpClient } from "@jamot/core/mcp";
+import { createLLMProvider, resolveEnabledModel, type LLMProvider } from "@jamot/core/llm";
+import { createSecretStore } from "@jamot/core/secrets/secret-store";
 
 export async function startChannelWorker(): Promise<void> {
   const registry = createChannelRegistry();
@@ -39,10 +52,106 @@ export async function startChannelWorker(): Promise<void> {
     },
   });
 
+  // Same Postgres-primary + optional Graphiti-mirror wiring as the API
+  // process (packages/api/src/index.ts) — every channel this worker handles
+  // (WhatsApp, Telegram, Matrix) should write to the same person memory.
+  let memoryProvider: MemoryProvider | undefined;
+  if (db) {
+    memoryProvider = createPostgresMemoryProvider(db);
+    if (process.env.GRAPHITI_ENABLED === "true" && process.env.GRAPHITI_MCP_URL) {
+      memoryProvider = createDualWriteMemoryProvider(
+        memoryProvider,
+        createGraphitiMemoryMirror({ client: createMcpClient(process.env.GRAPHITI_MCP_URL) }),
+      );
+    }
+  }
+
+  // Same key derivation as the API process's secret store — must match so
+  // that model API keys encrypted there can be decrypted here.
+  const sessionSecret = process.env.SESSION_SECRET ?? "jamot-dev-secret-change-me";
+  const replySecretStore = createSecretStore({
+    encryptionKey: createHash("sha256").update(sessionSecret).digest("base64"),
+  });
+  const fallbackLlm = process.env.OPENAI_API_KEY ? createLLMProvider("openai") : undefined;
+  const resolveReplyLlm = async (spaceId: string, agentId: string): Promise<LLMProvider | null> => {
+    const [org, agent] = await Promise.all([
+      repo.getOrganizationBySpaceId(spaceId),
+      repo.getAgent(agentId),
+    ]);
+    const cfg = await resolveEnabledModel({
+      repo,
+      store: replySecretStore,
+      organizationId: org?.id ?? null,
+      actorId: agent?.ownerId ?? undefined,
+      prefer: agent?.model ?? undefined,
+    });
+    if (!cfg) return fallbackLlm ?? null;
+    try {
+      return createLLMProvider(cfg.kind, { apiKey: cfg.apiKey, baseUrl: cfg.baseUrl, model: cfg.model });
+    } catch {
+      return fallbackLlm ?? null;
+    }
+  };
+
   const onMessage = (msg: InboundMessage) => {
     console.log(`[channel:${msg.kind}] ${msg.sender}: ${msg.text}`);
     void provisioner
       .handleInbound(msg)
+      .then(async (result) => {
+        if (!result.person) return;
+
+        if (msg.text) {
+          void recordInteractionMemory(
+            memoryProvider,
+            {
+              personId: result.person.id,
+              channelKind: msg.kind,
+              direction: "inbound",
+              text: msg.text,
+              timestamp: msg.timestamp,
+            },
+            fallbackLlm ? { repo, llm: fallbackLlm } : undefined,
+          );
+        }
+
+        if (!msg.text) return;
+        const account = await repo.getChannelAccount(msg.channelId);
+        if (!account) return;
+        const agentId = await resolveReplyAgent(repo, {
+          personId: result.person.id,
+          spaceId: account.spaceId,
+          isNewPerson: result.created,
+        });
+        if (!agentId) return;
+        const replyLlm = await resolveReplyLlm(account.spaceId, agentId);
+        if (!replyLlm) {
+          console.warn(
+            `[channel] no model configured for agent ${agentId} in space ${account.spaceId} — skipping auto-reply`,
+          );
+          return;
+        }
+        const reply = await draftAgentReply(
+          { repo, llm: replyLlm, memory: memoryProvider },
+          { agentId, personId: result.person.id, messageText: msg.text },
+        );
+        if (!reply) return;
+        if (msg.kind === "whatsapp") {
+          const waAdapter = manager?.get(msg.channelId);
+          if (!waAdapter) return;
+          await waAdapter.send(msg.sender, reply);
+        } else {
+          const adapter = registry.get(msg.channelId);
+          if (!adapter) return;
+          await adapter.send(msg.sender, reply);
+        }
+        void recordInteractionMemory(memoryProvider, {
+          personId: result.person.id,
+          channelKind: msg.kind,
+          direction: "outbound",
+          text: reply,
+          timestamp: new Date().toISOString(),
+        });
+      })
       .catch((err) => console.error("[channel] person provisioning failed", err));
     void service.onInbound(msg);
   };

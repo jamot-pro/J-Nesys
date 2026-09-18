@@ -272,6 +272,10 @@ function toPerson(row: typeof people.$inferSelect): Person {
     avatarSource: row.avatarSource ?? null,
     consent: row.consent ?? null,
     lastInteractionAt: row.lastInteractionAt ?? null,
+    contextSummary: row.contextSummary ?? null,
+    contextSummaryUpdatedAt: row.contextSummaryUpdatedAt
+      ? normalizePgTimestamp(row.contextSummaryUpdatedAt)
+      : null,
     profile: row.profile,
     membershipSpaceIds: row.membershipSpaceIds as Id[],
     reputation: row.reputation,

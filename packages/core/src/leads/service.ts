@@ -42,6 +42,27 @@ export function createLeadGenerationService(
     };
   }
 
+  async function recordLeadMemory(
+    person: Person,
+    event: "captured" | "enriched",
+    list: LeadList,
+    detail: Record<string, unknown>,
+  ): Promise<void> {
+    if (!services.memory) return;
+    const now = new Date().toISOString();
+    try {
+      await services.memory.store({
+        scope: "person",
+        ownerId: person.id,
+        content: { channel: "lead-gen", direction: "inbound", event, listName: list.name, ...detail },
+        sourceEventId: null,
+        provenance: { source: "system", confidence: 1, createdAt: now, updatedAt: now },
+      });
+    } catch (err) {
+      console.warn(`[memory] failed to record lead-gen memory for person ${person.id}`, err);
+    }
+  }
+
   function criteriaFor(list: LeadList): LeadCriteria {
     return {
       area: list.area ?? undefined,
@@ -70,11 +91,14 @@ export function createLeadGenerationService(
           profile,
           membershipSpaceIds: existing.membershipSpaceIds,
         });
-        return { person: updated ?? existing, existing: true };
+        const person = updated ?? existing;
+        void recordLeadMemory(person, "enriched", list, { raw: lead.raw ?? {} });
+        return { person, existing: true };
       }
     }
 
     const person = await repo.createLeadPerson(toPersonInput(lead, list.spaceId));
+    void recordLeadMemory(person, "captured", list, { raw: lead.raw ?? {} });
     return { person, existing: false };
   }
 
@@ -314,7 +338,9 @@ export function createLeadGenerationService(
         raw: { ...(member.raw ?? {}), enrichedAt: new Date().toISOString() },
       });
 
-      return updated ?? person;
+      const result = updated ?? person;
+      void recordLeadMemory(result, "enriched", list, { enrichment: input.profile.integral });
+      return result;
     },
   };
 }

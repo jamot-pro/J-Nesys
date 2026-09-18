@@ -1,4 +1,5 @@
 import type { ComposioService } from "../composio/index.js";
+import type { MemoryProvider } from "../memory/memory.js";
 import type { JamotRepository } from "../repository/repository.js";
 import type { SecretStore } from "../secrets/secret-store.js";
 import type { LeadCriteria, RawLead } from "@jamot/contracts";
@@ -17,6 +18,8 @@ export interface LeadProviderServices {
   secretStore: SecretStore;
   composio?: ComposioService;
   env?: NodeJS.ProcessEnv;
+  /** When set, every captured/enriched lead also writes a person-scoped memory entry. */
+  memory?: MemoryProvider;
 }
 
 /**

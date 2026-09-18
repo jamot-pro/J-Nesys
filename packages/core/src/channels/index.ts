@@ -42,3 +42,5 @@ export type {
   ResolveReplyAgentInput,
   DraftReplyInput,
 } from "./autoresponder.js";
+export { recordInteractionMemory } from "./interaction-memory.js";
+export type { RecordInteractionInput } from "./interaction-memory.js";
