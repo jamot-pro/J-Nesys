@@ -192,6 +192,11 @@ export const people = pgTable("people", {
     mode: "string",
     withTimezone: true,
   }),
+  contextSummary: text("context_summary"),
+  contextSummaryUpdatedAt: timestamp("context_summary_updated_at", {
+    mode: "string",
+    withTimezone: true,
+  }),
   profile: jsonb("profile")
     .$type<PersonProfile>()
     .notNull()

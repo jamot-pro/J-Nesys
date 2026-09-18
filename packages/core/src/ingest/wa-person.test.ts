@@ -38,6 +38,8 @@ function person(actorId: string): Person {
     avatarSource: null,
     consent: null,
     lastInteractionAt: null,
+    contextSummary: null,
+    contextSummaryUpdatedAt: null,
     profile: { selfDescribed: {}, integral: {}, skills: [], preferences: {}, goals: [] },
     membershipSpaceIds: [SPACE],
     reputation: {},

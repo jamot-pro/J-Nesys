@@ -943,8 +943,8 @@ export function AgentConfigurator({ initialAgentId }: { initialAgentId?: string 
                   </div>
 
                   <p style={{ margin: 0, fontSize: 12, lineHeight: 1.6, color: NOTE }}>
-                    Temporal knowledge-graph recall (Graphiti) runs automatically underneath both — it is
-                    infrastructure, not a per-agent setting.
+                    Temporal knowledge-graph recall (Graphiti) is infrastructure, not a per-agent setting — when
+                    an operator has enabled it for this deployment, it runs automatically underneath both.
                   </p>
                 </section>
               ) : null}

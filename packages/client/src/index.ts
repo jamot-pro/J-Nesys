@@ -2399,6 +2399,9 @@ export interface PeopleListPerson {
   context: string;
   aura: number;
   notes: PeopleNote[];
+  /** Auto-maintained from this person's memory entries — distinct from `context` above. */
+  contextSummary: string | null;
+  contextSummaryUpdatedAt: string | null;
 }
 
 export interface PeopleList {

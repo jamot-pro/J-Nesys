@@ -36,6 +36,9 @@ export const Person = z.object({
   avatarSource: z.string().nullable().default(null),
   consent: Consent.nullable().default(null),
   lastInteractionAt: Timestamp.nullable().default(null),
+  /** Concise, LLM-maintained summary of who this person is, rebuilt from their memory entries. */
+  contextSummary: z.string().nullable().default(null),
+  contextSummaryUpdatedAt: Timestamp.nullable().default(null),
   profile: PersonProfile,
   /** Space IDs this person participates in (organizations + personal). */
   membershipSpaceIds: z.array(Id).default([]),
@@ -115,6 +118,9 @@ export const PeopleListPerson = PersonSummary.extend({
   context: z.string().default(""),
   aura: z.number().min(0).max(100).default(0),
   notes: z.array(z.object({ when: z.string(), text: z.string() })).default([]),
+  /** Auto-maintained from this person's memory entries — distinct from `context` above. */
+  contextSummary: z.string().nullable().default(null),
+  contextSummaryUpdatedAt: Timestamp.nullable().default(null),
 });
 export type PeopleListPerson = z.infer<typeof PeopleListPerson>;
 

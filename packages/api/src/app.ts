@@ -222,6 +222,7 @@ export async function buildApp(opts: BuildAppOptions) {
         secretStore,
         composio: composioService,
         env: process.env,
+        memory: opts.memoryProvider,
       },
     );
 

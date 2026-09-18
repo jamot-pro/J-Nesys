@@ -689,6 +689,8 @@ export interface JamotRepository {
         | "lastInteractionAt"
         | "membershipSpaceIds"
         | "reputation"
+        | "contextSummary"
+        | "contextSummaryUpdatedAt"
       >
     >,
   ): Promise<Person | null>;

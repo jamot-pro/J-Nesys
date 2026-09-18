@@ -55,6 +55,11 @@ Every human should be able to:
 
 Jamot optimizes for **alignment, capability, learning, contribution and human agency**, not productivity alone.
 
+The Person is the anchor of the whole system: every channel, every agent, every
+organization ultimately resolves to one Person record and writes into that
+Person's memory. See §3.3 and §6.1 for the identity/memory mechanics, and §16
+for the rule every channel integration must follow.
+
 ## 1.2 Organizations as living systems
 
 An organization is a network of humans, agents, tools, capabilities, projects, knowledge and relationships.
@@ -247,6 +252,18 @@ Person Maria
  ├── Organization B → Advisor
  └── Organization C → Event Contractor
 ```
+
+**One Person, many channel identities.** A Person is reached through one or
+more `identities` (`provider:value`, e.g. `whatsapp:+3933...`,
+`telegram:424242`, `email:x@y.com`). The first time an identity is seen on any
+channel, a new Person is provisioned; every later message from that same
+identity resolves to the same Person. A phone/email match against a
+*different* existing Person is never auto-merged — it is flagged as a
+`person_merge_candidate` for human review (implementation:
+`packages/core/src/ingest/channel-person.ts`). This identity layer is what
+lets §6.1's "every interaction becomes memory" rule attach to one durable
+Person no matter which channel, list, or organization the interaction came
+through.
 
 ## 3.4 Agent
 
@@ -565,6 +582,69 @@ PRIVATE
 SHARED
 ORG
 ```
+
+### 6.1.1 The invariant: every interaction becomes memory
+
+Jamot's core promise is to be the organization's central memory of every
+human it touches. Concretely, that means: **no channel, no agent, and no
+integration is allowed to talk to a Person without that interaction becoming
+a `person`-scoped memory entry.** A Person record with no memory behind it is
+a contact list, not the platform's north star — memory is what turns identity
+into a relationship the organization actually remembers.
+
+This is implemented as one shared, soft-failing helper, never a bespoke write
+per channel:
+
+```text
+recordInteractionMemory(memory, { personId, channelKind, direction, text, timestamp })
+```
+
+(`packages/core/src/channels/interaction-memory.ts`). It:
+
+1. writes a `MemoryEntry` with `scope: "person"`, `ownerId: personId`,
+   `content: { channel, direction, text, timestamp }`, `provenance.source: "observed"`;
+2. never throws — a memory-write failure is logged and swallowed, and must
+   never block message delivery (the same soft-fail contract as the Graphiti
+   mirror in §6.5);
+3. on success, fires a best-effort, non-blocking summary refresh (§6.1.2).
+
+Every ingestion path in the codebase calls this after resolving the Person
+(never before — identity resolution must happen first, so the memory attaches
+to the right Person):
+
+- WhatsApp, in-process on the API (`packages/api/src/index.ts`);
+- WhatsApp / Telegram / Matrix, worker-based (`packages/workers/src/channel.ts`);
+- Lead generation, on capture and on enrichment (`packages/core/src/leads/service.ts`)
+  — there is no "message" here, so `content` documents *what was learned*
+  (`event: "captured" | "enriched"`) instead of chat text, but the call is the
+  same helper, the same scope, the same invariant.
+
+**Adding a new channel or integration that touches a Person must call this
+helper on every inbound interaction it handles, and on every outbound reply it
+sends.** This is not optional plumbing — it is the mechanism that makes §1.1's
+"People are the center of the platform" true in the running system rather than
+just in this document. See §16 for the full wiring checklist a new channel
+must follow, including the read side (memory-informed replies).
+
+### 6.1.2 Concise person context summary
+
+Raw memory entries are for machines; humans and agents both need one current,
+readable answer to "who is this person and what do we know about them."
+`people.context_summary` (+ `context_summary_updated_at`) holds that: a 2-4
+sentence, LLM-generated summary rebuilt from the person's most recent memory
+entries, strictly grounded in what those entries say (no speculation, per
+§69's Provenance invariant).
+
+`refreshPersonContextSummary(deps, personId)`
+(`packages/core/src/memory/summarize-person.ts`) does the rebuild; it is
+invoked by `recordInteractionMemory` itself, fire-and-forget, so a summary
+refresh never adds latency to a reply. Skipped entirely when no LLM is
+configured for the caller — it degrades gracefully, it does not error.
+
+Distinct from `profile.selfDescribed.context` (the manually-edited "what
+agents should know" field a human or the Person themselves writes) —
+`context_summary` is auto-maintained and never hand-edited. Both are surfaced
+on the People screen, labeled separately.
 
 ## 6.2 Agent Memory
 
@@ -1019,6 +1099,54 @@ authConfigSchema
 ```
 
 Communication must map into a common organizational event model.
+
+## 16.1 Wiring a new channel into Person Memory
+
+This is the checklist §6.1.1 requires. Every inbound message handler for a
+channel (existing or new) must do these steps, in this order, before it does
+anything channel-specific:
+
+1. **Resolve identity → Person first.** Run the message through the identity
+   provisioner (`createChannelPersonProvisioner` /
+   `createWhatsAppPersonProvisioner`, `packages/core/src/ingest/`) so it
+   attaches to one canonical Person (new or existing) before anything else
+   touches it. Never write memory or draft a reply against an unresolved
+   sender.
+2. **Record the inbound interaction.** Call `recordInteractionMemory(memory,
+   { personId, channelKind, direction: "inbound", text, timestamp })`
+   (§6.1.1) unconditionally — regardless of whether a reply agent is even
+   configured. An unanswered message is still an interaction worth
+   remembering.
+3. **Resolve a reply agent, if any.** `resolveReplyAgent` — list-assigned
+   agents answer whoever is on their list; a brand-new Person with no list
+   yet falls back to the space's default reply agent, if one is configured
+   (`packages/core/src/channels/autoresponder.ts`).
+4. **Draft with memory as context.** `draftAgentReply` reads this Person's
+   existing memory (`memory.list({ scope: "person", ownerId })`) into the
+   agent's prompt, so replies are informed by the whole relationship, not
+   just the current message. This read side must not be gated to one
+   channel — every channel with a reply agent gets memory-informed replies.
+5. **Record the outbound reply too**, same helper,
+   `direction: "outbound"`, once it has actually been sent. A conversation's
+   memory is incomplete if only one side of it is kept.
+6. **Memory writes are soft-failing, message delivery is not.** A memory or
+   summary-refresh failure must never prevent a message from being received
+   or a reply from being sent — wrap accordingly, or rely on
+   `recordInteractionMemory`'s own try/catch rather than adding a new one.
+
+A channel with no natural "message" (e.g. a CRM sync, a lead-gen provider, a
+form submission) still follows steps 1 and 2: resolve or create the Person,
+then record what was learned as the memory `content`, with an `event` field
+describing what happened instead of chat text (see the lead-gen provenance
+convention in §6.1.1).
+
+If a channel's worker process needs its own `MemoryProvider` (i.e. it isn't
+sharing the API process's), build it the same way everywhere: Postgres
+primary (`createPostgresMemoryProvider`), optionally wrapped in
+`createDualWriteMemoryProvider` + `createGraphitiMemoryMirror` when
+`GRAPHITI_ENABLED=true` and `GRAPHITI_MCP_URL` is set (§6.5). Do not invent a
+second memory backend or a parallel write path per channel — one
+`MemoryProvider` construction pattern, reused everywhere.
 
 ---
 
@@ -2844,6 +2972,11 @@ An Actor's identity is independent of the organization they currently work with.
 ### Memory
 
 A person's private memory belongs to the person and is not automatically shared.
+
+Every interaction a Person has with the organization, on any channel, is
+recorded as a person-scoped memory entry (§6.1.1) — no channel or integration
+is exempt. Identity resolution (§3.3) must run before the memory write, so
+the entry always attaches to one canonical Person.
 
 ### Replaceability
 

@@ -2,12 +2,16 @@
 # Deploys the API, the Next.js web app, a scheduler worker, Postgres and Redis.
 # Validation: render blueprints validate
 #
-# NOTE: The temporal knowledge graph (Graphiti MCP server + FalkorDB, see
-# docker-compose.yml) is NOT provisioned here. It is not viable on the Render
-# free tier: it must run where the jamot-api service can reach it over HTTP and
-# needs OPENAI_API_KEY (per-episode LLM extraction). To enable in production,
-# run graphiti-mcp on a paid service / private network and set GRAPHITI_ENABLED
-# and GRAPHITI_MCP_URL on the jamot-api service below.
+# The temporal knowledge graph (Graphiti MCP server + FalkorDB, mirrored from
+# docker-compose.yml) IS provisioned here as two private services
+# (jamot-falkordb, jamot-graphiti) reachable only from other services in this
+# project over Render's private network — not billed for public bandwidth,
+# not exposed publicly. jamot-api and jamot-channels point GRAPHITI_MCP_URL at
+# jamot-graphiti's internal hostname and have GRAPHITI_ENABLED=true. You still
+# must set OPENAI_API_KEY on jamot-graphiti (per-episode LLM extraction) in
+# the Render dashboard — it is deliberately `sync: false` here, never checked
+# in. Flip GRAPHITI_ENABLED to false on jamot-api/jamot-channels to disable
+# the mirror without removing the services.
 
 # NOTE: `corepack enable` is deliberately NOT used. Render's Node image ships
 # pnpm at /usr/bin/pnpm on a read-only filesystem, so corepack fails the build
@@ -106,6 +110,15 @@ projects:
               # want to grant full platform super-admin access to specific accounts.
               - key: SUPER_ADMIN_EMAILS
                 value: ""
+              # Temporal knowledge-graph mirror (see jamot-graphiti/jamot-falkordb
+              # below). Soft-failing: if the mirror is unreachable, Postgres
+              # (the primary) is unaffected.
+              - key: GRAPHITI_ENABLED
+                value: "true"
+              # Private services resolve by name on Render's internal network;
+              # jamot-graphiti listens on 8000 (see the service below).
+              - key: GRAPHITI_MCP_URL
+                value: http://jamot-graphiti:8000/mcp/
 
           - type: web
             name: jamot-web
@@ -225,3 +238,56 @@ projects:
                 value: ""
               - key: NODE_ENV
                 value: production
+              # Same temporal knowledge-graph mirror as jamot-api — Telegram/
+              # Matrix interactions handled by this worker should land in the
+              # same person memory.
+              - key: GRAPHITI_ENABLED
+                value: "true"
+              - key: GRAPHITI_MCP_URL
+                value: http://jamot-graphiti:8000/mcp/
+
+          # FalkorDB: Graphiti's graph store. Private only — never exposed
+          # publicly, reachable from jamot-graphiti over Render's internal
+          # network at redis://jamot-falkordb:6379 (mirrors docker-compose.yml).
+          - type: pserv
+            name: jamot-falkordb
+            runtime: image
+            region: oregon
+            plan: starter
+            image:
+              url: docker.io/falkordb/falkordb:latest
+            envVars:
+              - key: FALKORDB_PASSWORD
+                value: ""
+              - key: BROWSER
+                value: "0"
+            disk:
+              name: falkordb-data
+              mountPath: /var/lib/falkordb/data
+              sizeGB: 1
+
+          # Graphiti MCP server: receives the dual-write mirror of person
+          # memories from jamot-api/jamot-channels and projects them into
+          # FalkorDB as a temporal knowledge graph. Private only.
+          - type: pserv
+            name: jamot-graphiti
+            runtime: image
+            region: oregon
+            plan: starter
+            image:
+              url: docker.io/zepai/knowledge-graph-mcp:standalone
+            envVars:
+              - key: FALKORDB_URI
+                value: redis://jamot-falkordb:6379
+              # Required for episode extraction — set in the Render dashboard,
+              # never checked in.
+              - key: OPENAI_API_KEY
+                sync: false
+              - key: OPENAI_API_URL
+                value: https://api.openai.com/v1
+              - key: GRAPHITI_GROUP_ID
+                value: main
+              - key: GRAPHITI_TELEMETRY_ENABLED
+                value: "false"
+              - key: SEMAPHORE_LIMIT
+                value: "2"

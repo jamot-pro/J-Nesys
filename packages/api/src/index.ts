@@ -12,7 +12,7 @@ import {
   type InboundMessage,
 } from "@jamot/core/channels";
 import { createWhatsAppPersonProvisioner } from "@jamot/core/ingest";
-import { resolveReplyAgent, draftAgentReply } from "@jamot/core/channels";
+import { resolveReplyAgent, draftAgentReply, recordInteractionMemory } from "@jamot/core/channels";
 import { createPostgresMemoryProvider } from "@jamot/core/memory";
 import { createGraphitiMemoryMirror } from "@jamot/core/memory";
 import { createDualWriteMemoryProvider } from "@jamot/core/memory";
@@ -186,6 +186,20 @@ if (whatsappSessionDir) {
         );
       }
 
+      if (result.person && payload.text) {
+        void recordInteractionMemory(
+          memoryProvider,
+          {
+            personId: result.person.id,
+            channelKind: payload.kind ?? "whatsapp",
+            direction: "inbound",
+            text: payload.text,
+            timestamp: payload.timestamp,
+          },
+          llm ? { repo: repository, llm } : undefined,
+        );
+      }
+
       /* List-assigned agents answer whoever sends a message: which agent
          replies depends on which list (if any) the sender is on, with a
          space-wide default agent standing in for people on no list yet. A
@@ -208,7 +222,16 @@ if (whatsappSessionDir) {
               );
               if (reply) {
                 const adapter = whatsAppManager.get(payload.channelId);
-                if (adapter) await adapter.send(payload.sender, reply);
+                if (adapter) {
+                  await adapter.send(payload.sender, reply);
+                  void recordInteractionMemory(memoryProvider, {
+                    personId: result.person.id,
+                    channelKind: payload.kind ?? "whatsapp",
+                    direction: "outbound",
+                    text: reply,
+                    timestamp: new Date().toISOString(),
+                  });
+                }
               }
             } else {
               console.warn(
