@@ -16,8 +16,18 @@ import type { NextRequest } from "next/server";
  */
 export const ORG_SLUG_HEADER = "x-jamot-org-slug";
 
-const RESERVED = new Set(["www", "api", "app", "admin", "mvp", "mail", "static"]);
+const RESERVED = new Set(["www", "api", "app", "admin", "mail", "static"]);
 const SLUG_RE = /^[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?$/;
+
+/**
+ * Subdomain aliases: a request to the key resolves as if it were addressed
+ * to the value's org. `mvp` is the legacy marketing/demo domain (formerly its
+ * own separate app); until there is a distinct "mvp" org, it should render
+ * identically to `sales` rather than as an org-less console.
+ */
+const SLUG_ALIASES: Record<string, string> = {
+  mvp: "sales",
+};
 
 export function orgSlugFromHost(host: string | null, rootDomain: string | undefined): string | null {
   if (!host || !rootDomain) return null;
@@ -28,7 +38,7 @@ export function orgSlugFromHost(host: string | null, rootDomain: string | undefi
   // Only a single label is an org (acme.jamot.pro, not a.b.jamot.pro).
   if (!sub || sub.includes(".")) return null;
   if (RESERVED.has(sub) || !SLUG_RE.test(sub)) return null;
-  return sub;
+  return SLUG_ALIASES[sub] ?? sub;
 }
 
 export function proxy(request: NextRequest) {
