@@ -2179,16 +2179,16 @@ export function createPgRepository(db: Db): JamotRepository {
         const $2 = spaceIds;
 
         await client.query(
-          `DELETE FROM task_attachments WHERE task_id IN (SELECT id FROM tasks WHERE space_id = ANY($2::uuid[]))`,
-          [$1, $2],
+          `DELETE FROM task_attachments WHERE task_id IN (SELECT id FROM tasks WHERE space_id = ANY($1::uuid[]))`,
+          [$2],
         );
         await client.query(
-          `DELETE FROM messages WHERE conversation_id IN (SELECT id FROM conversations WHERE space_id = ANY($2::uuid[]))`,
-          [$1, $2],
+          `DELETE FROM messages WHERE conversation_id IN (SELECT id FROM conversations WHERE space_id = ANY($1::uuid[]))`,
+          [$2],
         );
         await client.query(
-          `DELETE FROM payment_records WHERE space_id = ANY($2::uuid[])`,
-          [$1, $2],
+          `DELETE FROM payment_records WHERE space_id = ANY($1::uuid[])`,
+          [$2],
         );
         await client.query(
           `DELETE FROM payment_intents WHERE space_id = ANY($2::uuid[]) OR buyer_organization_id = $1::uuid OR seller_organization_id = $1::uuid`,
@@ -2219,64 +2219,64 @@ export function createPgRepository(db: Db): JamotRepository {
           [$1],
         );
         await client.query(
-          `DELETE FROM product_variants WHERE space_id = ANY($2::uuid[])`,
-          [$1, $2],
+          `DELETE FROM product_variants WHERE space_id = ANY($1::uuid[])`,
+          [$2],
         );
         await client.query(
-          `DELETE FROM product_base WHERE space_id = ANY($2::uuid[])`,
-          [$1, $2],
+          `DELETE FROM product_base WHERE space_id = ANY($1::uuid[])`,
+          [$2],
         );
         await client.query(
-          `DELETE FROM conversations WHERE space_id = ANY($2::uuid[])`,
-          [$1, $2],
+          `DELETE FROM conversations WHERE space_id = ANY($1::uuid[])`,
+          [$2],
         );
         await client.query(
-          `DELETE FROM channels WHERE space_id = ANY($2::uuid[])`,
-          [$1, $2],
+          `DELETE FROM channels WHERE space_id = ANY($1::uuid[])`,
+          [$2],
         );
         await client.query(
-          `DELETE FROM wa_accounts WHERE space_id = ANY($2::uuid[])`,
-          [$1, $2],
+          `DELETE FROM wa_accounts WHERE space_id = ANY($1::uuid[])`,
+          [$2],
         );
         await client.query(
-          `DELETE FROM knowledge_edges WHERE space_id = ANY($2::uuid[])`,
-          [$1, $2],
+          `DELETE FROM knowledge_edges WHERE space_id = ANY($1::uuid[])`,
+          [$2],
         );
         await client.query(
-          `DELETE FROM knowledge_entities WHERE space_id = ANY($2::uuid[])`,
-          [$1, $2],
+          `DELETE FROM knowledge_entities WHERE space_id = ANY($1::uuid[])`,
+          [$2],
         );
         await client.query(
-          `DELETE FROM tasks WHERE space_id = ANY($2::uuid[])`,
-          [$1, $2],
+          `DELETE FROM tasks WHERE space_id = ANY($1::uuid[])`,
+          [$2],
         );
         await client.query(
-          `DELETE FROM task_lists WHERE space_id = ANY($2::uuid[])`,
-          [$1, $2],
+          `DELETE FROM task_lists WHERE space_id = ANY($1::uuid[])`,
+          [$2],
         );
         await client.query(
           `DELETE FROM projects WHERE organization_id = $1::uuid`,
           [$1],
         );
         await client.query(
-          `DELETE FROM goals WHERE space_id = ANY($2::uuid[])`,
-          [$1, $2],
+          `DELETE FROM goals WHERE space_id = ANY($1::uuid[])`,
+          [$2],
         );
         await client.query(
-          `DELETE FROM capabilities WHERE space_id = ANY($2::uuid[])`,
-          [$1, $2],
+          `DELETE FROM capabilities WHERE space_id = ANY($1::uuid[])`,
+          [$2],
         );
         await client.query(
-          `DELETE FROM policies WHERE space_id = ANY($2::uuid[])`,
-          [$1, $2],
+          `DELETE FROM policies WHERE space_id = ANY($1::uuid[])`,
+          [$2],
         );
         await client.query(
-          `DELETE FROM events WHERE space_id = ANY($2::uuid[])`,
-          [$1, $2],
+          `DELETE FROM events WHERE space_id = ANY($1::uuid[])`,
+          [$2],
         );
         await client.query(
-          `DELETE FROM audit_log WHERE space_id = ANY($2::uuid[])`,
-          [$1, $2],
+          `DELETE FROM audit_log WHERE space_id = ANY($1::uuid[])`,
+          [$2],
         );
         await client.query(
           `DELETE FROM memories WHERE owner_id = $1::uuid OR owner_id = ANY($2::uuid[])`,
@@ -2338,20 +2338,20 @@ export function createPgRepository(db: Db): JamotRepository {
           [$1],
         );
         await client.query(
-          `DELETE FROM roles WHERE space_id = ANY($2::uuid[])`,
-          [$1, $2],
+          `DELETE FROM roles WHERE space_id = ANY($1::uuid[])`,
+          [$2],
         );
         await client.query(
-          `UPDATE people SET membership_space_ids = ARRAY(SELECT x FROM unnest(membership_space_ids) AS x WHERE NOT (x = ANY($2::uuid[]))) WHERE membership_space_ids && $2::uuid[]`,
-          [$1, $2],
+          `UPDATE people SET membership_space_ids = ARRAY(SELECT x FROM unnest(membership_space_ids) AS x WHERE NOT (x = ANY($1::uuid[]))) WHERE membership_space_ids && $1::uuid[]`,
+          [$2],
         );
         await client.query(
           `DELETE FROM workspaces WHERE organization_id = $1::uuid`,
           [$1],
         );
         await client.query(
-          `DELETE FROM spaces WHERE id = ANY($2::uuid[])`,
-          [$1, $2],
+          `DELETE FROM spaces WHERE id = ANY($1::uuid[])`,
+          [$2],
         );
         await client.query(
           `DELETE FROM organizations WHERE id = $1::uuid`,
