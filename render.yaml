@@ -1,5 +1,7 @@
 # Jamot — Render Blueprint
-# Deploys the API, the Next.js web app, a scheduler worker, Postgres and Redis.
+# Deploys the API, the unified Next.js console app (jamot-console — org-skinned
+# marketing/console page plus the full product UI, formerly split across
+# jamot-web and jamot-console), a scheduler worker, Postgres and Redis.
 # Validation: render blueprints validate
 #
 # The temporal knowledge graph (Graphiti MCP server + FalkorDB, mirrored from
@@ -120,28 +122,12 @@ projects:
               - key: GRAPHITI_MCP_URL
                 value: http://jamot-graphiti:8000/mcp/
 
-          - type: web
-            name: jamot-web
-            runtime: node
-            region: oregon
-            plan: starter
-            buildCommand: pnpm install --frozen-lockfile && pnpm --filter @jamot/web build
-            startCommand: pnpm --filter @jamot/web start
-            buildFilter:
-              paths:
-                - apps/web/**
-                - packages/client/**
-                - packages/contracts/**
-                - package.json
-                - pnpm-lock.yaml
-                - pnpm-workspace.yaml
-            envVars:
-              # Next_PUBLIC_ values must be concrete strings — they're compiled into client JS.
-              - key: NEXT_PUBLIC_API_URL
-                value: https://api.jamot.pro
-              # Root domain used to detect per-org subdomains (e.g. org.jamot.pro).
-              - key: NEXT_PUBLIC_ROOT_DOMAIN
-                value: jamot.pro
+          # apps/web (jamot-web) was retired: its routes/components were merged
+          # into apps/console (see apps/console/src/app/(app)/**), so jamot-console
+          # is now the single app serving both the per-org marketing/console page
+          # (subdomain-branded "skin") and the full product UI. Point mvp.jamot.pro
+          # at jamot-console in the Render dashboard (custom domains aren't managed
+          # in this file) instead of a separate jamot-web service.
 
           # Per-organization branded consoles. One service serves every org:
           # the org is resolved per request from the subdomain (src/proxy.ts),
@@ -158,6 +144,9 @@ projects:
               paths:
                 - apps/console/**
                 - packages/client/**
+                - packages/contracts/**
+                - packages/archetype-engine/**
+                - packages/canvas-lead-generation/**
                 - package.json
                 - pnpm-lock.yaml
                 - pnpm-workspace.yaml

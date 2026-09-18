@@ -12,7 +12,7 @@ It is a **universal organizational kernel** — not an agent runtime, CRM, ERP, 
 
 ```
 J-01/
-├── apps/web/            Next.js 16 cockpit UI (CopilotKit v2, three-pane shell)
+├── apps/console/        Next.js 16 unified console UI (CopilotKit v2, per-org branded "skins" via subdomain)
 ├── packages/contracts/  Shared Zod domain contracts (the single source of truth for types)
 ├── packages/core/       Domain layer: Drizzle schema, events, policy engine, repositories,
 │                        memory/knowledge, LLM + routing, apps/resolver, channels,
@@ -59,8 +59,8 @@ cat packages/core/src/migrations/0001_init.sql \
 # API (http://localhost:4000) — uses Postgres when DATABASE_URL is set, else in-memory
 pnpm --filter @jamot/api dev
 
-# Web (http://localhost:3000) — set NEXT_PUBLIC_API_URL to point at the API
-NEXT_PUBLIC_API_URL=http://localhost:4000 pnpm --filter @jamot/web dev
+# Console (http://localhost:3002) — set NEXT_PUBLIC_API_URL to point at the API
+NEXT_PUBLIC_API_URL=http://localhost:4000 pnpm --filter @jamot/console dev
 
 # Scheduler / heartbeat worker
 pnpm --filter @jamot/workers dev:scheduler

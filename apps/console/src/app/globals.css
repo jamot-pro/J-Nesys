@@ -1,40 +1,10 @@
+@import "tailwindcss";
 @import "./design-system.css";
 
-/* The console is a port of templates/org-console/OrgConsole.dc.html. Its own
- * <style> block is reproduced verbatim below — the mockup carries almost all
- * of its styling inline, so the port keeps those inline styles and only needs
- * these globals. Tailwind is deliberately NOT loaded: nothing in the mockup
- * uses it, and having it available invites drift away from the design. */
-body {
-  margin: 0;
-  background: var(--color-surface);
-  color: var(--color-text);
-  font-family: var(--font-body);
-  --aura-h: 111;
-  --aura-a1: 0.52;
-  --aura-a2: 0.24;
-  --aura-a3: 0.62;
-  --aura-blur: 5.6px;
-  --aura-size: 67px;
-  --aura-glow: 29px;
-}
-
-* {
-  box-sizing: border-box;
-}
-
-.mark-dark {
-  display: none;
-}
-body[data-theme="dark"] .mark-dark {
-  display: block;
-}
-body[data-theme="dark"] .mark-light {
-  display: none;
-}
+@custom-variant dark (&:is(.dark *));
 
 /* Archivo arrives through next/font; point the system's tokens at it rather
- * than letting styles.css fetch the family itself. */
+ * than letting design-system.css fetch the family itself. */
 :root {
   --font-heading: var(--font-archivo), system-ui, sans-serif;
   --font-body: var(--font-archivo), system-ui, sans-serif;
@@ -46,7 +16,136 @@ body[data-theme="dark"] .mark-light {
   --color-accent: var(--org-accent, #ff2657);
 }
 
-html,
-body {
-  height: 100%;
+* {
+  box-sizing: border-box;
+}
+
+/* Modernist design system — vendored in design-system.css from the Claude
+ * Design export (JamotSales.zip, templates/org-console). Tailwind's own
+ * token names (--background, --card, --accent, ...) are aliased to that
+ * system's variables below so migrated app routes (formerly apps/web) keep
+ * their existing className usage unchanged, while the org-console page
+ * (page.tsx) keeps using the design-system variables directly. Both read
+ * from the same --color-* tokens, so a per-organization accent set via
+ * brandStyle() (lib/brand.ts) cascades into both. */
+:root {
+  --background: var(--color-surface);
+  --foreground: var(--color-text);
+  --muted: var(--color-neutral-100);
+  --muted-foreground: color-mix(in srgb, var(--color-text) 55%, transparent);
+  --border: var(--color-divider);
+  --card: var(--color-bg);
+  --card-foreground: var(--color-text);
+  --accent: var(--color-text);
+  --accent-foreground: var(--color-bg);
+  --ring: var(--color-accent);
+  --sidebar: var(--color-bg);
+  --sidebar-foreground: var(--color-text);
+  --space-accent: var(--color-accent);
+  --space-accent-foreground: var(--color-bg);
+  --shadow-sm: 0 1px 2px color-mix(in srgb, #2d2b2b 5%, transparent), 0 2px 8px color-mix(in srgb, #2d2b2b 5%, transparent);
+  --shadow-md: 0 2px 6px color-mix(in srgb, #2d2b2b 5%, transparent), 0 12px 28px color-mix(in srgb, #2d2b2b 7%, transparent);
+  --shadow-lg: 0 6px 16px color-mix(in srgb, #2d2b2b 7%, transparent), 0 32px 72px color-mix(in srgb, #2d2b2b 12%, transparent);
+  --shadow-soft-sm: var(--shadow-sm);
+  --shadow-soft-md: var(--shadow-md);
+  --shadow-soft-lg: var(--shadow-lg);
+}
+
+.dark {
+  --background: #141312;
+  --foreground: #f2f0ef;
+  --muted: #0e0d0c;
+  --muted-foreground: color-mix(in srgb, #f2f0ef 55%, transparent);
+  --border: color-mix(in srgb, #f2f0ef 14%, transparent);
+  --card: #1f1e1c;
+  --card-foreground: #f2f0ef;
+  --accent: #f2f0ef;
+  --accent-foreground: #1f1e1c;
+  --ring: #ff7d95;
+  --sidebar: #1f1e1c;
+  --sidebar-foreground: #f2f0ef;
+  --space-accent: #ff2657;
+  --space-accent-foreground: #1f1e1c;
+  --accent-ink: #ff7d95;
+  --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.32), 0 2px 8px rgba(0, 0, 0, 0.24);
+  --shadow-md: 0 2px 6px rgba(0, 0, 0, 0.3), 0 12px 28px rgba(0, 0, 0, 0.34);
+  --shadow-lg: 0 6px 16px rgba(0, 0, 0, 0.34), 0 32px 72px rgba(0, 0, 0, 0.46);
+  --shadow-soft-sm: var(--shadow-sm);
+  --shadow-soft-md: var(--shadow-md);
+  --shadow-soft-lg: var(--shadow-lg);
+}
+
+@theme inline {
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --color-muted: var(--muted);
+  --color-muted-foreground: var(--muted-foreground);
+  --color-border: var(--border);
+  --color-card: var(--card);
+  --color-card-foreground: var(--card-foreground);
+  --color-accent: var(--accent);
+  --color-accent-foreground: var(--accent-foreground);
+  --color-ring: var(--ring);
+  --color-sidebar: var(--sidebar);
+  --color-sidebar-foreground: var(--sidebar-foreground);
+  --color-space-accent: var(--space-accent);
+  --color-space-accent-foreground: var(--space-accent-foreground);
+  --color-accent-ink: var(--accent-ink);
+  --shadow-sm: var(--shadow-sm);
+  --shadow-md: var(--shadow-md);
+  --shadow-lg: var(--shadow-lg);
+  --font-sans: var(--font-archivo);
+  --font-display: var(--font-archivo);
+  --font-mono: var(--font-geist-mono);
+  --radius-lg: 18px;
+  --radius-md: 12px;
+  --radius-sm: 8px;
+}
+
+@layer utilities {
+  .glass {
+    background: rgba(255, 255, 255, 0.75);
+    backdrop-filter: blur(20px) saturate(180%);
+    -webkit-backdrop-filter: blur(20px) saturate(180%);
+  }
+  .dark .glass {
+    background: rgba(18, 17, 16, 0.75);
+  }
+  .glass-card {
+    background: rgba(255, 255, 255, 0.85);
+    backdrop-filter: blur(24px) saturate(190%);
+    -webkit-backdrop-filter: blur(24px) saturate(190%);
+    border: 1px solid rgba(255, 255, 255, 0.6);
+  }
+  .dark .glass-card {
+    background: rgba(18, 17, 16, 0.85);
+    border: 1px solid rgba(255, 255, 255, 0.08);
+  }
+  .glass-border {
+    border: 1px solid rgba(0, 0, 0, 0.05);
+  }
+  .dark .glass-border {
+    border: 1px solid rgba(255, 255, 255, 0.08);
+  }
+}
+
+@layer base {
+  * {
+    border-color: var(--border);
+  }
+
+  html,
+  body {
+    height: 100%;
+  }
+}
+
+.mark-dark {
+  display: none;
+}
+body[data-theme="dark"] .mark-dark {
+  display: block;
+}
+body[data-theme="dark"] .mark-light {
+  display: none;
 }

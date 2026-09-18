@@ -13,6 +13,6 @@
     "test": "pnpm -r test",
     "lint": "pnpm -r lint",
     "dev:api": "pnpm --filter @jamot/api dev",
-    "dev:web": "pnpm --filter @jamot/web dev"
+    "dev:console": "pnpm --filter @jamot/console dev"
   }
 }
