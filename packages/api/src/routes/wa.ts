@@ -28,6 +28,10 @@ const ReadBody = z.object({
   jid: z.string().min(1),
 });
 
+const PairingCodeBody = z.object({
+  phoneNumber: z.string().min(6),
+});
+
 const MediaBody = z.object({
   jid: z.string().min(1),
   type: z.enum(["image", "video", "audio"]),
@@ -147,6 +151,28 @@ export default async function waRoutes(
       const adapter = manager.get(id) ?? manager.ensure(id);
       await adapter.resetSession();
       return { ok: true };
+    },
+  );
+
+  app.post(
+    "/wa/accounts/:id/pairing-code",
+    { preHandler: requireAuth },
+    async (request, reply) => {
+      const params = request.params as { id?: string };
+      const id = parse(Id, params.id, reply);
+      if (!id) return;
+      const account = await loadAccount(id, reply);
+      if (!account) return;
+      if (!manager) return fail(reply, 503, "whatsapp manager not configured");
+      const body = parse(PairingCodeBody, request.body, reply);
+      if (!body) return;
+      const adapter = manager.get(id) ?? manager.ensure(id);
+      try {
+        const code = await adapter.requestPairingCode(body.phoneNumber);
+        return { code };
+      } catch (err) {
+        return fail(reply, 400, err instanceof Error ? err.message : "could not request a pairing code");
+      }
     },
   );
 

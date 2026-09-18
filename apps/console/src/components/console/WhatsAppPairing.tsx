@@ -8,6 +8,7 @@ import {
   getWaDiagnostics,
   importWaSession,
   listWaAccounts,
+  requestWaPairingCode,
   resetWaAccount,
   type ApiWaAccount,
   type WaAccountState,
@@ -44,6 +45,9 @@ export function WhatsAppPairing() {
   const [diagnostics, setDiagnostics] = useState<WaDiagnostics | null>(null);
   const [importing, setImporting] = useState(false);
   const [imported, setImported] = useState<string | null>(null);
+  const [phoneNumber, setPhoneNumber] = useState("");
+  const [pairingCode, setPairingCode] = useState<string | null>(null);
+  const [requestingCode, setRequestingCode] = useState(false);
 
   const refresh = useCallback(async () => {
     setAccounts(await listWaAccounts(spaceId));
@@ -121,11 +125,24 @@ export function WhatsAppPairing() {
       setState(null);
       setQrImage(null);
       setWaited(0);
+      setPairingCode(null);
       setSelected(id);
     } catch (err) {
       setError(err instanceof Error ? err.message : "Could not reset pairing.");
     } finally {
       setBusy(false);
+    }
+  }
+
+  async function requestCode(id: string) {
+    setRequestingCode(true);
+    setError(null);
+    try {
+      setPairingCode(await requestWaPairingCode(id, phoneNumber));
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Could not get a pairing code.");
+    } finally {
+      setRequestingCode(false);
     }
   }
 
@@ -207,7 +224,7 @@ export function WhatsAppPairing() {
                 </td>
                 <td>{"—"}</td>
                 <td style={{ whiteSpace: "nowrap" }}>
-                  <button type="button" className="btn btn-secondary" disabled={busy} onClick={() => { setWaited(0); setSelected(a.id); }}>
+                  <button type="button" className="btn btn-secondary" disabled={busy} onClick={() => { setWaited(0); setPairingCode(null); setSelected(a.id); }}>
                     Pair
                   </button>
                   <button type="button" className="btn btn-ghost" disabled={busy} onClick={() => void restart(a.id)}>
@@ -238,6 +255,48 @@ export function WhatsAppPairing() {
               <p className="card-body" style={{ marginTop: "var(--space-3)" }}>
                 WhatsApp → Settings → Linked devices → Link a device. The code refreshes on its own.
               </p>
+
+              <div style={{ marginTop: "var(--space-4)", paddingTop: "var(--space-3)", borderTop: "1px solid var(--color-divider)" }}>
+                <p className="card-body" style={{ margin: 0, fontSize: 12, color: MUTED }}>
+                  Can't scan? Link with a phone number instead:{" "}
+                  <strong>WhatsApp → Settings → Linked devices → Link with phone number</strong>, then
+                  type the code below.
+                </p>
+                {pairingCode ? (
+                  <p
+                    style={{
+                      marginTop: "var(--space-3)",
+                      fontFamily: "ui-monospace, 'SF Mono', Menlo, monospace",
+                      fontSize: 28,
+                      fontWeight: 700,
+                      letterSpacing: "0.08em",
+                      textAlign: "center",
+                    }}
+                  >
+                    {pairingCode}
+                  </p>
+                ) : (
+                  <div style={{ display: "flex", gap: "var(--space-2)", marginTop: "var(--space-3)", flexWrap: "wrap" }}>
+                    <input
+                      className="input"
+                      type="tel"
+                      placeholder="Phone number, with country code"
+                      value={phoneNumber}
+                      disabled={requestingCode}
+                      onChange={(e) => setPhoneNumber(e.target.value)}
+                      style={{ flex: 1, minWidth: 200 }}
+                    />
+                    <button
+                      type="button"
+                      className="btn btn-secondary"
+                      disabled={requestingCode || !phoneNumber.trim()}
+                      onClick={() => selected && void requestCode(selected)}
+                    >
+                      {requestingCode ? "Requesting…" : "Get code"}
+                    </button>
+                  </div>
+                )}
+              </div>
             </>
           ) : stalled ? (
             <>

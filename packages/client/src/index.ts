@@ -2263,6 +2263,16 @@ export async function logoutWaAccount(id: string): Promise<void> {
   await api<void>(`/api/wa/accounts/${id}/logout`, { method: "POST" });
 }
 
+/** WhatsApp → Linked Devices → Link with phone number — the alternative to
+ * scanning a QR. Returns an 8-character code to type into the phone. */
+export async function requestWaPairingCode(id: string, phoneNumber: string): Promise<string> {
+  const data = await api<{ code: string }>(`/api/wa/accounts/${id}/pairing-code`, {
+    method: "POST",
+    body: JSON.stringify({ phoneNumber }),
+  });
+  return data.code;
+}
+
 /** Import a session paired elsewhere (see wa-pair.ts) as base64 file contents. */
 export async function importWaSession(
   id: string,

@@ -68,6 +68,11 @@ export interface WhatsAppAdapter extends ChannelAdapter {
   kind: "whatsapp";
   getState(): WaState;
   resetSession(): Promise<void>;
+  /** The QR's alternative: WhatsApp → Linked Devices → Link with phone
+   * number takes an 8-character code instead of a camera scan. Requires a
+   * socket already mid-handshake (connect() runs on adapter creation and
+   * after every reset, so one normally exists). */
+  requestPairingCode(phoneNumber: string): Promise<string>;
   importSession(files: Record<string, string>): Promise<void>;
   listChats(): WaChat[];
   listContacts(query?: string): WaContact[];
@@ -470,6 +475,23 @@ export function createWhatsAppAdapter(
       }
       wipeSession();
       void connect();
+    },
+
+    async requestPairingCode(phoneNumber) {
+      if (!sock) {
+        throw new Error("not connected yet — wait a moment and try again");
+      }
+      const digits = phoneNumber.replace(/[^0-9]/g, "");
+      if (!digits) {
+        throw new Error("enter a phone number with country code, digits only");
+      }
+      try {
+        return await sock.requestPairingCode(digits);
+      } catch (err) {
+        throw new Error(
+          err instanceof Error ? err.message : "could not request a pairing code",
+        );
+      }
     },
 
     async importSession(files) {
