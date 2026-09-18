@@ -79,15 +79,18 @@ projects:
                 generateValue: true
               - key: SECRET_ENCRYPTION_KEY
                 generateValue: true
-              # Share the session cookie across all jamot.pro subdomains so the
-              # web app's server-side routes (CopilotKit chat) can forward the
-              # user's session to the API.
+              # Share the session cookie across all jamot.pro subdomains so
+              # jamot-console's server-side routes (CopilotKit chat) can forward
+              # the user's session to the API. mvp.jamot.pro is retired; only
+              # its root domain matters here (buildCorsOrigin/safeReturnUrl
+              # derive the jamot.pro wildcard from it), so any live
+              # <org>.jamot.pro value works — sales.jamot.pro is the current one.
               - key: COOKIE_DOMAIN
                 value: .jamot.pro
               - key: CORS_ORIGIN
-                value: https://mvp.jamot.pro
+                value: https://sales.jamot.pro
               - key: FRONTEND_URL
-                value: https://mvp.jamot.pro
+                value: https://sales.jamot.pro
               - key: GOOGLE_CLIENT_ID
                 sync: false
               - key: GOOGLE_CLIENT_SECRET
