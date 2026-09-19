@@ -279,6 +279,7 @@ function toPerson(row: typeof people.$inferSelect): Person {
     profile: row.profile,
     membershipSpaceIds: row.membershipSpaceIds as Id[],
     reputation: row.reputation,
+    publicToken: row.publicToken ?? null,
     createdAt: normalizePgTimestamp(row.createdAt),
     updatedAt: normalizePgTimestamp(row.updatedAt),
   };
@@ -1454,6 +1455,15 @@ export function createPgRepository(db: Db): JamotRepository {
         .select()
         .from(people)
         .where(eq(people.phone, phone))
+        .limit(1);
+      return row ? toPerson(row) : null;
+    },
+
+    async getPersonByPublicToken(token) {
+      const [row] = await q
+        .select()
+        .from(people)
+        .where(eq(people.publicToken, token))
         .limit(1);
       return row ? toPerson(row) : null;
     },

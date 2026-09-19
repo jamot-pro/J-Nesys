@@ -1,3 +1,4 @@
+import { randomBytes } from "node:crypto";
 import { z } from "zod";
 import type { FastifyInstance } from "fastify";
 import { Id, ProfileAttribute } from "@jamot/contracts";
@@ -6,6 +7,50 @@ import type { JamotRepository } from "../repository.js";
 import { registerPerson } from "../auth.js";
 import { actorRoleInSpace, requireAuth, ROLE_WEIGHT } from "../rbac.js";
 import { fail, parse } from "../util.js";
+
+const PublicOnboardBody = z.object({
+  birthDate: z.string().min(1),
+  birthHour: z.number().optional(),
+  timezone: z.number().optional(),
+  birthLocation: z.string().optional(),
+});
+
+/**
+ * `@jamot/archetype-engine`'s own relative imports use literal ".ts"
+ * extensions (needed for Next/Turbopack, which transpiles it directly in
+ * apps/console) — incompatible with this package's plain-tsc NodeNext build,
+ * which requires ".js"-mapped extensions. A dynamic import with a non-literal
+ * specifier is untyped (`Promise<any>`) and skips module resolution/
+ * type-checking entirely, so it never touches that incompatibility.
+ */
+async function synthesizeArchetypeProfile(input: {
+  birthDate: string;
+  birthHour?: number;
+  timezone?: number;
+  birthLocation?: string;
+}): Promise<unknown> {
+  const moduleName = "@jamot/archetype-engine";
+  const mod = (await import(moduleName)) as {
+    synthesizeProfile: (opts: typeof input) => unknown;
+  };
+  return mod.synthesizeProfile(input);
+}
+
+/** The subset of a person + their archetype report that's safe to expose
+ * on an unauthenticated public page — never email/phone/internal state. */
+function publicProfilePayload(person: Person) {
+  const displayName =
+    [person.firstName, person.lastName].filter(Boolean).join(" ") || "Someone";
+  const archetypeProfile = person.profile?.selfDescribed?.archetypeProfile?.value ?? null;
+  return {
+    displayName,
+    firstName: person.firstName,
+    company: String(person.profile?.selfDescribed?.company?.value ?? ""),
+    avatarUrl: person.avatarUrl,
+    hasProfile: Boolean(archetypeProfile),
+    profile: archetypeProfile,
+  };
+}
 
 const RegisterBody = z.object({
   email: z.string().email(),
@@ -451,6 +496,99 @@ export function peopleRoutes(repo: JamotRepository) {
 
       return updated;
     });
+
+    /** Creates (or returns the existing) public-profile token for a person.
+     * Idempotent, so clicking "Get link" twice never orphans an already-shared URL. */
+    app.post("/people/:id/public-token", { preHandler: requireAuth }, async (request, reply) => {
+      const params = request.params as { id?: string };
+      const id = parse(Id, params.id, reply);
+      if (!id) return;
+      const person = await repo.getPerson(id);
+      if (!person) return fail(reply, 404, "person not found");
+      const actorId = request.session.actorId!;
+      if (!(await canEditPerson(repo, actorId, person))) {
+        return fail(reply, 403, "no permission to create a link for this person");
+      }
+      const token = person.publicToken ?? randomBytes(16).toString("hex");
+      if (!person.publicToken) {
+        await repo.updatePerson(id, { publicToken: token });
+      }
+      return { token, path: `/p/${token}` };
+    });
+
+    /** Public, unauthenticated: what a person's own onboarding page shows. */
+    app.get(
+      "/people/public/:token",
+      { config: { rateLimit: { max: 60, timeWindow: "1 minute" } } },
+      async (request, reply) => {
+        const token = (request.params as { token?: string }).token;
+        if (!token) return fail(reply, 400, "token is required");
+        const person = await repo.getPersonByPublicToken(token);
+        if (!person) return fail(reply, 404, "not found");
+        return publicProfilePayload(person);
+      },
+    );
+
+    /** Public, unauthenticated: self-service Human Design / Gene Keys onboarding. */
+    app.post(
+      "/people/public/:token/onboard",
+      { config: { rateLimit: { max: 20, timeWindow: "1 minute" } } },
+      async (request, reply) => {
+        const token = (request.params as { token?: string }).token;
+        if (!token) return fail(reply, 400, "token is required");
+        const person = await repo.getPersonByPublicToken(token);
+        if (!person) return fail(reply, 404, "not found");
+        const body = parse(PublicOnboardBody, request.body, reply);
+        if (!body) return;
+
+        let archetypeProfile: unknown;
+        try {
+          archetypeProfile = await synthesizeArchetypeProfile({
+            birthDate: body.birthDate,
+            birthHour: body.birthHour,
+            timezone: body.timezone,
+            birthLocation: body.birthLocation,
+          });
+        } catch (err) {
+          return fail(
+            reply,
+            400,
+            err instanceof Error ? err.message : "Could not calculate profile",
+          );
+        }
+
+        const selfDescribed = { ...person.profile.selfDescribed };
+        const ts = new Date().toISOString();
+        for (const [key, value] of Object.entries({
+          birthDate: body.birthDate,
+          birthHour: body.birthHour ?? 12,
+          timezone: body.timezone ?? 0,
+          birthLocation: body.birthLocation ?? "",
+          archetypeProfile,
+        })) {
+          selfDescribed[key] = {
+            value,
+            source: "self_declared",
+            confidence: 1,
+            createdAt: selfDescribed[key]?.createdAt ?? ts,
+            updatedAt: ts,
+          };
+        }
+        const updated = await repo.updatePerson(person.id, {
+          profile: { ...person.profile, selfDescribed },
+        });
+        if (!updated) return fail(reply, 404, "not found");
+
+        await repo.recordEvent({
+          type: "person.onboarded",
+          spaceId: person.membershipSpaceIds[0] ?? null,
+          actorId: person.actorId,
+          payload: { personId: person.id, via: "public_link" },
+        });
+
+        return publicProfilePayload(updated);
+      },
+    );
 
     /** Manually attach a channel identity to a person. */
     app.post("/people/:id/identities", { preHandler: requireAuth }, async (request, reply) => {

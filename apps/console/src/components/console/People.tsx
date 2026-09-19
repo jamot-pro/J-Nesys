@@ -10,12 +10,15 @@ import {
   listActors,
   listDeals,
   listPeopleLists,
+  listWaAccounts,
   removePersonFromList,
   renamePeopleList,
+  sendWaMessage,
   setPeopleListReplyAgent,
   updatePerson,
   type ApiActor,
   type ApiAgent,
+  type ApiWaAccount,
   type Deal,
   type PeopleList,
   type PeopleListPerson,
@@ -24,7 +27,12 @@ import {
 
 import { useOrgScope } from "../console-context";
 import { formatPhoneDisplay } from "@/lib/utils";
-import { searchPeople, type ApiPersonSummary } from "../people/people-api";
+import {
+  createPersonPublicLink,
+  getPersonDetail,
+  searchPeople,
+  type ApiPersonSummary,
+} from "../people/people-api";
 
 const UNLISTED_ID = "__unlisted__";
 
@@ -139,14 +147,6 @@ function Chevron({ open }: { open: boolean }) {
 function noteStamp(): string {
   const d = new Date();
   return `${String(d.getDate()).padStart(2, "0")}/${String(d.getMonth() + 1).padStart(2, "0")}`;
-}
-
-function publicProfileFor(person: PeopleListPerson): string {
-  const slug = `${person.firstName ?? ""}-${person.lastName ?? ""}`
-    .toLowerCase()
-    .replace(/[^a-z]+/g, "-")
-    .replace(/^-|-$/g, "");
-  return `jamot.pro/${slug}`;
 }
 
 /**
@@ -592,6 +592,7 @@ export function People() {
           person={person}
           listName={(lists ?? []).find((l) => l.id === open.listId)?.name ?? ""}
           busy={busy}
+          spaceId={spaceId}
           onClose={() => setOpen(null)}
           onPatch={(fields) => patch(person, fields)}
           onRemove={() =>
@@ -729,11 +730,134 @@ function UnlistedSection({
   );
 }
 
+type SendChannel = "whatsapp" | "email" | "sms" | "telegram";
+
+const SEND_CHANNELS: { value: SendChannel; label: string }[] = [
+  { value: "whatsapp", label: "WhatsApp" },
+  { value: "email", label: "Email" },
+  { value: "sms", label: "SMS" },
+  { value: "telegram", label: "Telegram" },
+];
+
+/**
+ * Real "Get link" action, replacing the old fake publicProfile slug: creates
+ * (or reuses) a public token for this person, then offers to copy it or send
+ * it via a channel. Only WhatsApp actually sends today (reusing the same
+ * sendWaMessage the org's outreach/reply-agent features already use) —
+ * other channels are listed so the picker doesn't need reworking once
+ * they're wired up, but say plainly that they aren't yet.
+ */
+function PublicLinkAction({ personId, spaceId }: { personId: string; spaceId: string | null }) {
+  const [url, setUrl] = useState<string | null>(null);
+  const [loading, setLoading] = useState(false);
+  const [channel, setChannel] = useState<SendChannel>("whatsapp");
+  const [sending, setSending] = useState(false);
+  const [status, setStatus] = useState<string | null>(null);
+
+  const getLink = async () => {
+    setLoading(true);
+    setStatus(null);
+    try {
+      const { path } = await createPersonPublicLink(personId);
+      setUrl(`${window.location.origin}${path}`);
+    } catch (err) {
+      setStatus(err instanceof Error ? err.message : "Could not create link");
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const copyLink = async () => {
+    if (!url) return;
+    try {
+      await navigator.clipboard.writeText(url);
+      setStatus("Copied.");
+    } catch {
+      setStatus(url);
+    }
+  };
+
+  const send = async () => {
+    if (!url || !spaceId || sending) return;
+    setSending(true);
+    setStatus(null);
+    try {
+      if (channel !== "whatsapp") {
+        setStatus(`Sending via ${SEND_CHANNELS.find((c) => c.value === channel)?.label} isn't configured yet — use Copy link instead.`);
+        return;
+      }
+      const [detail, accounts]: [Awaited<ReturnType<typeof getPersonDetail>>, ApiWaAccount[]] =
+        await Promise.all([getPersonDetail(personId), listWaAccounts(spaceId)]);
+      const jid = detail.identities.find((i) => i.provider === "whatsapp")?.value;
+      if (!jid) {
+        setStatus("This person has no WhatsApp identity on file.");
+        return;
+      }
+      const account = accounts[0];
+      if (!account) {
+        setStatus("No WhatsApp account connected for this org yet.");
+        return;
+      }
+      await sendWaMessage(account.id, jid, `Here's your link: ${url}`);
+      setStatus("Sent via WhatsApp.");
+    } catch (err) {
+      setStatus(err instanceof Error ? err.message : "Could not send");
+    } finally {
+      setSending(false);
+    }
+  };
+
+  if (!url) {
+    return (
+      <button
+        className="btn btn-secondary"
+        style={{ justifyContent: "flex-start" }}
+        disabled={loading}
+        onClick={() => void getLink()}
+      >
+        {loading ? "Getting link…" : "Get link"}
+      </button>
+    );
+  }
+
+  return (
+    <div style={{ display: "flex", alignItems: "center", gap: 6, flexWrap: "wrap" }}>
+      <button className="btn btn-secondary" style={{ justifyContent: "flex-start" }} onClick={() => void copyLink()}>
+        Copy link
+      </button>
+      <select
+        className="input"
+        value={channel}
+        onChange={(e) => setChannel(e.target.value as SendChannel)}
+        style={{ height: 34, fontSize: 13, padding: "0 8px" }}
+      >
+        {SEND_CHANNELS.map((c) => (
+          <option key={c.value} value={c.value}>
+            {c.label}
+          </option>
+        ))}
+      </select>
+      <button
+        className="btn btn-secondary"
+        style={{ justifyContent: "flex-start" }}
+        disabled={sending}
+        onClick={() => void send()}
+      >
+        {sending ? "Sending…" : "Send"}
+      </button>
+      {status ? (
+        <span style={{ fontSize: 12, color: MUTED, flexBasis: "100%" }}>{status}</span>
+      ) : null}
+    </div>
+  );
+}
+
 /** The mockup's `person-card` modal (lines 485-578), styles verbatim. */
 function PersonCard({
   person,
   listName,
   busy,
+  spaceId,
   onClose,
   onPatch,
   onRemove,
@@ -741,6 +865,7 @@ function PersonCard({
   person: PeopleListPerson;
   listName: string;
   busy: boolean;
+  spaceId: string | null;
   onClose: () => void;
   onPatch: (fields: Parameters<typeof updatePerson>[1]) => void;
   onRemove: () => void;
@@ -1043,26 +1168,7 @@ function PersonCard({
           <button className="btn btn-primary" style={{ justifyContent: "flex-start" }} onClick={onClose}>
             Save and close
           </button>
-          {onboarded ? (
-            <a
-              className="btn btn-secondary"
-              href={`https://${person.publicProfile}`}
-              target="_blank"
-              rel="noreferrer"
-              style={{ justifyContent: "flex-start", textDecoration: "none" }}
-            >
-              View public profile
-            </a>
-          ) : (
-            <button
-              className="btn btn-secondary"
-              style={{ justifyContent: "flex-start" }}
-              disabled={busy}
-              onClick={() => onPatch({ publicProfile: publicProfileFor(person) })}
-            >
-              Send onboarding link
-            </button>
-          )}
+          <PublicLinkAction personId={person.id} spaceId={spaceId} />
           <button
             className="btn btn-ghost"
             style={{ marginLeft: "auto", justifyContent: "flex-start" }}

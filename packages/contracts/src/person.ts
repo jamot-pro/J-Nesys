@@ -43,6 +43,8 @@ export const Person = z.object({
   /** Space IDs this person participates in (organizations + personal). */
   membershipSpaceIds: z.array(Id).default([]),
   reputation: z.record(z.string(), z.number()).default({}),
+  /** Opaque id for this person's unauthenticated public profile page. */
+  publicToken: z.string().nullable().default(null),
   createdAt: Timestamp.optional(),
   updatedAt: Timestamp.optional(),
 });

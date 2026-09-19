@@ -507,6 +507,13 @@ export function createMemoryRepository(): JamotRepository {
       return null;
     },
 
+    async getPersonByPublicToken(token) {
+      for (const person of people.values()) {
+        if (person.publicToken === token) return person;
+      }
+      return null;
+    },
+
     async deletePerson(id) {
       people.delete(id);
       for (const [identityId, identity] of identityStore.entries()) {

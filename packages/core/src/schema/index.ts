@@ -209,6 +209,9 @@ export const people = pgTable("people", {
     .$type<Record<string, number>>()
     .notNull()
     .default(sql`'{}'::jsonb`),
+  /** Opaque id for this person's unauthenticated public profile page
+   * (/p/<publicToken>). Null until "Get link" is used for them. */
+  publicToken: text("public_token"),
   ...timestamps(),
 });
 

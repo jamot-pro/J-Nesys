@@ -225,4 +225,74 @@ describe("people API", () => {
     });
     expect(gone.statusCode).toBe(404);
   });
+
+  it("issues a public-profile token and lets that person self-onboard, unauthenticated", async () => {
+    const { app } = await makeAppWithRepo();
+    const cookie = await registerAndLogin(app, "alice@example.com", "password123", "Alice");
+    const me = await app.inject({ method: "GET", url: "/api/auth/me", headers: { cookie } });
+    const spaceId = me.json().actor.personalSpaceId;
+
+    const created = await app.inject({
+      method: "POST",
+      url: "/api/people/contacts",
+      headers: { cookie },
+      payload: { spaceId, firstName: "Andrea", lastName: "Rossi" },
+    });
+    const personId = created.json().person.id;
+
+    // A stranger cannot create a link for someone else's contact.
+    const strangerCookie = await registerAndLogin(
+      app,
+      "stranger@example.com",
+      "password123",
+      "Stranger",
+    );
+    const denied = await app.inject({
+      method: "POST",
+      url: `/api/people/${personId}/public-token`,
+      headers: { cookie: strangerCookie },
+    });
+    expect(denied.statusCode).toBe(403);
+
+    const linked = await app.inject({
+      method: "POST",
+      url: `/api/people/${personId}/public-token`,
+      headers: { cookie },
+    });
+    expect(linked.statusCode).toBe(200);
+    const token = linked.json().token as string;
+    expect(token).toBeTruthy();
+
+    // Idempotent: asking again returns the same token.
+    const linkedAgain = await app.inject({
+      method: "POST",
+      url: `/api/people/${personId}/public-token`,
+      headers: { cookie },
+    });
+    expect(linkedAgain.json().token).toBe(token);
+
+    // Public GET, no cookie at all: shows the person, no archetype yet.
+    const before = await app.inject({ method: "GET", url: `/api/people/public/${token}` });
+    expect(before.statusCode).toBe(200);
+    expect(before.json()).toMatchObject({ displayName: "Andrea Rossi", hasProfile: false });
+
+    // Self-service onboarding, still no cookie.
+    const onboarded = await app.inject({
+      method: "POST",
+      url: `/api/people/public/${token}/onboard`,
+      payload: { birthDate: "1990-05-15", birthHour: 8, timezone: -5, birthLocation: "NYC" },
+    });
+    expect(onboarded.statusCode).toBe(200);
+    expect(onboarded.json().hasProfile).toBe(true);
+    expect(onboarded.json().profile?.identity?.type).toBeTruthy();
+
+    // The computed report is now cached and shows up on a plain GET too.
+    const after = await app.inject({ method: "GET", url: `/api/people/public/${token}` });
+    expect(after.json().hasProfile).toBe(true);
+    expect(after.json().profile?.identity?.type).toEqual(onboarded.json().profile.identity.type);
+
+    // An unknown token is a clean 404, not a leak of someone else's data.
+    const missing = await app.inject({ method: "GET", url: "/api/people/public/does-not-exist" });
+    expect(missing.statusCode).toBe(404);
+  });
 });

@@ -143,6 +143,9 @@ importers:
       '@fastify/static':
         specifier: ^8.0.3
         version: 8.3.0
+      '@jamot/archetype-engine':
+        specifier: workspace:*
+        version: link:../archetype-engine
       '@jamot/contracts':
         specifier: workspace:*
         version: link:../contracts

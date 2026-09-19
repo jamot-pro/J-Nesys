@@ -137,6 +137,13 @@ export async function getPersonDetail(personId: string): Promise<ApiPersonDetail
   return api(`/api/people/${enc(personId)}`);
 }
 
+/** Creates (or returns the existing) public-profile link for a person. */
+export async function createPersonPublicLink(
+  personId: string,
+): Promise<{ token: string; path: string }> {
+  return api(`/api/people/${enc(personId)}/public-token`, { method: "POST" });
+}
+
 export interface PersonFieldPatch {
   firstName?: string | null;
   lastName?: string | null;

@@ -43,6 +43,7 @@ function person(actorId: string): Person {
     profile: { selfDescribed: {}, integral: {}, skills: [], preferences: {}, goals: [] },
     membershipSpaceIds: [SPACE],
     reputation: {},
+    publicToken: null,
   };
 }
 

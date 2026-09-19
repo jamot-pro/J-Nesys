@@ -693,11 +693,13 @@ export interface JamotRepository {
         | "reputation"
         | "contextSummary"
         | "contextSummaryUpdatedAt"
+        | "publicToken"
       >
     >,
   ): Promise<Person | null>;
   findPersonByEmail(email: string): Promise<Person | null>;
   findPersonByPhone(phone: string): Promise<Person | null>;
+  getPersonByPublicToken(token: string): Promise<Person | null>;
   /** Delete a person row (identities/merge candidates cascade). */
   deletePerson(id: string): Promise<void>;
   /** Create an external lead as an actor + person (no user account). */
