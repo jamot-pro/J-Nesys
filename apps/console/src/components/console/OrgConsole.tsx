@@ -13,20 +13,24 @@ import { Dashboard } from "./Dashboard";
 import { SystemConfig } from "./SystemConfig";
 import { getOrganizationApps, listNotifications, type AppManifest } from "@jamot/client";
 import type { RailApp } from "./mockup-data";
-import { useOrgScope } from "../console-context";
+import { ConsoleNavProvider, useOrgScope } from "../console-context";
 import { CommerceSection } from "../CommerceSection";
 import { LeadGen } from "./LeadGen";
 import { Notifications } from "./Notifications";
-import { People } from "./People";
+import { PeopleWorkspace } from "../people/PeopleWorkspace";
 import { OutreachSection } from "../OutreachSection";
 
 /** Rail apps that already have a backend behind them. Their screens are not
  * yet re-skinned to the corresponding mockup (LeadGen.dc.html, Outreach.dc.html,
  * Commerce.dc.html) — they carry real data in design-system components, and the
- * mockup's own layout for each is still to be ported. */
+ * mockup's own layout for each is still to be ported.
+ *
+ * `crm` (the catalog app named "People") renders the real, full-featured
+ * People directory (search, channel filter, merge review) rather than the
+ * console's own earlier lists-only People.tsx, which it replaces here. */
 const WIRED: Record<string, React.ReactNode> = {
   channels: <Channels />,
-  crm: <People />,
+  crm: <PeopleWorkspace />,
   "lead-generation": <LeadGen />,
   outreach: <OutreachSection />,
   commerce: <CommerceSection />,
@@ -143,6 +147,7 @@ export function OrgConsole({ branding }: { branding: OrgPublicBranding }) {
   const current = apps.find((a) => a.id === activeApp) ?? null;
 
   return (
+    <ConsoleNavProvider value={{ activeApp, setActiveApp }}>
     <div
       data-copilot-region="app-shell"
       style={{
@@ -252,5 +257,6 @@ export function OrgConsole({ branding }: { branding: OrgPublicBranding }) {
         />
       ) : null}
     </div>
+    </ConsoleNavProvider>
   );
 }

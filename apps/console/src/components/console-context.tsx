@@ -1,6 +1,7 @@
 "use client";
 
 import { createContext, useContext } from "react";
+import type { Dispatch, SetStateAction } from "react";
 import type { MeResponse, SubdomainResolution } from "@jamot/client";
 import type { OrgPublicBranding } from "@jamot/client/branding";
 
@@ -36,4 +37,26 @@ export function useOrgScope(): { organizationId: string; spaceId: string } {
     organizationId: resolution.organization.id,
     spaceId: resolution.space.id,
   };
+}
+
+export interface ConsoleNavValue {
+  /** Id of the app currently open in the main pane; null is the dashboard. */
+  activeApp: string | null;
+  setActiveApp: Dispatch<SetStateAction<string | null>>;
+}
+
+const ConsoleNavContext = createContext<ConsoleNavValue | null>(null);
+
+export const ConsoleNavProvider = ConsoleNavContext.Provider;
+
+/**
+ * Shell navigation state (which app/section is open), owned by OrgConsole.
+ * Anything that needs to switch screens from outside OrgConsole itself
+ * (command palette, notification bell) reads/writes it here instead of
+ * each holding its own notion of "current section".
+ */
+export function useConsoleNav(): ConsoleNavValue {
+  const value = useContext(ConsoleNavContext);
+  if (!value) throw new Error("useConsoleNav must be used inside OrgConsole");
+  return value;
 }

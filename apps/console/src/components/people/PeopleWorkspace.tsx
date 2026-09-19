@@ -5,7 +5,7 @@ import { AnimatePresence, motion } from "framer-motion";
 import { ChevronLeft, ChevronRight, Loader2, Search, UserPlus, Users } from "lucide-react";
 
 import { EmptyList } from "@/components/directory/EmptyList";
-import { useAppShell } from "@/components/app-shell/app-shell-context";
+import { useConsole, useOrgScope } from "@/components/console-context";
 import { useAuth } from "@/components/auth/auth-context";
 import { useEventStream } from "@/lib/use-event-stream";
 import { cn } from "@/lib/utils";
@@ -63,13 +63,14 @@ function relativeWhen(iso: string | null): string {
 }
 
 export function PeopleWorkspace() {
-  const { space } = useAppShell();
+  const { spaceId } = useOrgScope();
+  const { branding } = useConsole();
   const { user } = useAuth();
   return (
     <PeopleDirectory
-      key={space.id}
-      spaceName={space.name}
-      spaceId={space.spaceId ?? user?.person?.membershipSpaceIds[0] ?? null}
+      key={spaceId}
+      spaceName={branding.displayName}
+      spaceId={spaceId ?? user?.person?.membershipSpaceIds[0] ?? null}
     />
   );
 }
