@@ -2439,6 +2439,7 @@ export interface PeopleListPerson {
   relationship: string | null;
   lastInteractionAt: string | null;
   createdAt?: string;
+  company: string;
   website: string;
   publicProfile: string;
   context: string;
@@ -2531,6 +2532,7 @@ export async function updatePerson(
     lastName?: string | null;
     email?: string | null;
     phone?: string | null;
+    company?: string;
     website?: string;
     publicProfile?: string;
     context?: string;
@@ -2539,7 +2541,7 @@ export async function updatePerson(
   },
 ): Promise<unknown> {
   const selfDescribed: Record<string, { value: unknown }> = {};
-  for (const key of ["website", "publicProfile", "context", "aura", "notes"] as const) {
+  for (const key of ["company", "website", "publicProfile", "context", "aura", "notes"] as const) {
     if (patch[key] !== undefined) selfDescribed[key] = { value: patch[key] };
   }
   const body: Record<string, unknown> = {};

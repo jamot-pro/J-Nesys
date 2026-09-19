@@ -37,6 +37,14 @@ export interface ApiPersonSummary {
   relationship: string | null;
   lastInteractionAt: string | null;
   createdAt?: string;
+  /** CRM fields, present since GET /people started returning the same shape
+   * as a people-list member (company/website/context/aura/notes). */
+  company?: string;
+  website?: string;
+  publicProfile?: string;
+  context?: string;
+  aura?: number;
+  contextSummary?: string | null;
 }
 
 export interface ApiIdentity {

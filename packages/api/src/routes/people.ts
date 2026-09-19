@@ -150,13 +150,14 @@ function attr(person: Person, key: string): unknown {
 async function toListPerson(
   repo: JamotRepository,
   person: Person,
-  spaceId: string,
+  spaceId?: string,
 ) {
   const summary = await toSummary(repo, person, spaceId);
   const notes = attr(person, "notes");
   const aura = attr(person, "aura");
   return {
     ...summary,
+    company: String(attr(person, "company") ?? ""),
     website: String(attr(person, "website") ?? ""),
     publicProfile: String(attr(person, "publicProfile") ?? ""),
     context: String(attr(person, "context") ?? ""),
@@ -260,7 +261,7 @@ export function peopleRoutes(repo: JamotRepository) {
       });
 
       const summaries = await Promise.all(
-        items.map((p) => toSummary(repo, p, query.spaceId)),
+        items.map((p) => toListPerson(repo, p, query.spaceId)),
       );
 
       return {

@@ -17,20 +17,16 @@ import { ConsoleNavProvider, useOrgScope } from "../console-context";
 import { CommerceSection } from "../CommerceSection";
 import { LeadGen } from "./LeadGen";
 import { Notifications } from "./Notifications";
-import { PeopleWorkspace } from "../people/PeopleWorkspace";
+import { People } from "./People";
 import { OutreachSection } from "../OutreachSection";
 
 /** Rail apps that already have a backend behind them. Their screens are not
  * yet re-skinned to the corresponding mockup (LeadGen.dc.html, Outreach.dc.html,
  * Commerce.dc.html) — they carry real data in design-system components, and the
- * mockup's own layout for each is still to be ported.
- *
- * `crm` (the catalog app named "People") renders the real, full-featured
- * People directory (search, channel filter, merge review) rather than the
- * console's own earlier lists-only People.tsx, which it replaces here. */
+ * mockup's own layout for each is still to be ported. */
 const WIRED: Record<string, React.ReactNode> = {
   channels: <Channels />,
-  crm: <PeopleWorkspace />,
+  crm: <People />,
   "lead-generation": <LeadGen />,
   outreach: <OutreachSection />,
   commerce: <CommerceSection />,

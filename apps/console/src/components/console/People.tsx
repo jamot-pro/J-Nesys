@@ -8,6 +8,7 @@ import {
   deletePeopleList,
   getAgents,
   listActors,
+  listDeals,
   listPeopleLists,
   removePersonFromList,
   renamePeopleList,
@@ -15,12 +16,40 @@ import {
   updatePerson,
   type ApiActor,
   type ApiAgent,
+  type Deal,
   type PeopleList,
   type PeopleListPerson,
   type PeopleNote,
 } from "@jamot/client";
 
 import { useOrgScope } from "../console-context";
+import { formatPhoneDisplay } from "@/lib/utils";
+import { searchPeople, type ApiPersonSummary } from "../people/people-api";
+
+const UNLISTED_ID = "__unlisted__";
+
+function matchesQuery(query: string, ...fields: (string | null | undefined)[]): boolean {
+  const q = query.trim().toLowerCase();
+  if (!q) return true;
+  return fields.some((f) => f?.toLowerCase().includes(q));
+}
+
+/** Compact "$1.2k open" style summary of a person's deals. */
+function dealsSummary(deals: Deal[]): string {
+  if (deals.length === 0) return "—";
+  const open = deals.filter((d) => d.stage !== "won" && d.stage !== "lost");
+  const won = deals.filter((d) => d.stage === "won");
+  const total = (list: Deal[]) => list.reduce((sum, d) => sum + d.valueAmount, 0);
+  const fmt = (amount: number, currency: string) =>
+    new Intl.NumberFormat(undefined, { style: "currency", currency, maximumFractionDigits: 0 }).format(
+      amount,
+    );
+  const currency = deals[0]?.currency ?? "USD";
+  const parts: string[] = [];
+  if (open.length > 0) parts.push(`${open.length} open · ${fmt(total(open), currency)}`);
+  if (won.length > 0) parts.push(`${won.length} won · ${fmt(total(won), currency)}`);
+  return parts.join(" · ") || "—";
+}
 
 const MUTED = "color-mix(in srgb, var(--color-text) 76%, transparent)";
 const DIM = "color-mix(in srgb, var(--color-text) 72%, transparent)";
@@ -30,13 +59,12 @@ const MONO = "ui-monospace,'SF Mono',Menlo,monospace";
 const COLUMNS = [
   "Name",
   "Surname",
+  "Company",
   "Email",
   "Phone",
-  "Website",
-  "Profile ID",
-  "Profile",
   "Context",
   "Aura",
+  "Deals",
   "Channels",
 ];
 
@@ -145,6 +173,13 @@ export function People() {
   const [busy, setBusy] = useState(false);
   const [agents, setAgents] = useState<ApiAgent[]>([]);
   const [actors, setActors] = useState<ApiActor[]>([]);
+  const [query, setQuery] = useState("");
+  const [dealsByPerson, setDealsByPerson] = useState<Record<string, Deal[]>>({});
+
+  const [unlistedOpen, setUnlistedOpen] = useState(false);
+  const [unlistedTotal, setUnlistedTotal] = useState<number | null>(null);
+  const [unlistedPeople, setUnlistedPeople] = useState<ApiPersonSummary[]>([]);
+  const [unlistedLoading, setUnlistedLoading] = useState(false);
 
   const load = useCallback(async () => {
     if (!spaceId) return;
@@ -169,6 +204,65 @@ export function People() {
       },
     );
   }, []);
+
+  useEffect(() => {
+    if (!spaceId) return;
+    let cancelled = false;
+    listDeals(spaceId)
+      .then((deals) => {
+        if (cancelled) return;
+        const byPerson: Record<string, Deal[]> = {};
+        for (const deal of deals) {
+          if (!deal.personId) continue;
+          (byPerson[deal.personId] ??= []).push(deal);
+        }
+        setDealsByPerson(byPerson);
+      })
+      .catch(() => {
+        if (!cancelled) setDealsByPerson({});
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [spaceId]);
+
+  // Unlisted count stays live regardless of expand state; the fuller
+  // member fetch only happens once expanded.
+  useEffect(() => {
+    if (!spaceId) return;
+    let cancelled = false;
+    searchPeople({ spaceId, unlisted: true, perPage: 1 })
+      .then(({ total }) => {
+        if (!cancelled) setUnlistedTotal(total);
+      })
+      .catch(() => {
+        if (!cancelled) setUnlistedTotal(null);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [spaceId]);
+
+  useEffect(() => {
+    if (!spaceId || !unlistedOpen) return;
+    let cancelled = false;
+    setUnlistedLoading(true);
+    searchPeople({ spaceId, unlisted: true, q: query || undefined, perPage: 200 })
+      .then(({ items, total }) => {
+        if (cancelled) return;
+        setUnlistedPeople(items);
+        setUnlistedTotal(total);
+      })
+      .catch(() => {
+        if (!cancelled) setUnlistedPeople([]);
+      })
+      .finally(() => {
+        if (!cancelled) setUnlistedLoading(false);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [spaceId, unlistedOpen, query]);
 
   /** An agent's name lives on its actor; role is what it does, not what it is. */
   const agentName = (agent: ApiAgent) =>
@@ -239,6 +333,16 @@ export function People() {
         </div>
       </div>
 
+      <div style={{ margin: "var(--space-4) 0", maxWidth: 420 }}>
+        <input
+          className="input"
+          value={query}
+          onChange={(e) => setQuery(e.target.value)}
+          placeholder="Search people across every list…"
+          style={{ width: "100%", height: 38 }}
+        />
+      </div>
+
       <div className="hr" style={{ margin: "var(--space-4) 0" }} />
 
       {error ? (
@@ -255,7 +359,15 @@ export function People() {
 
       <div style={{ display: "flex", flexDirection: "column", gap: "var(--space-4)" }}>
         {(lists ?? []).map((list) => {
-          const isOpen = collapsed[list.id] !== true;
+          const filteredPeople = list.people.filter((p) =>
+            matchesQuery(query, p.firstName, p.lastName, p.email, p.phone, p.company, p.displayName),
+          );
+          // Searching surfaces which list a match lives in: hide lists with
+          // no match, and auto-show every match in the ones that do.
+          if (query.trim() && filteredPeople.length === 0) return null;
+          const isOpen = query.trim() ? true : collapsed[list.id] !== true;
+          const visiblePeople = isOpen ? filteredPeople : filteredPeople.slice(0, 3);
+          const hiddenCount = filteredPeople.length - visiblePeople.length;
           return (
             <section
               key={list.id}
@@ -320,10 +432,10 @@ export function People() {
                   {list.people.length === 1 ? "1 person" : `${list.people.length} people`}
                 </span>
                 <label
-                  title="Agent that answers WhatsApp messages from anyone on this list"
-                  style={{ marginLeft: "auto", display: "flex", alignItems: "center", gap: 6, fontSize: 12, color: MUTED }}
+                  title="Auto-reply agent for this list, on whichever channel a member writes in"
+                  style={{ marginLeft: "auto", display: "flex", alignItems: "center", gap: 5, fontSize: 12, color: MUTED }}
                 >
-                  Reply agent
+                  Agent
                   <select
                     className="input"
                     value={list.replyAgentId ?? ""}
@@ -331,7 +443,7 @@ export function People() {
                     onChange={(e) =>
                       run(() => setPeopleListReplyAgent(list.id, e.target.value || null))
                     }
-                    style={{ height: 30, fontSize: 12, padding: "0 8px" }}
+                    style={{ height: 28, fontSize: 12, padding: "0 6px", maxWidth: 140 }}
                   >
                     <option value="">No auto-reply</option>
                     {agents.map((agent) => (
@@ -353,116 +465,126 @@ export function People() {
                 </button>
               </header>
 
-              {isOpen ? (
-                <>
-                  <div style={{ overflowX: "auto" }}>
-                    <table style={{ width: "100%", minWidth: 1180, borderCollapse: "collapse", fontSize: 13 }}>
-                      <thead>
-                        <tr>
-                          {COLUMNS.map((c) => (
-                            <th key={c} style={TH}>
-                              {c}
-                            </th>
-                          ))}
-                        </tr>
-                      </thead>
-                      <tbody>
-                        {list.people.map((p) => (
-                          <tr key={p.id} style={{ borderBottom: "1px solid var(--color-divider)" }}>
-                            <td style={TD}>
-                              <button
-                                onClick={() => setOpen({ listId: list.id, personId: p.id })}
-                                title="Open profile card"
-                                style={{
-                                  background: "none",
-                                  border: "none",
-                                  padding: 0,
-                                  font: "inherit",
-                                  fontWeight: 600,
-                                  color: "var(--color-text)",
-                                  cursor: "pointer",
-                                }}
-                              >
-                                {p.firstName || p.displayName}
-                              </button>
-                            </td>
-                            <td style={TD}>{p.lastName ?? ""}</td>
-                            <td style={TD}>{p.email ?? ""}</td>
-                            <td style={{ ...TD, fontFamily: MONO, fontSize: 12 }}>{p.phone ?? ""}</td>
-                            <td style={TD}>{p.website}</td>
-                            <td style={{ ...TD, fontFamily: MONO, fontSize: 12, color: MUTED }}>{p.id.slice(0, 8)}</td>
-                            <td style={TD}>
-                              {p.publicProfile ? (
-                                <a href={`https://${p.publicProfile}`} target="_blank" rel="noreferrer" style={{ textDecoration: "none", fontFamily: MONO, fontSize: 12 }}>
-                                  {p.publicProfile}
-                                </a>
-                              ) : (
-                                <button
-                                  className="btn btn-secondary"
-                                  style={{ height: 30, padding: "0 12px", fontSize: 12 }}
-                                  disabled={busy}
-                                  onClick={() => patch(p, { publicProfile: publicProfileFor(p) })}
+              <div style={{ overflowX: "auto" }}>
+                <table style={{ width: "100%", minWidth: 1180, borderCollapse: "collapse", fontSize: 13 }}>
+                  <thead>
+                    <tr>
+                      {COLUMNS.map((c) => (
+                        <th key={c} style={TH}>
+                          {c}
+                        </th>
+                      ))}
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {visiblePeople.map((p) => (
+                      <tr key={p.id} style={{ borderBottom: "1px solid var(--color-divider)" }}>
+                        <td style={TD}>
+                          <button
+                            onClick={() => setOpen({ listId: list.id, personId: p.id })}
+                            title="Open profile card"
+                            style={{
+                              background: "none",
+                              border: "none",
+                              padding: 0,
+                              font: "inherit",
+                              fontWeight: 600,
+                              color: "var(--color-text)",
+                              cursor: "pointer",
+                            }}
+                          >
+                            {p.firstName || p.displayName}
+                          </button>
+                        </td>
+                        <td style={TD}>{p.lastName ?? ""}</td>
+                        <td style={TD}>{p.company || ""}</td>
+                        <td style={TD}>{p.email ?? ""}</td>
+                        <td style={{ ...TD, fontFamily: MONO, fontSize: 12 }}>
+                          {formatPhoneDisplay(p.phone) ?? ""}
+                        </td>
+                        <td style={{ padding: "10px var(--space-3)", maxWidth: 240 }}>
+                          <span style={{ display: "block", lineHeight: 1.5, color: MUTED }}>{p.context}</span>
+                        </td>
+                        <td style={TD}>
+                          <span style={{ display: "inline-flex", alignItems: "center", gap: 7 }}>
+                            <span style={auraDotStyle(p.aura, 7)} />
+                            <span style={{ fontFamily: "var(--font-heading)", fontWeight: 800 }}>{p.aura}</span>
+                          </span>
+                        </td>
+                        <td style={{ ...TD, fontSize: 12, color: MUTED }}>
+                          {dealsSummary(dealsByPerson[p.id] ?? [])}
+                        </td>
+                        <td style={TD}>
+                          <span style={{ display: "flex", gap: 6 }}>
+                            {p.channels.map((provider) => {
+                              const label = channelLabel(provider);
+                              return (
+                                <span
+                                  key={provider}
+                                  title={label}
+                                  style={{
+                                    display: "flex",
+                                    alignItems: "center",
+                                    justifyContent: "center",
+                                    width: 24,
+                                    height: 24,
+                                    border: "1px solid var(--color-divider)",
+                                    borderRadius: 999,
+                                    fontFamily: "var(--font-heading)",
+                                    fontWeight: 800,
+                                    fontSize: 10,
+                                  }}
                                 >
-                                  Onboard
-                                </button>
-                              )}
-                            </td>
-                            <td style={{ padding: "10px var(--space-3)", maxWidth: 280 }}>
-                              <span style={{ display: "block", lineHeight: 1.5, color: MUTED }}>{p.context}</span>
-                            </td>
-                            <td style={TD}>
-                              <span style={{ display: "inline-flex", alignItems: "center", gap: 7 }}>
-                                <span style={auraDotStyle(p.aura, 7)} />
-                                <span style={{ fontFamily: "var(--font-heading)", fontWeight: 800 }}>{p.aura}</span>
-                              </span>
-                            </td>
-                            <td style={TD}>
-                              <span style={{ display: "flex", gap: 6 }}>
-                                {p.channels.map((provider) => {
-                                  const label = channelLabel(provider);
-                                  return (
-                                    <span
-                                      key={provider}
-                                      title={label}
-                                      style={{
-                                        display: "flex",
-                                        alignItems: "center",
-                                        justifyContent: "center",
-                                        width: 24,
-                                        height: 24,
-                                        border: "1px solid var(--color-divider)",
-                                        borderRadius: 999,
-                                        fontFamily: "var(--font-heading)",
-                                        fontWeight: 800,
-                                        fontSize: 10,
-                                      }}
-                                    >
-                                      {monoFor(label)}
-                                    </span>
-                                  );
-                                })}
-                              </span>
-                            </td>
-                          </tr>
-                        ))}
-                      </tbody>
-                    </table>
-                  </div>
-                  <div style={{ padding: "var(--space-3)" }}>
-                    <button
-                      className="btn btn-ghost"
-                      style={{ height: 32, padding: "0 12px", fontSize: 12 }}
-                      disabled={busy}
-                      onClick={() => addPersonTo(list.id)}
-                    >
-                      + Add person to this list
-                    </button>
-                  </div>
-                </>
-              ) : null}
+                                  {monoFor(label)}
+                                </span>
+                              );
+                            })}
+                          </span>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+              <div style={{ display: "flex", alignItems: "center", gap: "var(--space-3)", padding: "var(--space-3)" }}>
+                <button
+                  className="btn btn-ghost"
+                  style={{ height: 32, padding: "0 12px", fontSize: 12 }}
+                  disabled={busy}
+                  onClick={() => addPersonTo(list.id)}
+                >
+                  + Add person to this list
+                </button>
+                {hiddenCount > 0 ? (
+                  <button
+                    className="btn btn-ghost"
+                    style={{ height: 32, padding: "0 12px", fontSize: 12, color: MUTED }}
+                    onClick={() => setCollapsed((c) => ({ ...c, [list.id]: false }))}
+                  >
+                    +{hiddenCount} more
+                  </button>
+                ) : null}
+              </div>
             </section>
           );
         })}
+
+        <UnlistedSection
+          total={unlistedTotal}
+          people={unlistedPeople}
+          loading={unlistedLoading}
+          open={unlistedOpen}
+          lists={lists ?? []}
+          busy={busy}
+          onToggle={() => setUnlistedOpen((v) => !v)}
+          onAddToList={(personId, listId) =>
+            run(async () => {
+              await addPersonToList(listId, personId);
+              setUnlistedPeople((prev) => prev.filter((p) => p.id !== personId));
+              setUnlistedTotal((t) => (t !== null ? t - 1 : t));
+            })
+          }
+        />
       </div>
 
       {open && person ? (
@@ -481,6 +603,129 @@ export function People() {
         />
       ) : null}
     </div>
+  );
+}
+
+/**
+ * Everyone in none of the space's lists. Backed by GET /people?unlisted=true
+ * rather than a real list — no reply agent (there's no list to attach one
+ * to), and rows offer "add to list" instead of an editable profile card.
+ */
+function UnlistedSection({
+  total,
+  people,
+  loading,
+  open,
+  lists,
+  busy,
+  onToggle,
+  onAddToList,
+}: {
+  total: number | null;
+  people: ApiPersonSummary[];
+  loading: boolean;
+  open: boolean;
+  lists: PeopleList[];
+  busy: boolean;
+  onToggle: () => void;
+  onAddToList: (personId: string, listId: string) => void;
+}) {
+  return (
+    <section
+      style={{
+        border: "1px dashed var(--color-divider)",
+        borderRadius: "var(--radius-md)",
+        background: "color-mix(in srgb, var(--color-bg) 60%, transparent)",
+        overflow: "hidden",
+      }}
+    >
+      <button
+        onClick={onToggle}
+        style={{
+          display: "flex",
+          alignItems: "center",
+          gap: "var(--space-3)",
+          width: "100%",
+          height: 52,
+          padding: "0 var(--space-3)",
+          background: "none",
+          border: "none",
+          borderBottom: open ? "1px solid var(--color-divider)" : "none",
+          cursor: "pointer",
+          textAlign: "left",
+        }}
+      >
+        <Chevron open={open} />
+        <span style={{ fontFamily: "var(--font-heading)", fontWeight: 800, fontSize: 15 }}>
+          Unlisted
+        </span>
+        <span style={{ fontSize: 12, color: MUTED }}>Not on any list yet</span>
+        <span style={{ marginLeft: "auto", fontSize: 12, color: MUTED }}>{total ?? "…"}</span>
+      </button>
+
+      {open ? (
+        <div style={{ overflowX: "auto" }}>
+          {loading ? (
+            <p style={{ margin: 0, padding: "var(--space-3)", fontSize: 13, color: MUTED }}>Loading…</p>
+          ) : people.length === 0 ? (
+            <p style={{ margin: 0, padding: "var(--space-3)", fontSize: 13, color: MUTED }}>
+              Everyone is on a list.
+            </p>
+          ) : (
+            <table style={{ width: "100%", minWidth: 900, borderCollapse: "collapse", fontSize: 13 }}>
+              <thead>
+                <tr>
+                  {["Name", "Surname", "Company", "Email", "Phone", "Aura", ""].map((c) => (
+                    <th key={c} style={TH}>
+                      {c}
+                    </th>
+                  ))}
+                </tr>
+              </thead>
+              <tbody>
+                {people.map((p) => (
+                  <tr key={p.id} style={{ borderBottom: "1px solid var(--color-divider)" }}>
+                    <td style={TD}>{p.firstName || p.displayName}</td>
+                    <td style={TD}>{p.lastName ?? ""}</td>
+                    <td style={TD}>{p.company || ""}</td>
+                    <td style={TD}>{p.email ?? ""}</td>
+                    <td style={{ ...TD, fontFamily: MONO, fontSize: 12 }}>
+                      {formatPhoneDisplay(p.phone) ?? ""}
+                    </td>
+                    <td style={TD}>
+                      <span style={{ display: "inline-flex", alignItems: "center", gap: 7 }}>
+                        <span style={auraDotStyle(p.aura ?? 0, 7)} />
+                        <span style={{ fontFamily: "var(--font-heading)", fontWeight: 800 }}>
+                          {p.aura ?? 0}
+                        </span>
+                      </span>
+                    </td>
+                    <td style={TD}>
+                      <select
+                        className="input"
+                        disabled={busy || lists.length === 0}
+                        value=""
+                        onChange={(e) => {
+                          if (e.target.value) onAddToList(p.id, e.target.value);
+                        }}
+                        style={{ height: 30, fontSize: 12, padding: "0 8px" }}
+                      >
+                        <option value="">Add to list…</option>
+                        {lists.map((list) => (
+                          <option key={list.id} value={list.id}>
+                            {list.name}
+                          </option>
+                        ))}
+                      </select>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          )}
+        </div>
+      ) : null}
+    </section>
   );
 }
 
@@ -504,8 +749,9 @@ function PersonCard({
   const readonly: { label: string; value: string }[] = [
     { label: "Name", value: person.firstName || "—" },
     { label: "Surname", value: person.lastName || "—" },
+    { label: "Company", value: person.company || "—" },
     { label: "Email", value: person.email || "—" },
-    { label: "Phone", value: person.phone || "—" },
+    { label: "Phone", value: formatPhoneDisplay(person.phone) || "—" },
     { label: "Website", value: person.website || "—" },
     { label: "Profile ID", value: person.id.slice(0, 8) },
     { label: "Public profile", value: person.publicProfile || "—" },
@@ -651,6 +897,7 @@ function PersonCard({
               <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "var(--space-3)" }}>
                 <Field label="Name" value={person.firstName ?? ""} onSave={(v) => onPatch({ firstName: v })} />
                 <Field label="Surname" value={person.lastName ?? ""} onSave={(v) => onPatch({ lastName: v })} />
+                <Field label="Company" value={person.company} onSave={(v) => onPatch({ company: v })} />
                 <Field label="Email" value={person.email ?? ""} onSave={(v) => onPatch({ email: v || null })} />
                 <Field label="Phone" value={person.phone ?? ""} onSave={(v) => onPatch({ phone: v || null })} />
                 <Field label="Website" value={person.website} onSave={(v) => onPatch({ website: v })} />
