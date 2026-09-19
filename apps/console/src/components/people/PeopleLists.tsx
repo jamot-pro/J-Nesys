@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { AnimatePresence, motion } from "framer-motion";
-import { ListPlus, Loader2, Trash2, UserPlus, Users, X } from "lucide-react";
+import { ListPlus, Loader2, Trash2, UserPlus, X } from "lucide-react";
 
 import { EmptyList } from "@/components/directory/EmptyList";
 import { Button } from "@/components/ui/button";
@@ -23,14 +23,28 @@ import {
   type OutreachList,
   type OutreachListMember,
 } from "@/lib/api-client";
-import { searchPeople } from "@/components/people/people-api";
+import { searchPeople, type ApiPersonSummary } from "@/components/people/people-api";
+
+const UNLISTED_ID = "__unlisted__";
+
+function matchesQuery(query: string, ...fields: (string | null | undefined)[]): boolean {
+  if (!query) return true;
+  const q = query.trim().toLowerCase();
+  if (!q) return true;
+  return fields.some((f) => f?.toLowerCase().includes(q));
+}
 
 export function PeopleLists({
   spaceId,
   orgId,
+  query = "",
+  onSelectPerson,
 }: {
   spaceId: string | null;
   orgId: string | undefined;
+  /** Filters the members shown within each expanded list/Unlisted. */
+  query?: string;
+  onSelectPerson?: (personId: string) => void;
 }) {
   const [lists, setLists] = useState<OutreachList[]>([]);
   const [loading, setLoading] = useState(true);
@@ -42,6 +56,10 @@ export function PeopleLists({
   const [error, setError] = useState<string | null>(null);
   const [agents, setAgents] = useState<ApiAgent[]>([]);
   const [actors, setActors] = useState<ApiActor[]>([]);
+
+  const [unlistedTotal, setUnlistedTotal] = useState<number | null>(null);
+  const [unlistedPeople, setUnlistedPeople] = useState<ApiPersonSummary[]>([]);
+  const [unlistedLoading, setUnlistedLoading] = useState(false);
 
   useEffect(() => {
     let cancelled = false;
@@ -79,6 +97,44 @@ export function PeopleLists({
       cancelled = true;
     };
   }, []);
+
+  // Unlisted count, kept live regardless of expand state so the badge is
+  // never stale; the fuller member fetch only happens once expanded.
+  useEffect(() => {
+    if (!spaceId) return;
+    let cancelled = false;
+    searchPeople({ spaceId, unlisted: true, perPage: 1 })
+      .then(({ total }) => {
+        if (!cancelled) setUnlistedTotal(total);
+      })
+      .catch(() => {
+        if (!cancelled) setUnlistedTotal(null);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [spaceId]);
+
+  useEffect(() => {
+    if (!spaceId || expandedId !== UNLISTED_ID) return;
+    let cancelled = false;
+    setUnlistedLoading(true);
+    searchPeople({ spaceId, unlisted: true, q: query || undefined, perPage: 200 })
+      .then(({ items, total }) => {
+        if (cancelled) return;
+        setUnlistedPeople(items);
+        setUnlistedTotal(total);
+      })
+      .catch(() => {
+        if (!cancelled) setUnlistedPeople([]);
+      })
+      .finally(() => {
+        if (!cancelled) setUnlistedLoading(false);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [spaceId, expandedId, query]);
 
   /** An agent's name lives on its actor; role is what it does, not what it is. */
   const agentName = (agent: ApiAgent) =>
@@ -159,6 +215,10 @@ export function PeopleLists({
       return;
     }
     setExpandedId(id);
+    // Unlisted has no real list backing it — its members load in a separate
+    // effect (searchPeople with unlisted:true), not through this list-member
+    // path.
+    if (id === UNLISTED_ID) return;
     if (!members[id]) {
       setMembersLoading((prev) => ({ ...prev, [id]: true }));
       try {
@@ -240,14 +300,13 @@ export function PeopleLists({
             title="Loading lists…"
             description="Fetching People lists."
           />
-        ) : lists.length === 0 ? (
-          <EmptyList
-            icon={Users}
-            title="No lists yet"
-            description="Create a list to group people for outreach campaigns."
-          />
         ) : (
           <div className="flex flex-col gap-2 p-3">
+            {lists.length === 0 ? (
+              <p className="px-1 py-2 text-xs text-muted-foreground">
+                No lists yet — create one to group people for outreach campaigns.
+              </p>
+            ) : null}
             {lists.map((list) => (
               <div
                 key={list.id}
@@ -314,13 +373,23 @@ export function PeopleLists({
                           <p className="text-xs text-muted-foreground">Loading members…</p>
                         ) : (members[list.id] ?? []).length === 0 ? (
                           <p className="text-xs text-muted-foreground">No members yet.</p>
+                        ) : (members[list.id] ?? []).filter((m) =>
+                            matchesQuery(query, m.displayName, m.email),
+                          ).length === 0 ? (
+                          <p className="text-xs text-muted-foreground">No members match “{query}”.</p>
                         ) : (
-                          (members[list.id] ?? []).map((member) => (
+                          (members[list.id] ?? [])
+                            .filter((m) => matchesQuery(query, m.displayName, m.email))
+                            .map((member) => (
                             <div
                               key={member.personId}
                               className="flex items-center justify-between gap-2 rounded-md bg-muted/40 px-2 py-1.5"
                             >
-                              <div className="flex min-w-0 flex-col">
+                              <button
+                                type="button"
+                                onClick={() => onSelectPerson?.(member.personId)}
+                                className="flex min-w-0 flex-1 flex-col text-left"
+                              >
                                 <span className="truncate text-xs font-medium">
                                   {member.displayName}
                                 </span>
@@ -329,7 +398,7 @@ export function PeopleLists({
                                     {member.email}
                                   </span>
                                 ) : null}
-                              </div>
+                              </button>
                               <button
                                 type="button"
                                 aria-label="Remove member"
@@ -368,6 +437,63 @@ export function PeopleLists({
                 </AnimatePresence>
               </div>
             ))}
+
+            <div className="flex flex-col gap-2 rounded-lg border border-dashed border-border bg-card/50 p-3">
+              <button
+                type="button"
+                className="flex items-center justify-between gap-2 text-left"
+                onClick={() => void toggleExpand(UNLISTED_ID)}
+              >
+                <div className="flex min-w-0 flex-col">
+                  <span className="truncate text-sm font-medium">Unlisted</span>
+                  <span className="truncate text-xs text-muted-foreground">
+                    Everyone not in any list yet.
+                  </span>
+                </div>
+                <Badge variant="secondary" className="px-1.5 text-[10px]">
+                  {unlistedTotal ?? "…"}
+                </Badge>
+              </button>
+
+              <AnimatePresence>
+                {expandedId === UNLISTED_ID ? (
+                  <motion.div
+                    initial={{ opacity: 0, height: 0 }}
+                    animate={{ opacity: 1, height: "auto" }}
+                    exit={{ opacity: 0, height: 0 }}
+                    className="overflow-hidden"
+                  >
+                    <div className="flex flex-col gap-1.5 border-t border-border pt-2">
+                      {unlistedLoading ? (
+                        <p className="text-xs text-muted-foreground">Loading…</p>
+                      ) : unlistedPeople.length === 0 ? (
+                        <p className="text-xs text-muted-foreground">
+                          {query ? `No unlisted matches for "${query}".` : "Everyone is on a list."}
+                        </p>
+                      ) : (
+                        unlistedPeople.map((person) => (
+                          <button
+                            key={person.id}
+                            type="button"
+                            onClick={() => onSelectPerson?.(person.id)}
+                            className="flex min-w-0 flex-col rounded-md bg-muted/40 px-2 py-1.5 text-left"
+                          >
+                            <span className="truncate text-xs font-medium">
+                              {person.displayName}
+                            </span>
+                            {person.email ? (
+                              <span className="truncate text-[11px] text-muted-foreground">
+                                {person.email}
+                              </span>
+                            ) : null}
+                          </button>
+                        ))
+                      )}
+                    </div>
+                  </motion.div>
+                ) : null}
+              </AnimatePresence>
+            </div>
           </div>
         )}
       </section>

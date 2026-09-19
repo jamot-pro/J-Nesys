@@ -49,6 +49,8 @@ const PeopleQuery = z.object({
   spaceId: Id.optional(),
   q: z.string().max(200).optional(),
   channel: z.string().max(60).optional(),
+  /** Restrict to people who belong to none of the space's people_lists. */
+  unlisted: z.coerce.boolean().optional(),
   sort: z.enum(["recently_active", "recently_added", "name"]).optional(),
   page: z.coerce.number().int().min(1).optional(),
   perPage: z.coerce.number().int().min(1).max(200).optional(),
@@ -251,6 +253,7 @@ export function peopleRoutes(repo: JamotRepository) {
         spaceId: query.spaceId,
         q: query.q,
         channel: query.channel,
+        unlisted: query.unlisted,
         sort: query.sort ?? "recently_active",
         page: query.page ?? 1,
         perPage: query.perPage ?? 50,

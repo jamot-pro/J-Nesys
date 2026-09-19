@@ -162,6 +162,8 @@ export interface PeopleFilter {
   q?: string;
   /** Restrict to people carrying an identity of this provider. */
   channel?: string;
+  /** Restrict to people who belong to none of the space's people_lists. */
+  unlisted?: boolean;
   sort?: "recently_active" | "recently_added" | "name";
   page?: number;
   perPage?: number;

@@ -13,7 +13,7 @@ import {
   UserRound,
 } from "lucide-react";
 
-import { cn } from "@/lib/utils";
+import { cn, formatPhoneDisplay } from "@/lib/utils";
 import { listMemory, storeMemory, forgetMemory, updateMemory } from "@/lib/api-client";
 import { listTasks } from "@/components/tasks/tasks-api";
 import { EditableField } from "./EditableField";
@@ -165,7 +165,7 @@ export function PersonProfilePanel({
         <div className="min-w-0 flex-1">
           <p className="truncate text-sm font-semibold">{displayName}</p>
           <p className="truncate text-xs text-muted-foreground">
-            {[detail.phone, detail.email].filter(Boolean).join(" · ") ||
+            {[formatPhoneDisplay(detail.phone), detail.email].filter(Boolean).join(" · ") ||
               detail.identities[0]?.value ||
               "No contact details yet"}
           </p>

@@ -105,6 +105,8 @@ export interface PeopleSearchQuery {
   spaceId: string;
   q?: string;
   channel?: string;
+  /** Restrict to people who belong to none of the space's lists. */
+  unlisted?: boolean;
   sort?: "recently_active" | "recently_added" | "name";
   page?: number;
   perPage?: number;
@@ -116,6 +118,7 @@ export async function searchPeople(
   const params = new URLSearchParams({ spaceId: query.spaceId });
   if (query.q) params.set("q", query.q);
   if (query.channel) params.set("channel", query.channel);
+  if (query.unlisted) params.set("unlisted", "true");
   if (query.sort) params.set("sort", query.sort);
   if (query.page) params.set("page", String(query.page));
   if (query.perPage) params.set("perPage", String(query.perPage));

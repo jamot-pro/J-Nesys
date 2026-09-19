@@ -103,6 +103,49 @@ describe("People and Outreach share one list", () => {
     expect(seen.json().items[0].name).toBe("After");
   });
 
+  it("GET /people?unlisted=true returns only people in none of the space's lists", async () => {
+    const { app, cookie, spaceId, personId } = await setup();
+
+    const listed = await app.inject({
+      method: "POST",
+      url: "/api/people/contacts",
+      headers: { cookie },
+      payload: { spaceId, firstName: "Listed", email: "listed@example.com" },
+    });
+    const listedId = listed.json().person.id as string;
+    const unlisted = await app.inject({
+      method: "POST",
+      url: "/api/people/contacts",
+      headers: { cookie },
+      payload: { spaceId, firstName: "Unlisted", email: "unlisted@example.com" },
+    });
+    const unlistedId = unlisted.json().person.id as string;
+
+    const made = await app.inject({
+      method: "POST",
+      url: "/api/people/lists",
+      headers: { cookie },
+      payload: { spaceId, name: "Some list" },
+    });
+    const listId = made.json().id as string;
+    await app.inject({
+      method: "POST",
+      url: `/api/people/lists/${listId}/members`,
+      headers: { cookie },
+      payload: { personId: listedId },
+    });
+
+    const seen = await app.inject({
+      method: "GET",
+      url: `/api/people?spaceId=${spaceId}&unlisted=true&perPage=200`,
+      headers: { cookie },
+    });
+    const ids = seen.json().items.map((p: { id: string }) => p.id);
+    expect(ids).toContain(unlistedId);
+    expect(ids).toContain(personId); // the space owner, never added to any list
+    expect(ids).not.toContain(listedId);
+  });
+
   it("People refuses to delete a list a campaign is working", async () => {
     const { app, cookie, spaceId } = await setup();
     const made = await app.inject({

@@ -444,6 +444,17 @@ export function createMemoryRepository(): JamotRepository {
           );
           if (!hasChannel) return false;
         }
+        if (filter.unlisted) {
+          const spaceListIds = new Set(
+            [...peopleListStore.values()]
+              .filter((l) => l.spaceId === filter.spaceId)
+              .map((l) => l.id),
+          );
+          const isListed = [...peopleListMemberStore.values()].some(
+            (m) => m.personId === p.id && spaceListIds.has(m.peopleListId),
+          );
+          if (isListed) return false;
+        }
         if (q) {
           const haystack = [p.firstName, p.lastName, p.email, p.phone]
             .filter(Boolean)

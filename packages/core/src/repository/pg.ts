@@ -1395,6 +1395,15 @@ export function createPgRepository(db: Db): JamotRepository {
           )`,
         );
       }
+      if (filter.unlisted) {
+        conditions.push(
+          sql`NOT EXISTS (
+            SELECT 1 FROM people_list_members m
+            JOIN people_lists l ON l.id = m.people_list_id
+            WHERE m.person_id = ${people.id} AND l.space_id = ${filter.spaceId}
+          )`,
+        );
+      }
       if (filter.q && filter.q.trim()) {
         const like = `%${filter.q.trim()}%`;
         conditions.push(
