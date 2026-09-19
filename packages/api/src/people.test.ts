@@ -274,16 +274,38 @@ describe("people API", () => {
     // Public GET, no cookie at all: shows the person, no archetype yet.
     const before = await app.inject({ method: "GET", url: `/api/people/public/${token}` });
     expect(before.statusCode).toBe(200);
-    expect(before.json()).toMatchObject({ displayName: "Andrea Rossi", hasProfile: false });
+    expect(before.json()).toMatchObject({
+      displayName: "Andrea Rossi",
+      hasProfile: false,
+      onboarded: false,
+    });
 
-    // Self-service onboarding, still no cookie.
+    // Self-service onboarding, still no cookie — name, company and a photo
+    // alongside the birth data, all in one submit.
+    const onePxPng =
+      "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk+A8AAQUBAScY42YAAAAASUVORK5CYII=";
     const onboarded = await app.inject({
       method: "POST",
       url: `/api/people/public/${token}/onboard`,
-      payload: { birthDate: "1990-05-15", birthHour: 8, timezone: -5, birthLocation: "NYC" },
+      payload: {
+        firstName: "Andrea",
+        lastName: "Rossi Jr",
+        company: "Acme Inc",
+        avatarDataUri: onePxPng,
+        birthDate: "1990-05-15",
+        birthHour: 8,
+        timezone: -5,
+        birthLocation: "NYC",
+      },
     });
     expect(onboarded.statusCode).toBe(200);
-    expect(onboarded.json().hasProfile).toBe(true);
+    expect(onboarded.json()).toMatchObject({
+      displayName: "Andrea Rossi Jr",
+      company: "Acme Inc",
+      hasProfile: true,
+      onboarded: true,
+    });
+    expect(onboarded.json().avatarUrl).toMatch(new RegExp(`/uploads/people/${personId}/avatar\\.`));
     expect(onboarded.json().profile?.identity?.type).toBeTruthy();
 
     // The computed report is now cached and shows up on a plain GET too.

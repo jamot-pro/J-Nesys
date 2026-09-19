@@ -870,7 +870,7 @@ function PersonCard({
   onPatch: (fields: Parameters<typeof updatePerson>[1]) => void;
   onRemove: () => void;
 }) {
-  const onboarded = Boolean(person.publicProfile);
+  const onboarded = person.onboarded;
   const readonly: { label: string; value: string }[] = [
     { label: "Name", value: person.firstName || "—" },
     { label: "Surname", value: person.lastName || "—" },

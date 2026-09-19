@@ -1,4 +1,6 @@
 import { randomBytes } from "node:crypto";
+import { mkdir, writeFile } from "node:fs/promises";
+import { join } from "node:path";
 import { z } from "zod";
 import type { FastifyInstance } from "fastify";
 import { Id, ProfileAttribute } from "@jamot/contracts";
@@ -8,7 +10,42 @@ import { registerPerson } from "../auth.js";
 import { actorRoleInSpace, requireAuth, ROLE_WEIGHT } from "../rbac.js";
 import { fail, parse } from "../util.js";
 
+function joinUploadsDir(): string {
+  return join(process.cwd(), "uploads");
+}
+
+/** Saves a base64 image data URI the same way PUT /agents/:id/avatar and
+ * PUT /organizations/:id/logo do: validated mime/size, one file per owner.
+ * Returns the served path, or null (silently) if dataUri is absent. */
+async function saveAvatarDataUri(
+  dataUri: string | undefined,
+  ownerKind: "people",
+  ownerId: string,
+): Promise<string | null> {
+  if (!dataUri) return null;
+  const match = /^data:(image\/(?:png|jpeg|jpg|gif|webp|svg\+xml));base64,(.+)$/i.exec(dataUri);
+  if (!match) throw new Error("expected a base64 image data URI");
+  const mime = match[1]!.toLowerCase();
+  const raw = match[2]!.replace(/\s+/g, "");
+  const buffer = Buffer.from(raw, "base64");
+  if (buffer.byteLength === 0) throw new Error("empty image");
+  if (buffer.byteLength > 2 * 1024 * 1024) throw new Error("image exceeds 2 MB limit");
+
+  const ext = mime === "image/svg+xml" ? "svg" : mime.replace("image/", "");
+  const uploadsDir = process.env.UPLOADS_DIR ?? joinUploadsDir();
+  const ownerDir = join(uploadsDir, ownerKind, ownerId);
+  await mkdir(ownerDir, { recursive: true });
+  const filename = `avatar.${ext}`;
+  await writeFile(join(ownerDir, filename), buffer);
+  return `/uploads/${ownerKind}/${ownerId}/${filename}`;
+}
+
 const PublicOnboardBody = z.object({
+  firstName: z.string().max(120).optional(),
+  lastName: z.string().max(120).optional(),
+  company: z.string().max(200).optional(),
+  /** Base64 image data URI, same contract as PUT /agents/:id/avatar. */
+  avatarDataUri: z.string().optional(),
   birthDate: z.string().min(1),
   birthHour: z.number().optional(),
   timezone: z.number().optional(),
@@ -45,9 +82,14 @@ function publicProfilePayload(person: Person) {
   return {
     displayName,
     firstName: person.firstName,
+    lastName: person.lastName,
     company: String(person.profile?.selfDescribed?.company?.value ?? ""),
     avatarUrl: person.avatarUrl,
     hasProfile: Boolean(archetypeProfile),
+    /** Set once the self-service form has ever been submitted — a person
+     * with a photo/name but no birth data yet is still "not onboarded"
+     * here, since hasProfile/onboarded track the same completion event. */
+    onboarded: Boolean(person.profile?.selfDescribed?.onboardedAt?.value),
     profile: archetypeProfile,
   };
 }
@@ -207,6 +249,10 @@ async function toListPerson(
     publicProfile: String(attr(person, "publicProfile") ?? ""),
     context: String(attr(person, "context") ?? ""),
     aura: typeof aura === "number" ? Math.max(0, Math.min(100, aura)) : 0,
+    /** Set once the person has submitted the public self-service form
+     * (POST /people/public/:token/onboard) — a real signal, unlike the
+     * legacy `publicProfile` string above. */
+    onboarded: Boolean(attr(person, "onboardedAt")),
     notes: Array.isArray(notes)
       ? (notes as { when?: unknown; text?: unknown }[]).map((n) => ({
           when: String(n?.when ?? ""),
@@ -557,15 +603,25 @@ export function peopleRoutes(repo: JamotRepository) {
           );
         }
 
+        let avatarUrl: string | null = null;
+        try {
+          avatarUrl = await saveAvatarDataUri(body.avatarDataUri, "people", person.id);
+        } catch (err) {
+          return fail(reply, 400, err instanceof Error ? err.message : "Could not save photo");
+        }
+
         const selfDescribed = { ...person.profile.selfDescribed };
         const ts = new Date().toISOString();
         for (const [key, value] of Object.entries({
+          company: body.company,
           birthDate: body.birthDate,
           birthHour: body.birthHour ?? 12,
           timezone: body.timezone ?? 0,
           birthLocation: body.birthLocation ?? "",
           archetypeProfile,
+          onboardedAt: ts,
         })) {
+          if (value === undefined) continue;
           selfDescribed[key] = {
             value,
             source: "self_declared",
@@ -575,6 +631,9 @@ export function peopleRoutes(repo: JamotRepository) {
           };
         }
         const updated = await repo.updatePerson(person.id, {
+          firstName: body.firstName ?? person.firstName,
+          lastName: body.lastName ?? person.lastName,
+          avatarUrl: avatarUrl ?? person.avatarUrl,
           profile: { ...person.profile, selfDescribed },
         });
         if (!updated) return fail(reply, 404, "not found");

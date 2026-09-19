@@ -2445,6 +2445,9 @@ export interface PeopleListPerson {
   context: string;
   aura: number;
   notes: PeopleNote[];
+  /** Set once this person has submitted the public self-service onboarding
+   * form (name/photo/birth data) — see apps/console/src/app/p/[token]. */
+  onboarded: boolean;
   /** Auto-maintained from this person's memory entries — distinct from `context` above. */
   contextSummary: string | null;
   contextSummaryUpdatedAt: string | null;
